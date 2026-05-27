@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["app"]
+}
+
+model Category {
+  id          String      @id @default(cuid())
+  name        String
+  color       String
+  description String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  timeBlocks  TimeBlock[]
+
+  @@schema("app")
+}
+
+model TimeBlock {
+  id              String   @id @default(cuid())
+  title           String
+  note            String?
+  startTime       DateTime
+  endTime         DateTime
+  status          String   @default("planned")
+  completionLevel Int      @default(0)
+  categoryId      String
+  category        Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@schema("app")
+}

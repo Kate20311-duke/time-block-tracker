@@ -1,0 +1,223 @@
+"use client";
+
+import { useRef, useState } from "react";
+import { updateTimeBlockSchedule } from "@/lib/actions/calendar-time-blocks";
+import {
+  CALENDAR_GRID_HEIGHT_PX,
+  calculateMovedRange,
+  parseCalendarDateParam,
+  pixelYToMinutes,
+} from "@/lib/calendar";
+
+const DRAG_THRESHOLD_PX = 5;
+
+type Props = {
+  blockId: string;
+  startTimeIso: string;
+  endTimeIso: string;
+  calendarDate: string;
+  gridContainerRef: React.RefObject<HTMLDivElement | null>;
+  title: string;
+  categoryName: string;
+  color: string;
+  timeLabel: string;
+  topPercent: number;
+  heightPercent: number;
+  isSelected?: boolean;
+  onSelect: (blockId: string) => void;
+  onSaveEnd: (ok: boolean) => void;
+};
+
+export function CalendarDraggableBlock({
+  blockId,
+  startTimeIso,
+  endTimeIso,
+  calendarDate,
+  gridContainerRef,
+  title,
+  categoryName,
+  color,
+  timeLabel,
+  topPercent,
+  heightPercent,
+  isSelected = false,
+  onSelect,
+  onSaveEnd,
+}: Props) {
+  const [dragOffsetPx, setDragOffsetPx] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const dragStartedRef = useRef(false);
+  const grabOffsetYRef = useRef(0);
+  const startClientYRef = useRef(0);
+  const startClientXRef = useRef(0);
+  const initialTopPxRef = useRef(0);
+
+  const originalStart = new Date(startTimeIso);
+  const originalEnd = new Date(endTimeIso);
+  const selectedDay = parseCalendarDateParam(calendarDate);
+
+  const clearBodyDragStyles = () => {
+    document.body.style.userSelect = "";
+    document.body.style.cursor = "";
+  };
+
+  const finishPointer = async (
+    el: HTMLElement,
+    pointerId: number,
+    clientY: number,
+  ) => {
+    if (el.hasPointerCapture(pointerId)) {
+      el.releasePointerCapture(pointerId);
+    }
+    clearBodyDragStyles();
+
+    if (!dragStartedRef.current) {
+      setDragOffsetPx(0);
+      onSelect(blockId);
+      return;
+    }
+
+    dragStartedRef.current = false;
+    setIsDragging(false);
+
+    const container = gridContainerRef.current;
+    if (!container) {
+      setDragOffsetPx(0);
+      onSaveEnd(false);
+      return;
+    }
+
+    const containerRect = container.getBoundingClientRect();
+    const newTopPx = clientY - containerRect.top - grabOffsetYRef.current;
+    const targetStartMinutes = pixelYToMinutes(
+      newTopPx,
+      CALENDAR_GRID_HEIGHT_PX,
+    );
+
+    const moved = calculateMovedRange(
+      originalStart,
+      originalEnd,
+      targetStartMinutes,
+      selectedDay,
+    );
+
+    setDragOffsetPx(0);
+
+    if (!moved.ok) {
+      onSaveEnd(false);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const result = await updateTimeBlockSchedule({
+        id: blockId,
+        startTime: moved.startTime.toISOString(),
+        endTime: moved.endTime.toISOString(),
+      });
+      onSaveEnd(result.ok);
+    } catch {
+      onSaveEnd(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      disabled={isSaving}
+      onPointerDown={(e) => {
+        if (e.button !== 0 || isSaving) return;
+
+        const container = gridContainerRef.current;
+        if (!container) return;
+
+        const blockRect = e.currentTarget.getBoundingClientRect();
+        grabOffsetYRef.current = e.clientY - blockRect.top;
+        startClientYRef.current = e.clientY;
+        startClientXRef.current = e.clientX;
+        initialTopPxRef.current = (topPercent / 100) * CALENDAR_GRID_HEIGHT_PX;
+        dragStartedRef.current = false;
+        setDragOffsetPx(0);
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        if (!e.currentTarget.hasPointerCapture(e.pointerId) || isSaving) {
+          return;
+        }
+
+        const deltaY = e.clientY - startClientYRef.current;
+        const deltaX = e.clientX - startClientXRef.current;
+
+        if (!dragStartedRef.current) {
+          if (
+            Math.abs(deltaY) < DRAG_THRESHOLD_PX &&
+            Math.abs(deltaX) < DRAG_THRESHOLD_PX
+          ) {
+            return;
+          }
+          dragStartedRef.current = true;
+          setIsDragging(true);
+          document.body.style.userSelect = "none";
+          document.body.style.cursor = "grabbing";
+        }
+
+        const container = gridContainerRef.current;
+        if (!container) return;
+
+        const containerRect = container.getBoundingClientRect();
+        const newTopPx =
+          e.clientY - containerRect.top - grabOffsetYRef.current;
+        setDragOffsetPx(newTopPx - initialTopPxRef.current);
+      }}
+      onPointerUp={(e) => {
+        if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+        void finishPointer(e.currentTarget, e.pointerId, e.clientY);
+      }}
+      onPointerCancel={(e) => {
+        if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+        dragStartedRef.current = false;
+        setIsDragging(false);
+        setDragOffsetPx(0);
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+        clearBodyDragStyles();
+      }}
+      className={`absolute overflow-hidden rounded border text-left text-white shadow-sm hover:brightness-95 ${
+        isDragging || isSaving ? "z-20" : ""
+      } ${isSelected ? "z-10" : ""} right-1 left-1 px-2 py-1 touch-none ${
+        isDragging
+          ? "cursor-grabbing opacity-90 ring-2 ring-white/40"
+          : isSaving
+            ? "cursor-wait opacity-80"
+            : "cursor-grab"
+      } ${
+        isSelected
+          ? "border-zinc-900 ring-2 ring-zinc-900 ring-offset-1"
+          : "border-white/25"
+      }`}
+      style={{
+        top: `${topPercent}%`,
+        height: `${heightPercent}%`,
+        minHeight: "1.25rem",
+        backgroundColor: color,
+        transform: dragOffsetPx ? `translateY(${dragOffsetPx}px)` : undefined,
+      }}
+      title={`${title} · ${categoryName} · ${timeLabel}`}
+      aria-pressed={isSelected}
+      aria-grabbed={isDragging}
+      aria-label={`${title}, ${categoryName}, ${timeLabel}`}
+    >
+      <p className="pointer-events-none truncate text-xs font-semibold leading-tight">
+        {title}
+      </p>
+      <p className="pointer-events-none truncate text-[10px] leading-tight opacity-90">
+        {timeLabel}
+      </p>
+    </button>
+  );
+}

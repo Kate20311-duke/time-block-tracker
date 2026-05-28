@@ -9,9 +9,11 @@ export type TimeBlockRowData = {
   id: string;
   title: string;
   note: string | null;
+  reviewNote: string | null;
   categoryId: string;
   status: string;
   completionLevel: number;
+  efficiencyLevel: string | null;
   startTime: Date;
   endTime: Date;
   category: { id: string; name: string; color: string };
@@ -27,6 +29,9 @@ type Labels = {
   noteOptional: string;
   status: string;
   completionRange: string;
+  efficiencyOptional: string;
+  selectEfficiency: string;
+  reviewNoteOptional: string;
   durationFormatted: string;
   statusCompletionFormatted: string;
   startFormatted: string;
@@ -43,6 +48,7 @@ type Props = {
   block: TimeBlockRowData;
   categories: CategoryOption[];
   statusOptions: { value: string; label: string }[];
+  efficiencyOptions: { value: string; label: string }[];
   startTimeLocal: string;
   endTimeLocal: string;
   labels: Labels;
@@ -52,6 +58,7 @@ export function TimeBlockRow({
   block,
   categories,
   statusOptions,
+  efficiencyOptions,
   startTimeLocal,
   endTimeLocal,
   labels,
@@ -82,6 +89,11 @@ export function TimeBlockRow({
             </p>
             {block.note ? (
               <p className="mt-1 text-sm text-zinc-600">{block.note}</p>
+            ) : null}
+            {block.reviewNote ? (
+              <p className="mt-1 text-sm text-zinc-600">
+                {block.reviewNote}
+              </p>
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -180,12 +192,36 @@ export function TimeBlockRow({
             className="rounded border border-zinc-300 px-3 py-2"
           />
         </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">{labels.efficiencyOptional}</span>
+          <select
+            name="efficiencyLevel"
+            defaultValue={block.efficiencyLevel ?? ""}
+            className="rounded border border-zinc-300 px-3 py-2"
+          >
+            <option value="">{labels.selectEfficiency}</option>
+            {efficiencyOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="flex flex-col gap-1 text-sm sm:col-span-2">
           <span className="font-medium">{labels.noteOptional}</span>
           <textarea
             name="note"
             rows={2}
             defaultValue={block.note ?? ""}
+            className="rounded border border-zinc-300 px-3 py-2"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+          <span className="font-medium">{labels.reviewNoteOptional}</span>
+          <textarea
+            name="reviewNote"
+            rows={2}
+            defaultValue={block.reviewNote ?? ""}
             className="rounded border border-zinc-300 px-3 py-2"
           />
         </label>

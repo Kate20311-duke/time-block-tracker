@@ -31,9 +31,11 @@ export async function createTimeBlock(formData: FormData): Promise<void> {
     data: {
       title: data.title,
       note: data.note,
+      reviewNote: data.reviewNote,
       categoryId: data.categoryId,
       status: data.status,
       completionLevel: clampCompletionLevel(data.completionLevel),
+      efficiencyLevel: data.efficiencyLevel,
       startTime: range.start,
       endTime: range.end,
     },

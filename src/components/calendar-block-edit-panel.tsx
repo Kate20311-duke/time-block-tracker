@@ -7,9 +7,11 @@ export type CalendarEditBlockData = {
   id: string;
   title: string;
   note: string | null;
+  reviewNote: string | null;
   categoryId: string;
   status: string;
   completionLevel: number;
+  efficiencyLevel: string | null;
   startTimeIso: string;
   endTimeIso: string;
   category: { name: string; color: string };
@@ -24,8 +26,11 @@ type FormLabels = {
   startTime: string;
   endTime: string;
   noteOptional: string;
+  reviewNoteOptional: string;
   status: string;
   completionRange: string;
+  efficiencyOptional: string;
+  selectEfficiency: string;
   save: string;
   cancel: string;
   submitting: string;
@@ -35,6 +40,7 @@ type Props = {
   block: CalendarEditBlockData;
   categories: CategoryOption[];
   statusOptions: { value: string; label: string }[];
+  efficiencyOptions: { value: string; label: string }[];
   startTimeLocal: string;
   endTimeLocal: string;
   calendarDate: string;
@@ -47,6 +53,7 @@ export function CalendarBlockEditPanel({
   block,
   categories,
   statusOptions,
+  efficiencyOptions,
   startTimeLocal,
   endTimeLocal,
   calendarDate,
@@ -160,12 +167,36 @@ export function CalendarBlockEditPanel({
             className="rounded border border-zinc-300 px-3 py-2"
           />
         </label>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">{labels.efficiencyOptional}</span>
+          <select
+            name="efficiencyLevel"
+            defaultValue={block.efficiencyLevel ?? ""}
+            className="rounded border border-zinc-300 px-3 py-2"
+          >
+            <option value="">{labels.selectEfficiency}</option>
+            {efficiencyOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="flex flex-col gap-1 text-sm sm:col-span-2">
           <span className="font-medium">{labels.noteOptional}</span>
           <textarea
             name="note"
             rows={2}
             defaultValue={block.note ?? ""}
+            className="rounded border border-zinc-300 px-3 py-2"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+          <span className="font-medium">{labels.reviewNoteOptional}</span>
+          <textarea
+            name="reviewNote"
+            rows={2}
+            defaultValue={block.reviewNote ?? ""}
             className="rounded border border-zinc-300 px-3 py-2"
           />
         </label>

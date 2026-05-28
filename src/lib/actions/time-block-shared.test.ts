@@ -78,9 +78,11 @@ describe("validateFullTimeBlockForm", () => {
       id: "id1",
       title: "Focus",
       note: null,
+      reviewNote: null,
       categoryId: "cat1",
       status: "planned",
       completionLevel: 0,
+      efficiencyLevel: null,
       startTime: new Date("2026-05-21T10:00:00"),
       endTime: new Date("2026-05-21T11:00:00"),
     });

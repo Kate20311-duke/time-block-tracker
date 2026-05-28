@@ -256,6 +256,7 @@ export function calculateResizedRange(
     options?.minDurationMinutes ?? MIN_TIME_BLOCK_DURATION_MINUTES;
 
   const startTime = originalStart;
+  const dayEnd = endOfDay(selectedDay);
   let endMinutes = snapMinutes(targetEndMinutes, snap);
   endMinutes = clampMinutesToDay(endMinutes);
 
@@ -270,6 +271,9 @@ export function calculateResizedRange(
 
   if (durationMinutes < minDuration) {
     endTime = new Date(startTime.getTime() + minDuration * 60_000);
+    if (endTime > dayEnd) {
+      endTime = dayEnd;
+    }
     durationMinutes =
       (endTime.getTime() - startTime.getTime()) / 60_000;
     if (endTime <= startTime || durationMinutes < minDuration) {

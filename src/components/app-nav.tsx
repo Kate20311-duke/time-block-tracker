@@ -11,6 +11,7 @@ const NAV_ITEMS: { href: string; labelKey: keyof Dictionary["nav"] }[] = [
   { href: "/time-blocks", labelKey: "timeBlocks" },
   { href: "/calendar", labelKey: "calendar" },
   { href: "/dashboard", labelKey: "dashboard" },
+  { href: "/review/day", labelKey: "review" },
 ];
 
 type Props = {

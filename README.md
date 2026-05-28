@@ -1,8 +1,83 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## TimeBlock Tracker
+
+个人时间块日历与时间追踪 Web 应用（Next.js + Prisma + PostgreSQL）。
 
 ## Getting Started
 
-First, run the development server:
+### 本地开发（Mac + Docker PostgreSQL）
+
+#### 前置条件
+
+- Node.js：建议使用 `.nvmrc` 指定版本（推荐 `nvm use`）
+- pnpm：项目使用 pnpm
+- Docker Desktop：用于本地 PostgreSQL
+
+#### 1) 安装依赖
+
+```bash
+pnpm install
+```
+
+#### 2) 启动数据库（Docker）
+
+```bash
+docker compose up -d
+```
+
+停止数据库：
+
+```bash
+docker compose down
+```
+
+不要随便使用：
+
+```bash
+docker compose down -v
+```
+
+因为这会删除本地数据库 volume 与数据。
+
+#### 3) 配置环境变量
+
+```bash
+cp .env.example .env
+```
+
+`.env` 里需要配置 `DATABASE_URL`（示例见 `.env.example`），并确保包含 `?schema=app`。
+
+#### 4) 生成 Prisma Client
+
+```bash
+pnpm prisma generate
+```
+
+#### 5) 运行 migration
+
+```bash
+pnpm prisma migrate dev
+```
+
+#### 6) 启动开发服务器
+
+```bash
+pnpm dev
+```
+
+打开 `http://localhost:3000`。
+
+### 常用检查命令
+
+```bash
+pnpm test
+pnpm typecheck
+pnpm lint
+pnpm build
+```
+
+## Notes
+
+- 本项目的 `pnpm-workspace.yaml` 中包含 `allowBuilds` 等配置（pnpm v11 不再读取 `package.json` 的 `"pnpm"` 字段）。
 
 ```bash
 npm run dev

@@ -6,15 +6,69 @@
 
 ## 2. 当前阶段
 
-**Phase 2：基础日历视图（进行中）**
+**Phase 4：完成追踪与复盘（已完成第一版）**
 
 - **Phase 1：已完成** — 数据模型、分类/时间块 CRUD、Dashboard、导航、i18n、测试
-- **已完成子步骤**
-  - **Day View MVP（日视图）** — 已手动验证
-  - **Week View（周视图）** — 已手动验证
-- **建议下一子步骤**
-  - 日历事件详情增强（块上展示更多字段 / 悬停详情）
-  - 可选：从日历块链接到 `/time-blocks` 对应记录的查看或编辑
+- **Phase 2：已完成** — `/calendar` 周/日视图、URL 参数、跨天裁剪、测试
+- **Phase 2.5：已完成（交互能力）**
+  - **calendar-specific server actions**：`src/lib/actions/calendar-time-blocks.ts`
+  - **click-to-edit from calendar**：点击块打开 `/calendar?blockId=...` 的页内编辑面板
+  - **day view drag-to-move**：日视图列内纵向拖拽移动（保持时长、5 分钟吸附、00:00–24:00 夹取）
+  - **day view bottom resize**：日视图底部手柄 resize（只改 `endTime`、5 分钟吸附、最小时长、00:00–24:00 夹取）
+  - **week view column-internal interactions（受限）**：周视图列内拖拽/底部 resize（不跨列、不改日期）
+  - **00:00–24:00 全日交互范围**：拖拽/resize 的计算与 clamp 都以单日网格为边界
+  - **可配置吸附间隔**：`CALENDAR_SNAP_MINUTES`（当前 5 分钟）
+  - **可配置最小时长**：`MIN_TIME_BLOCK_DURATION_MINUTES`
+- **Phase 3（本阶段）已完成（第一版）**
+  - **统计工具层（纯函数）**：`src/lib/stats.ts`（按分类/按状态/按周每日汇总等）
+  - **Dashboard 日期范围工具**：`src/lib/dashboard-ranges.ts`（今天/本周；周一为起点）
+  - **Dashboard（/dashboard）第一版**
+    - 今天与本周：总时长、时间块数量、状态计数/汇总
+    - 分类 breakdown：时长 + 占比 + 颜色
+    - **基础图表**（Recharts）：分类 donut、周内每日柱状图、状态柱状图
+    - 服务端取数 + 统计，图表在独立 client component 渲染：`src/components/dashboard-charts.tsx`
+
+- **Phase 4.1（本阶段进行中）完成度数据模型（已完成）**
+  - `TimeBlock` 新增字段：
+    - `efficiencyLevel?: "low" | "medium" | "high"`（主观效率，允许为空）
+    - `reviewNote?: string`（复盘备注，允许为空）
+  - 解析/校验/写入已预埋（UI 尚未添加字段）：
+    - `src/lib/actions/time-block-shared.ts`
+    - `src/lib/actions/time-blocks.ts`
+    - `src/lib/validation.ts`
+    - `src/lib/constants.ts`
+
+- **Phase 4.2（进行中）完成度编辑 UI（已完成第一版）**
+  - `/time-blocks`：新建与编辑表单支持编辑
+    - `status`、`completionLevel`
+    - `efficiencyLevel`（可选）
+    - `reviewNote`（可选）
+  - `/calendar` 页内编辑面板：支持编辑 `efficiencyLevel` 与 `reviewNote`
+  - i18n：中英文字典已补齐相关字段文案
+
+- **Phase 4.3（进行中）复盘/完成度统计（已完成第一版）**
+  - 统计工具：`src/lib/stats.ts` 新增 `summarizeCompletionQuality(...)`
+  - 单元测试：`src/lib/stats.review.test.ts`
+  - 统计规则（简化版）：
+    - `completed`：整段时长计为完成
+    - `skipped`：整段时长计为跳过
+    - `partial`：按 `completionLevel%` 折算完成分钟（例如 60 分钟、50% → 30 分钟完成）
+    - `planned`：不计入完成分钟
+
+- **Phase 4.4（进行中）每日复盘页（已完成第一版）**
+  - 路由：`/review/day`
+  - 能力：选择日期、查看当日 TimeBlocks、完成质量摘要、分类汇总、未完成/跳过列表、显示 `reviewNote`、跳转回日历/看板
+  - 导航：顶栏新增「复盘」入口
+
+- **Phase 4.5（进行中）每周复盘页（已完成第一版）**
+  - 路由：`/review/week`
+  - 能力：选择周（任意日期）、周摘要、分类汇总、按分类完成情况、周一至周日每日分解、需要复盘条目列表、跳转回日历/看板
+  - 统计：复用 `summarizeCompletionQuality(...)`（不在页面内重复计算规则）
+
+- **Phase 4.6（进行中）Dashboard 完成度指标整合（已完成第一版）**
+  - `/dashboard` 增加本周完成质量指标：计划时长、估算完成时长、完成率、平均完成度、跳过时长
+  - 可选显示：低效率（low）时长（若填写了 `efficiencyLevel`）
+  - 增加跳转：`/review/day` 与 `/review/week`
 
 ## 3. 技术栈
 
@@ -28,6 +82,7 @@
 | 包管理 | pnpm |
 | Node | **20.19+**（见 `.nvmrc`） |
 | 测试 | Vitest + Testing Library |
+| 图表 | Recharts（Phase 3 引入，基础可视化） |
 
 ## 4. Phase 1 已完成功能
 
@@ -159,6 +214,13 @@ pnpm build
 pnpm dev    # http://localhost:3000/calendar
 ```
 
+近期结果（本地 Mac + Docker 环境）：
+
+- `pnpm test` ✅（54 tests）
+- `pnpm typecheck` ✅
+- `pnpm lint` ✅
+- `pnpm build` ✅
+
 ### 5.10 手动测试清单（日历）
 
 **通用**
@@ -167,6 +229,8 @@ pnpm dev    # http://localhost:3000/calendar
 - [ ] `/categories`、`/time-blocks`、`/dashboard` 正常
 - [ ] 顶栏「日历」与高亮正确；中英文切换正常
 - [ ] `/time-blocks` 增删改后日历数据更新
+- [ ] 日历点击块打开编辑面板；保存后仍在 `/calendar`，且数据刷新
+- [ ] 拖拽/resize 保存失败时有提示，并会刷新回最新数据
 
 **周视图（默认）**
 
@@ -177,6 +241,7 @@ pnpm dev    # http://localhost:3000/calendar
 - [ ] 跨午夜块在涉及的多天各显示裁剪片段
 - [ ] 整周无记录：空状态 + 7 列空网格不崩
 - [ ] 窄屏可横向滚动浏览 7 列
+- [ ] 仅在同一列内拖拽移动/底部 resize；不会跨列改变日期
 
 **日视图**
 
@@ -184,6 +249,8 @@ pnpm dev    # http://localhost:3000/calendar
 - [ ] 「前一天」「后一天」「今天」正确
 - [ ] 单日块位置、分类色、跨天裁剪（单日段）正确
 - [ ] 当日无记录：空状态 + 日网格正常
+- [ ] **拖拽移动**：00:00–24:00 全范围可拖；吸附 5 分钟；保持原始时长；保存后刷新
+- [ ] **底部 resize**：只改 `endTime`；吸附 5 分钟；满足最小时长；靠近 24:00 正确夹取；保存后刷新
 
 **参数**
 
@@ -192,8 +259,13 @@ pnpm dev    # http://localhost:3000/calendar
 
 ### 5.11 日历已知限制
 
-- **只读**：创建/编辑在 `/time-blocks`（页底文字链接）；日历块本身不可点击编辑
-- **无拖拽**、无日历内点击创建、无 FullCalendar 等第三方库
+- **无日历内点击创建**、无 FullCalendar 等第三方库
+- **无冲突检测**：允许 overlaps；重叠块可能遮挡（未分列）
+- **无撤销/重做**
+- **无重复事件**
+- **无外部日历同步**
+- **无空白处创建（blank-space creation）**
+- **周视图不支持跨列拖拽/跨天改变日期**（仅列内交互）
 - **重叠块**：同列多条记录可能互相遮挡（未分列）
 - **浅色分类 + 白字**：对比度可能不足
 - **周列 `compact`**：仅显示标题，时间在 `title` 属性
@@ -204,9 +276,64 @@ pnpm dev    # http://localhost:3000/calendar
 ### 5.12 Phase 2 仍未做
 
 - [ ] 日历块详情增强 / 跳转编辑
-- [ ] 日历内拖拽调整时间
 - [ ] Dashboard 图表与日期筛选
 - [ ] 用户认证、Pomodoro、外部日历同步、E2E
+
+## 5.13 Phase 2.5 — 日历交互实现说明
+
+### 5.13.1 `updateTimeBlockFromCalendar`（全量编辑，保存后留在 `/calendar`）
+
+文件：`src/lib/actions/calendar-time-blocks.ts`
+
+- 用途：从日历页内编辑面板提交完整 TimeBlock 表单
+- 行为：
+  - 校验表单字段与时间范围
+  - `prisma.timeBlock.update(...)` 写入完整字段
+  - `revalidatePath("/calendar")` + `revalidatePath("/time-blocks")`
+  - 使用隐藏字段（`calendarDate` / `calendarView` / `calendarBlockId`）构造重定向 URL，确保用户保存后仍停留在相同日历上下文
+
+### 5.13.2 `updateTimeBlockSchedule`（拖拽/resize，仅更新 start/end，不 redirect）
+
+文件：`src/lib/actions/calendar-time-blocks.ts`
+
+- 用途：拖拽移动或 resize 时仅更新 `startTime` / `endTime`
+- 行为：
+  - 解析与校验 schedule-only 输入（`startTime < endTime`）
+  - `prisma.timeBlock.update({ startTime, endTime })`
+  - `revalidatePath("/calendar")` + `revalidatePath("/time-blocks")`
+  - 返回 `{ ok: true } | { ok: false; error }`，由客户端决定刷新与提示
+
+### 5.13.3 交互组件（Client Components）
+
+以下均为客户端组件（含 `"use client"`）：
+
+- `src/components/calendar-interactive-view.tsx`
+- `src/components/calendar-day-grid.tsx`
+- `src/components/calendar-week-grid.tsx`
+- `src/components/calendar-day-column.tsx`
+- `src/components/calendar-block.tsx`
+- `src/components/calendar-draggable-block.tsx`
+- `src/components/calendar-block-edit-panel.tsx`
+
+### 5.13.4 拖拽移动（高层计算）
+
+- 将 pointer Y 位置映射到“分钟”（`pixelYToMinutes`）
+- 以 `CALENDAR_SNAP_MINUTES` 做吸附（`snapMinutes`）
+- 使用 `calculateMovedRange`：
+  - **保持原始 duration**
+  - 对 start 做 clamp，确保最终范围在 00:00–24:00 内（必要时向上夹取到最晚可开始）
+- 保存：调用 `updateTimeBlockSchedule`，保存结束后 `router.refresh()`
+
+### 5.13.5 底部 resize（高层计算）
+
+- 底部 handle 使用 pointer events，并阻止冒泡避免误触选中
+- 将“块底部”Y 位置映射到分钟（`pixelYToMinutes`）
+- 使用 `calculateResizedRange`：
+  - **只改变 `endTime`，不改变 `startTime`**
+  - 吸附到 `CALENDAR_SNAP_MINUTES`
+  - 强制最小时长 `MIN_TIME_BLOCK_DURATION_MINUTES`
+  - clamp 到 00:00–24:00（无法满足最小约束则返回失败）
+- 保存：调用 `updateTimeBlockSchedule`，保存结束后 `router.refresh()`
 
 ## 6. 数据库模型
 
@@ -231,10 +358,12 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 | id | String (cuid) | 主键 |
 | title | String | 标题 |
 | note | String? | 可选备注 |
+| reviewNote | String? | 复盘备注（可选） |
 | startTime | DateTime | 开始时间 |
 | endTime | DateTime | 结束时间 |
 | status | String | 默认 `planned`；见下方状态值 |
 | completionLevel | Int | 0–100，默认 0 |
+| efficiencyLevel | String? | `"low" \| "medium" \| "high"`（可选） |
 | categoryId | String | 外键 → Category |
 | createdAt | DateTime | 默认 now |
 | updatedAt | DateTime | 自动更新 |
@@ -247,6 +376,7 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 
 - `20260521173159_init`
 - `20260521180044_add_category_description`
+- `20260528030837_add_timeblock_review_fields`（新增 `TimeBlock.efficiencyLevel`、`TimeBlock.reviewNote`）
 
 ## 7. 已实现页面
 
@@ -256,7 +386,7 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 | `/categories` | 动态 | 分类 CRUD（查看/编辑模式 + 顶部新建表单） |
 | `/time-blocks` | 动态 | 时间块 CRUD（列表 + 表单） |
 | `/calendar` | 动态 | **周/日视图**（默认周）；`?date=`、`?view=day\|week` |
-| `/dashboard` | 动态 | 概览数字 + 按分类时长汇总 |
+| `/dashboard` | 动态 | 今天/本周统计 + 分类 breakdown + 基础图表 |
 
 全局布局：`src/app/layout.tsx` + `src/components/app-nav.tsx`（顶栏、当前路由高亮）。
 
@@ -264,8 +394,6 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 
 ```bash
 nvm use
-cd /home/devbox/project
-
 pnpm install
 cp .env.example .env    # 编辑 DATABASE_URL
 
@@ -279,6 +407,34 @@ pnpm lint
 pnpm test
 pnpm build
 ```
+
+### 本地开发（Mac + Docker PostgreSQL）
+
+本项目已可在本地 Mac 环境中使用 Docker PostgreSQL 稳定开发。
+
+#### 启动/停止数据库
+
+```bash
+docker compose up -d
+docker compose down
+```
+
+注意：不要随便运行 `docker compose down -v`，否则会删除本地数据库 volume 与数据。
+
+#### DATABASE_URL（本地 Docker 示例）
+
+`.env.example` 提供了本地默认示例（包含 `?schema=app`）：
+
+```
+DATABASE_URL="postgresql://timeblock:timeblock_password@localhost:5432/timeblock_db?schema=app"
+```
+
+对应 `docker-compose.yml` 的默认配置：
+
+- `POSTGRES_USER=timeblock`
+- `POSTGRES_PASSWORD=timeblock_password`
+- `POSTGRES_DB=timeblock_db`
+- 端口映射：`5432:5432`
 
 **Sealos / 托管 PostgreSQL**：勿对默认 `public` 做未隔离的 `db push`。使用 `?schema=app` + `@@schema("app")`。
 
@@ -309,7 +465,7 @@ node -e "require('dotenv/config');const{Pool}=require('pg');(async()=>{const p=n
 示例（`.env.example`）：
 
 ```
-DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/postgres?schema=app"
+DATABASE_URL="postgresql://timeblock:timeblock_password@localhost:5432/timeblock_db?schema=app"
 ```
 
 ## 11. 主要文件
@@ -323,6 +479,10 @@ src/lib/prisma.ts
 src/lib/time.ts
 src/lib/calendar.ts
 src/lib/calendar.test.ts
+src/lib/stats.ts
+src/lib/dashboard-ranges.ts
+src/lib/actions/calendar-time-blocks.ts
+src/lib/actions/time-block-shared.ts
 src/lib/constants.ts
 src/lib/validation.ts
 src/lib/i18n/
@@ -334,8 +494,14 @@ src/components/calendar-block.tsx
 src/components/calendar-day-column.tsx
 src/components/calendar-day-grid.tsx
 src/components/calendar-week-grid.tsx
+src/components/calendar-interactive-view.tsx
+src/components/calendar-draggable-block.tsx
+src/components/calendar-block-edit-panel.tsx
 src/components/category-row.tsx
 src/components/time-block-row.tsx
+src/components/dashboard-charts.tsx
+src/app/review/day/page.tsx
+src/app/review/week/page.tsx
 
 src/app/calendar/page.tsx
 src/app/categories/page.tsx
@@ -353,20 +519,27 @@ docs/AI_CONTEXT.md
 - **列表默认查看模式**；编辑 / 取消 / 保存 + `redirect`
 - **顶部新建表单**；成功 `?success=created` + 表单 `key` 重置
 - **删除**：`DeleteConfirmButton` + i18n `confirm`
-- **日历页**：只读展示；底部链接至 `/time-blocks` 编辑
+- **日历页**：支持选择块并在页内编辑（保存后留在 `/calendar`）；仍保留底部链接至 `/time-blocks`
 
 ## 13. 全局已知限制
 
 - **无用户认证**
-- **日历**：无拖拽、无块级编辑链接（仅页底总链）、无第三方日历库
-- **Dashboard**：无图表、无按日期筛选
+- **日历**：无“点击创建”；周视图交互相对有限；无第三方日历库
+- **Dashboard**：
+  - 无自定义日期筛选（仅默认“今天/本周”）
+  - **跨午夜 TimeBlock 的统计口径（简化版）**：当前 Dashboard 统计会把**整段时长**计入其 `startTime` 所在的那一天/那一周（不会按天裁剪拆分）。例如 23:00–01:00 会全部算在开始日。
+  - 图表为基础版：无日期选择器、无月统计、无高级交互（hover/tooltip 以 Recharts 默认实现为主）
 - **无** Pomodoro、重复事件、外部日历、shadcn、E2E
 - **Node 20.19+** 运行 Prisma 7 CLI
 
+## 15. Devbox（可选/历史）
+
+仓库内保留了 `.devbox-original/` 作为迁移前的参考（不作为默认开发方式）。
+
 ## 14. 建议下一阶段
 
-1. **日历事件详情增强** — 块上展示 status、完成度、备注摘要等
-2. **可选**：日历块 → `/time-blocks`（定位或高亮对应记录）
-3. 日历拖拽调整时间（Phase 2 后期）
-4. Dashboard 图表与日期范围筛选
-5. 更远期：认证、Pomodoro、重复事件、外部日历
+1. **Phase 5（建议）— 复盘体验与统计精度**
+   - 统计口径升级：跨午夜 TimeBlock **按天裁剪拆分**（避免“全部算在开始日”）
+   - Review 体验：为 `/review/day` 和 `/review/week` 增加更清晰的“需要复盘”筛选规则与快捷跳转（仍保持轻量）
+   - Dashboard：把 Phase 4 完成质量指标用更直观的方式呈现（例如按分类完成率、低效率时间趋势），并补齐更完整空态文案
+2. 更远期：认证、重复事件、外部日历同步、E2E

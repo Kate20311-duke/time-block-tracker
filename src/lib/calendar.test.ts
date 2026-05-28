@@ -291,6 +291,12 @@ describe("calculateResizedRange", () => {
       expect(result.endTime.getMinutes() % CALENDAR_SNAP_MINUTES).toBe(0);
     }
   });
+
+  it("does not push endTime past 24:00 when enforcing minimum duration", () => {
+    const lateStart = new Date(2026, 4, 21, 23, 58);
+    const result = calculateResizedRange(lateStart, 23 * 60 + 59, day);
+    expect(result.ok).toBe(false);
+  });
 });
 
 describe("layoutBlockInDay", () => {

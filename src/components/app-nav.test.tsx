@@ -43,5 +43,9 @@ describe("AppNav", () => {
     expect(
       screen.getByRole("link", { name: dict.nav.dashboard }),
     ).toHaveAttribute("href", "/dashboard");
+    expect(screen.getByRole("link", { name: dict.nav.review })).toHaveAttribute(
+      "href",
+      "/review/day",
+    );
   });
 });

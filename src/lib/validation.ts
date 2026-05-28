@@ -1,6 +1,8 @@
 import {
   TIME_BLOCK_STATUSES,
+  TIME_BLOCK_EFFICIENCY_LEVELS,
   type TimeBlockStatus,
+  type TimeBlockEfficiencyLevel,
 } from "@/lib/constants";
 
 export function isNonEmptyTrimmed(value: string): boolean {
@@ -27,11 +29,18 @@ export function isValidTimeBlockStatus(
   return (TIME_BLOCK_STATUSES as readonly string[]).includes(status);
 }
 
+export function isValidTimeBlockEfficiencyLevel(
+  level: string,
+): level is TimeBlockEfficiencyLevel {
+  return (TIME_BLOCK_EFFICIENCY_LEVELS as readonly string[]).includes(level);
+}
+
 export type TimeBlockCreateError =
   | "missing_fields"
   | "invalid_range"
   | "invalid_status"
-  | "invalid_completion";
+  | "invalid_completion"
+  | "invalid_efficiency";
 
 export function validateTimeBlockCreate(input: {
   title: string;
@@ -40,6 +49,7 @@ export function validateTimeBlockCreate(input: {
   endTime: Date | null;
   status: string;
   completionLevel: number;
+  efficiencyLevel?: string | null;
 }): TimeBlockCreateError | null {
   if (!isNonEmptyTrimmed(input.title) || !isNonEmptyTrimmed(input.categoryId)) {
     return "missing_fields";
@@ -59,6 +69,10 @@ export function validateTimeBlockCreate(input: {
     input.completionLevel > 100
   ) {
     return "invalid_completion";
+  }
+  const efficiencyRaw = String(input.efficiencyLevel ?? "").trim();
+  if (efficiencyRaw && !isValidTimeBlockEfficiencyLevel(efficiencyRaw)) {
+    return "invalid_efficiency";
   }
   return null;
 }

@@ -216,6 +216,12 @@ export default async function CalendarPage({
     label: getStatusLabel(s, locale),
   }));
 
+  const efficiencyOptions = [
+    { value: "low", label: locale === "zh" ? "低" : "Low" },
+    { value: "medium", label: locale === "zh" ? "中" : "Medium" },
+    { value: "high", label: locale === "zh" ? "高" : "High" },
+  ];
+
   const formLabels = {
     panelAria: t.calendar.edit.panelAria,
     titleLabel: t.timeBlocks.titleLabel,
@@ -223,8 +229,11 @@ export default async function CalendarPage({
     startTime: t.timeBlocks.startTime,
     endTime: t.timeBlocks.endTime,
     noteOptional: t.timeBlocks.noteOptional,
+    reviewNoteOptional: t.timeBlocks.reviewNoteOptional,
     status: t.timeBlocks.status,
     completionRange: t.timeBlocks.completionRange,
+    efficiencyOptional: t.timeBlocks.efficiencyOptional,
+    selectEfficiency: t.timeBlocks.selectEfficiency,
     save: t.common.save,
     cancel: t.common.cancel,
     submitting: t.common.submitting,
@@ -361,6 +370,7 @@ export default async function CalendarPage({
           }
           categories={categories.map((c) => ({ id: c.id, name: c.name }))}
           statusOptions={statusOptions}
+          efficiencyOptions={efficiencyOptions}
           startTimeLocal={
             selectedBlockRaw
               ? toDateTimeLocalValue(selectedBlockRaw.startTime)

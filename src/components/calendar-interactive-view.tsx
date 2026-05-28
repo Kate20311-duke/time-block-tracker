@@ -20,8 +20,11 @@ type FormLabels = {
   startTime: string;
   endTime: string;
   noteOptional: string;
+  reviewNoteOptional: string;
   status: string;
   completionRange: string;
+  efficiencyOptional: string;
+  selectEfficiency: string;
   save: string;
   cancel: string;
   submitting: string;
@@ -37,6 +40,7 @@ type Props = {
   editPanelKey?: string;
   categories: CategoryOption[];
   statusOptions: { value: string; label: string }[];
+  efficiencyOptions: { value: string; label: string }[];
   startTimeLocal: string;
   endTimeLocal: string;
   formLabels: FormLabels;
@@ -77,6 +81,7 @@ export function CalendarInteractiveView({
   editPanelKey,
   categories,
   statusOptions,
+  efficiencyOptions,
   startTimeLocal,
   endTimeLocal,
   formLabels,
@@ -135,6 +140,7 @@ export function CalendarInteractiveView({
           columns={weekColumns}
           selectedBlockId={selectedBlockId}
           onBlockSelect={handleBlockSelect}
+          onScheduleSaveEnd={handleScheduleSaveEnd}
         />
       ) : null}
 
@@ -167,6 +173,7 @@ export function CalendarInteractiveView({
           block={selectedBlock}
           categories={categories}
           statusOptions={statusOptions}
+          efficiencyOptions={efficiencyOptions}
           startTimeLocal={startTimeLocal}
           endTimeLocal={endTimeLocal}
           calendarDate={calendarDate}
@@ -190,9 +197,11 @@ export function toCalendarEditBlockData(block: {
   id: string;
   title: string;
   note: string | null;
+  reviewNote: string | null;
   categoryId: string;
   status: string;
   completionLevel: number;
+  efficiencyLevel: string | null;
   startTime: Date;
   endTime: Date;
   category: { name: string; color: string };
@@ -201,9 +210,11 @@ export function toCalendarEditBlockData(block: {
     id: block.id,
     title: block.title,
     note: block.note,
+    reviewNote: block.reviewNote,
     categoryId: block.categoryId,
     status: block.status,
     completionLevel: block.completionLevel,
+    efficiencyLevel: block.efficiencyLevel,
     startTimeIso: block.startTime.toISOString(),
     endTimeIso: block.endTime.toISOString(),
     category: block.category,

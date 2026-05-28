@@ -83,6 +83,7 @@ export function CalendarDayColumn({
               topPercent={block.layout.topPercent}
               heightPercent={block.layout.heightPercent}
               isSelected={selectedBlockId === block.blockId}
+              compact={compact}
               onSelect={onBlockSelect}
               onSaveEnd={onScheduleSaveEnd}
             />

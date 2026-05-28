@@ -74,6 +74,12 @@ export default async function TimeBlocksPage({
     label: getStatusLabel(s, locale),
   }));
 
+  const efficiencyOptions = [
+    { value: "low", label: locale === "zh" ? "低" : "Low" },
+    { value: "medium", label: locale === "zh" ? "中" : "Medium" },
+    { value: "high", label: locale === "zh" ? "高" : "High" },
+  ];
+
   const createFormKey = success === "created" ? "created" : "default";
 
   return (
@@ -187,6 +193,21 @@ export default async function TimeBlocksPage({
                 className="rounded border border-zinc-300 px-3 py-2"
               />
             </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="font-medium">{t.timeBlocks.efficiencyOptional}</span>
+              <select
+                name="efficiencyLevel"
+                defaultValue=""
+                className="rounded border border-zinc-300 px-3 py-2"
+              >
+                <option value="">{t.timeBlocks.selectEfficiency}</option>
+                {efficiencyOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="flex flex-col gap-1 text-sm sm:col-span-2">
               <span className="font-medium">{t.timeBlocks.noteOptional}</span>
               <textarea
@@ -194,6 +215,15 @@ export default async function TimeBlocksPage({
                 rows={2}
                 className="rounded border border-zinc-300 px-3 py-2"
                 placeholder={t.timeBlocks.notePlaceholder}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+              <span className="font-medium">{t.timeBlocks.reviewNoteOptional}</span>
+              <textarea
+                name="reviewNote"
+                rows={2}
+                className="rounded border border-zinc-300 px-3 py-2"
+                placeholder={t.timeBlocks.reviewNotePlaceholder}
               />
             </label>
             <div className="sm:col-span-2">
@@ -226,9 +256,11 @@ export default async function TimeBlocksPage({
                     id: block.id,
                     title: block.title,
                     note: block.note,
+                    reviewNote: block.reviewNote,
                     categoryId: block.categoryId,
                     status: block.status,
                     completionLevel: block.completionLevel,
+                    efficiencyLevel: block.efficiencyLevel,
                     startTime: block.startTime,
                     endTime: block.endTime,
                     category: block.category,
@@ -238,6 +270,7 @@ export default async function TimeBlocksPage({
                     name: c.name,
                   }))}
                   statusOptions={statusOptions}
+                  efficiencyOptions={efficiencyOptions}
                   startTimeLocal={toDateTimeLocalValue(block.startTime)}
                   endTimeLocal={toDateTimeLocalValue(block.endTime)}
                   labels={{
@@ -248,6 +281,9 @@ export default async function TimeBlocksPage({
                     noteOptional: t.timeBlocks.noteOptional,
                     status: t.timeBlocks.status,
                     completionRange: t.timeBlocks.completionRange,
+                    efficiencyOptional: t.timeBlocks.efficiencyOptional,
+                    selectEfficiency: t.timeBlocks.selectEfficiency,
+                    reviewNoteOptional: t.timeBlocks.reviewNoteOptional,
                     durationFormatted: `${minutes} ${t.timeBlocks.minutesUnit}`,
                     statusCompletionFormatted: `${getStatusLabel(block.status, locale)} · ${block.completionLevel}%`,
                     startFormatted: formatDateTime(block.startTime, locale),

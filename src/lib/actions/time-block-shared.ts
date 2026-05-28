@@ -15,9 +15,11 @@ export type TimeBlockFormFields = {
   id: string;
   title: string;
   note: string | null;
+  reviewNote: string | null;
   categoryId: string;
   status: string;
   completionLevel: number;
+  efficiencyLevel: string | null;
   startTime: Date | null;
   endTime: Date | null;
 };
@@ -45,12 +47,14 @@ export function parseTimeBlockFormData(formData: FormData): TimeBlockFormFields 
     id: String(formData.get("id") ?? "").trim(),
     title: String(formData.get("title") ?? "").trim(),
     note: parseOptionalNote(formData.get("note")),
+    reviewNote: parseOptionalNote(formData.get("reviewNote")),
     categoryId: String(formData.get("categoryId") ?? "").trim(),
     status: String(formData.get("status") ?? "planned"),
     completionLevel:
       completionLevelRaw === null || completionLevelRaw === ""
         ? 0
         : Number(completionLevelRaw),
+    efficiencyLevel: parseOptionalNote(formData.get("efficiencyLevel")),
     startTime: parseDateTimeLocal(String(formData.get("startTime") ?? "")),
     endTime: parseDateTimeLocal(String(formData.get("endTime") ?? "")),
   };
@@ -68,6 +72,7 @@ export function validateFullTimeBlockForm(data: TimeBlockFormFields): {
     endTime: data.endTime,
     status: data.status,
     completionLevel: data.completionLevel,
+    efficiencyLevel: data.efficiencyLevel,
   });
 
   if (validationError) {
@@ -90,9 +95,11 @@ export function buildFullTimeBlockUpdateData(
   return {
     title: data.title,
     note: data.note,
+    reviewNote: data.reviewNote,
     categoryId: data.categoryId,
     status: data.status,
     completionLevel: clampCompletionLevel(data.completionLevel),
+    efficiencyLevel: data.efficiencyLevel,
     startTime: range.start,
     endTime: range.end,
   };

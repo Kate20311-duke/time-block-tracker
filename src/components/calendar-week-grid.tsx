@@ -7,7 +7,12 @@ import {
   HOUR_ROW_PX,
   type CalendarColumnBlock,
 } from "@/components/calendar-day-column";
-import { formatCalendarColumnHeading, formatHourLabel, getHourLabels } from "@/lib/calendar";
+import {
+  formatCalendarColumnHeading,
+  formatCalendarDateParam,
+  formatHourLabel,
+  getHourLabels,
+} from "@/lib/calendar";
 import type { Locale } from "@/lib/i18n/types";
 
 export type WeekGridColumn = {
@@ -22,6 +27,7 @@ type Props = {
   columns: WeekGridColumn[];
   selectedBlockId?: string;
   onBlockSelect: (blockId: string) => void;
+  onScheduleSaveEnd: (ok: boolean) => void;
 };
 
 export function CalendarWeekGrid({
@@ -29,6 +35,7 @@ export function CalendarWeekGrid({
   columns,
   selectedBlockId,
   onBlockSelect,
+  onScheduleSaveEnd,
 }: Props) {
   const hours = getHourLabels();
 
@@ -85,6 +92,9 @@ export function CalendarWeekGrid({
                 selectedBlockId={selectedBlockId}
                 compact
                 onBlockSelect={onBlockSelect}
+                enableDrag
+                calendarDate={formatCalendarDateParam(column.day)}
+                onScheduleSaveEnd={onScheduleSaveEnd}
               />
             ))}
           </div>

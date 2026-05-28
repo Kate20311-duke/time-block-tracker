@@ -28,6 +28,8 @@ model TimeBlock {
   endTime         DateTime
   status          String   @default("planned")
   completionLevel Int      @default(0)
+  efficiencyLevel String?
+  reviewNote      String?
   categoryId      String
   category        Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   createdAt       DateTime @default(now())

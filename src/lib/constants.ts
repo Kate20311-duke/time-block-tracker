@@ -7,6 +7,11 @@ export const TIME_BLOCK_STATUSES = [
 
 export type TimeBlockStatus = (typeof TIME_BLOCK_STATUSES)[number];
 
+export const TIME_BLOCK_EFFICIENCY_LEVELS = ["low", "medium", "high"] as const;
+
+export type TimeBlockEfficiencyLevel =
+  (typeof TIME_BLOCK_EFFICIENCY_LEVELS)[number];
+
 export const NAV_ROUTES = [
   { href: "/" },
   { href: "/categories" },

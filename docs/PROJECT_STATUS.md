@@ -6,6 +6,66 @@
 
 ## 2. 当前阶段
 
+**Phase 7：Docker 化（已完成）** — 详见 §19
+
+**Phase 6：用户认证与按用户数据隔离（已完成）** — 详见 §18
+
+**Phase 5 及更早**：专注、复盘、日历等 — 见上文各 Phase 小节
+
+**下一步（Phase 8）**：Sealos 部署（见 §19.11、§16）
+
+- **Phase 5.4（已完成第一版）Dashboard 专注统计**
+  - 独立区块「专注统计（FocusSession）」：今天/本周专注时长、完成/放弃次数、完成率、已转换数量
+  - 各分类专注时长列表（仅已完成/已转换会话；标注已写入时间块的次数）
+  - 时间块图表与「各分类时间统计」仍仅使用 `TimeBlock`；文案说明避免重复相加
+  - 工具：`src/lib/focus-stats.ts` + 单元测试
+
+- **Phase 5.3（已完成第一版）专注完成 → 时间块**
+  - 完成后提示「是否转为时间块」；确认调用 `convertFocusSessionToTimeBlock`
+  - 默认标题：无标题时用「专注会话」/ `Focus Session`
+  - 防重复转换（`already_converted` / `convertedToTimeBlock`）
+  - 放弃会话不自动转换
+  - `/focus` 底部「最近专注记录」：状态、时长、是否已转换；未完成转换的 `completed` 可补转
+
+- **Phase 5.2（已完成第一版）`/focus` 专注页与番茄钟 UI**
+  - 路由：`/focus`（服务端取分类 + 客户端倒计时）
+  - 组件：`src/components/focus-timer.tsx`、`src/components/focus-history.tsx`
+  - 时长预设：15 / 25 / 45 / 50 / 90 分钟 + 自定义
+  - 操作：开始（创建 `running` 会话）、暂停/继续（纯客户端）、完成、放弃
+  - 导航与首页入口、中英 i18n
+
+- **Phase 5.8（已完成）Dashboard 专注区拆分（Option B + 文案）**
+  - 专注区显式展示：本周专注总时长、已写入时间块的专注、尚未写入时间块的专注
+  - `summarizeFocusSessions` 新增 `convertedFocusMinutes` / `unconvertedFocusMinutes`
+  - 统计口径不变：TimeBlock 仅来自时间块；FocusSession 仍计全部 completed/converted
+  - 文案：`timeBlocksSectionNote`、`focusSectionNote` 说明双视角重叠，勿直接相加
+
+- **Phase 5.7（已完成）四项收尾修复**
+  - 时长展示：统一 `formatDurationMinutes`（85 分钟 → `1 小时 25 分钟`，非 `85 小时` 或 `1.4 小时`）
+  - 转换事务：先 `updateMany` claim（`status: completed`, `convertedToTimeBlock: false`），再创建 TimeBlock，再写 `timeBlockId`；失败回滚无孤儿块
+  - Dashboard 文案：`timeBlocksSectionNote` + 优化 `focusSectionNote`
+  - 测试：`focus-convert.test.ts`、`time.test.ts`（formatDurationMinutes）
+
+- **Phase 5.6（已完成）Dashboard 重复计数审计**
+  - **结论：未发现将 Focus 时长并入 TimeBlock 合计的 bug**（两路数据独立计算，分区展示）
+  - TimeBlock/分类/图表：仅 `prisma.timeBlock` → `src/lib/stats.ts`
+  - 专注统计：仅 `prisma.focusSession` → `src/lib/focus-stats.ts`
+  - 已转换专注：25 分钟计入 **TimeBlock 85** 与 **专注 55** 两个指标（ intentional 双视角，非同一「总时长」字段相加）
+  - 测试：`src/lib/dashboard-metrics.test.ts`（含 60+25+30+20 场景）
+
+- **Phase 5.5（已完成）收尾与测试**
+  - 空状态：无分类、无专注记录、无已完成记录
+  - 按钮 loading / disabled、`aria-busy`、移动端按钮与倒计时布局
+  - 转换幂等：`updateMany` + `convertedToTimeBlock: false` 条件
+  - 集成规则测试：`src/lib/focus-flow.test.ts`、`src/lib/dashboard-metrics.test.ts`（104 tests 总量见下方验证）
+
+- **Phase 5.1（已完成）FocusSession 数据模型与 Server Actions**
+  - Prisma 模型 `FocusSession` + 与 `Category`、`TimeBlock` 可选 1:1 关联
+  - 迁移：`20260529120000_add_focus_session`
+  - Actions：`src/lib/actions/focus-sessions.ts`（创建、更新状态、完成、放弃、转换为 TimeBlock）
+  - 校验：`src/lib/validation.ts`、`src/lib/actions/focus-shared.ts`
+  - 单元测试：`focus-shared.test.ts`、扩展 `validation.test.ts`
+
 **Phase 4：完成追踪与复盘（已完成第一版）**
 
 - **Phase 1：已完成** — 数据模型、分类/时间块 CRUD、Dashboard、导航、i18n、测试
@@ -216,7 +276,8 @@ pnpm dev    # http://localhost:3000/calendar
 
 近期结果（本地 Mac + Docker 环境）：
 
-- `pnpm test` ✅（54 tests）
+- `pnpm test` ✅（104 tests）
+- `pnpm typecheck` ✅ · `pnpm lint` ✅ · `pnpm build` ✅
 - `pnpm typecheck` ✅
 - `pnpm lint` ✅
 - `pnpm build` ✅
@@ -339,17 +400,29 @@ pnpm dev    # http://localhost:3000/calendar
 
 PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 
+### User（Auth.js）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String (cuid) | 主键 |
+| name, email, image | 可选 | GitHub 资料 |
+| categories | Category[] | 用户拥有的分类 |
+
+另：`Account`、`Session`、`VerificationToken`（Prisma Adapter 标准表）。
+
 ### Category
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | String (cuid) | 主键 |
+| **userId** | String | 外键 → User（**数据隔离根**） |
 | name | String | 名称 |
 | color | String | 颜色（如 `#3b82f6`） |
 | description | String? | 可选说明 |
 | createdAt | DateTime | 默认 now |
 | updatedAt | DateTime | 自动更新 |
 | timeBlocks | TimeBlock[] | 关联时间块 |
+| focusSessions | FocusSession[] | 关联专注 |
 
 ### TimeBlock
 
@@ -370,13 +443,48 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 
 **status 字符串值**（非 enum）：`planned` | `completed` | `partial` | `skipped`
 
-**关系**：Category 1 — N TimeBlock；删除分类时若仍有关联时间块则被拒绝。
+**关系**：User 1 — N Category；Category 1 — N TimeBlock。删除分类前应用层检查关联 TimeBlock **与** FocusSession（`has-records`）。
+
+### FocusSession
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String (cuid) | 主键 |
+| title | String? | 可选标题 |
+| note | String? | 可选备注 |
+| categoryId | String | 外键 → Category |
+| startTime | DateTime | 开始时间 |
+| endTime | DateTime? | 结束时间（进行中可为空） |
+| plannedDurationMinutes | Int | 计划时长（分钟，须 > 0） |
+| actualDurationMinutes | Int? | 实际时长（完成/放弃时可填） |
+| status | String | 默认 `planned`；见下方 |
+| convertedToTimeBlock | Boolean | 是否已转为 TimeBlock，默认 false |
+| timeBlockId | String? | 可选，唯一，关联生成的 TimeBlock |
+| createdAt / updatedAt | DateTime | 审计字段 |
+
+**status 字符串值**：`planned` | `running` | `completed` | `abandoned` | `converted`
+
+**关系**：
+
+- Category 1 — N FocusSession（`onDelete: Restrict`）
+- FocusSession 0..1 — 1 TimeBlock（`timeBlockId` 唯一；删除 TimeBlock 时 `SetNull`）
+
+**Server Actions**（`src/lib/actions/focus-sessions.ts`，返回 `{ ok, data } | { ok, error }`）：
+
+| Action | 说明 |
+|--------|------|
+| `createFocusSession` | 创建会话（默认 `planned`，`startTime` 默认当前时间） |
+| `updateFocusSessionStatus` | 更新 status（已 converted 的不可改） |
+| `completeFocusSession` | `completed` + `endTime` + `actualDurationMinutes` |
+| `abandonFocusSession` | `abandoned`；可选 `endTime` |
+| `convertFocusSessionToTimeBlock` | 仅 `completed` 且未转换；创建 `TimeBlock`（`completed`, 100%）并链接 |
 
 ### 迁移
 
 - `20260521173159_init`
 - `20260521180044_add_category_description`
 - `20260528030837_add_timeblock_review_fields`（新增 `TimeBlock.efficiencyLevel`、`TimeBlock.reviewNote`）
+- `20260529120000_add_focus_session`（新增 `FocusSession` 表）
 
 ## 7. 已实现页面
 
@@ -386,7 +494,8 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 | `/categories` | 动态 | 分类 CRUD（查看/编辑模式 + 顶部新建表单） |
 | `/time-blocks` | 动态 | 时间块 CRUD（列表 + 表单） |
 | `/calendar` | 动态 | **周/日视图**（默认周）；`?date=`、`?view=day\|week` |
-| `/dashboard` | 动态 | 今天/本周统计 + 分类 breakdown + 基础图表 |
+| `/dashboard` | 动态 | 时间块统计 + 图表 + 专注会话统计（分区展示） |
+| `/focus` | 动态 | 番茄钟专注：配置会话 + 倒计时 + 完成/放弃 |
 
 全局布局：`src/app/layout.tsx` + `src/components/app-nav.tsx`（顶栏、当前路由高亮）。
 
@@ -461,12 +570,15 @@ node -e "require('dotenv/config');const{Pool}=require('pg');(async()=>{const p=n
 | 变量 | 必填 | 说明 |
 |------|------|------|
 | `DATABASE_URL` | 是 | PostgreSQL 连接串 |
+| `AUTH_SECRET` | 是 | Auth.js 会话签名（`openssl rand -base64 32`） |
+| `AUTH_URL` | 是（生产） | 应用根 URL，本地 `http://localhost:3000` |
+| `AUTH_TRUST_HOST` | 本地可选 | 开发环境可设 `true` |
+| `AUTH_GITHUB_ID` | 是 | GitHub OAuth App Client ID |
+| `AUTH_GITHUB_SECRET` | 是 | GitHub OAuth App Client Secret |
 
-示例（`.env.example`）：
+GitHub OAuth 回调：`http://localhost:3000/api/auth/callback/github`
 
-```
-DATABASE_URL="postgresql://timeblock:timeblock_password@localhost:5432/timeblock_db?schema=app"
-```
+示例见 `.env.example`。
 
 ## 11. 主要文件
 
@@ -481,7 +593,11 @@ src/lib/calendar.ts
 src/lib/calendar.test.ts
 src/lib/stats.ts
 src/lib/dashboard-ranges.ts
+src/lib/db/scoped.ts
+src/lib/db/scoped-where.ts
 src/lib/actions/calendar-time-blocks.ts
+src/lib/actions/focus-sessions.ts
+src/lib/actions/focus-shared.ts
 src/lib/actions/time-block-shared.ts
 src/lib/constants.ts
 src/lib/validation.ts
@@ -500,6 +616,12 @@ src/components/calendar-block-edit-panel.tsx
 src/components/category-row.tsx
 src/components/time-block-row.tsx
 src/components/dashboard-charts.tsx
+src/components/focus-timer.tsx
+src/components/focus-history.tsx
+src/lib/focus.ts
+src/lib/focus-stats.ts
+src/lib/focus-flow.test.ts
+src/app/focus/page.tsx
 src/app/review/day/page.tsx
 src/app/review/week/page.tsx
 
@@ -523,23 +645,309 @@ docs/AI_CONTEXT.md
 
 ## 13. 全局已知限制
 
-- **无用户认证**
+- **认证**：仅 GitHub OAuth；无邮箱密码登录
+- **数据隔离**：每用户仅见自己的 Category / TimeBlock / FocusSession（经 `Category.userId`）
+- **Next.js 16**：构建可能提示 `middleware` 将更名为 `proxy`（见 §18.11）
 - **日历**：无“点击创建”；周视图交互相对有限；无第三方日历库
 - **Dashboard**：
   - 无自定义日期筛选（仅默认“今天/本周”）
   - **跨午夜 TimeBlock 的统计口径（简化版）**：当前 Dashboard 统计会把**整段时长**计入其 `startTime` 所在的那一天/那一周（不会按天裁剪拆分）。例如 23:00–01:00 会全部算在开始日。
   - 图表为基础版：无日期选择器、无月统计、无高级交互（hover/tooltip 以 Recharts 默认实现为主）
-- **无** Pomodoro、重复事件、外部日历、shadcn、E2E
+- **专注**：暂停状态不写入数据库；刷新页面会丢失进行中的倒计时
+- **无** 重复事件、外部日历、shadcn、E2E
 - **Node 20.19+** 运行 Prisma 7 CLI
 
-## 15. Devbox（可选/历史）
+## 14. Phase 5 验证命令
+
+```bash
+nvm use
+docker compose up -d
+pnpm install
+pnpm prisma generate
+pnpm exec prisma migrate deploy   # 或 pnpm db:migrate
+pnpm test
+pnpm typecheck
+pnpm lint
+pnpm build
+pnpm dev                          # http://localhost:3000/focus
+```
+
+## 15. Phase 5 手动测试清单
+
+**数据与转换**
+
+- [ ] 无分类时 `/focus` 显示空状态并引导至 `/categories`
+- [ ] 开始 → 完成 → 「转为时间块」→ `/time-blocks` 与 `/calendar` 出现记录
+- [ ] 完成但不转换 → 仅 `FocusSession` 为 `completed`，无新 TimeBlock
+- [ ] 放弃 → `abandoned`，不出现转换提示，不创建 TimeBlock
+- [ ] 已转换会话再次转换 → 错误提示（`already_converted`），历史无转换按钮
+- [ ] 历史列表中 `completed` 未转换项可补转
+
+**Dashboard**
+
+- [ ] 「时间块统计」与「专注统计」分区显示，说明文案可见
+- [ ] 已转换专注：时间块区有记录；专注区完成次数含该会话
+- [ ] 勿将两栏「专注时长」与「记录时间」简单相加
+
+**移动端**
+
+- [ ] 窄屏下倒计时与按钮可点、无横向溢出
+
+**重复计数（Dashboard）**
+
+- [ ] Study 分类时间块合计 **85 分钟**（60 手动 + 25 转换），不是 110 或 140
+- [ ] 本周记录时间（时间块）显示 **1 小时 25 分钟** 或 **85 分钟**（不是 `85 小时` 或 `1.4 小时`）
+- [ ] 本周专注时长 **55 分钟**（25 已转换 + 30 未转换），不含放弃 20
+- [ ] 已放弃 **1 次**；放弃不计入专注时长
+- [ ] `/focus` 历史三条：**converted(25)**、**completed 未转换(30)**、**abandoned(20)**
+- [ ] 页面有记录时间 / 专注时间分区说明，勿将两栏相加
+
+## 16. 建议下一阶段（Phase 8 及以后）
+
+1. **Sealos 部署**（Phase 8）：镜像仓库、应用、PostgreSQL、环境变量、域名、OAuth callback、线上 `migrate deploy`
+2. **统计精度**：跨午夜 TimeBlock / FocusSession 按天裁剪拆分（与日历一致）
+3. **专注增强**：localStorage 恢复进行中计时、可选浏览器通知
+4. **复盘**：Review 页纳入 FocusSession 摘要（可选）
+5. 更远期：重复事件、外部日历、E2E、多因素认证
+
+## 17. Devbox（可选/历史）
 
 仓库内保留了 `.devbox-original/` 作为迁移前的参考（不作为默认开发方式）。
 
-## 14. 建议下一阶段
+## 18. Phase 6 — 用户认证与数据隔离（已完成）
 
-1. **Phase 5（建议）— 复盘体验与统计精度**
-   - 统计口径升级：跨午夜 TimeBlock **按天裁剪拆分**（避免“全部算在开始日”）
-   - Review 体验：为 `/review/day` 和 `/review/week` 增加更清晰的“需要复盘”筛选规则与快捷跳转（仍保持轻量）
-   - Dashboard：把 Phase 4 完成质量指标用更直观的方式呈现（例如按分类完成率、低效率时间趋势），并补齐更完整空态文案
-2. 更远期：认证、重复事件、外部日历同步、E2E
+### 18.1 已完成功能（Steps A–E）
+
+| Step | 内容 |
+|------|------|
+| A | Auth.js v5 + GitHub OAuth + JWT session + `/login` + `middleware` |
+| B | `src/lib/db/scoped.ts`（`*ForUser`、`assert*Owned`） |
+| C | 7 个私有页面 scoped 读取 |
+| D | 全部业务 Server Actions `requireUser()` + 归属校验 |
+| E | 删除分类检查 TimeBlock + FocusSession；转换跨用户防护确认 |
+
+### 18.2 认证方案
+
+- **库**：`next-auth@5.0.0-beta.31`（Auth.js v5）+ `@auth/prisma-adapter`
+- **会话**：`session: { strategy: "jwt" }`（Adapter 仍写入 `Account` 等表）
+- **文件**：`src/auth.config.ts`（Edge，无 Prisma）· `src/auth.ts` · `src/app/api/auth/[...nextauth]/route.ts` · `src/middleware.ts` · `src/lib/session.ts`
+
+### 18.3 GitHub OAuth 配置
+
+1. [GitHub Developer Settings](https://github.com/settings/developers) → **New OAuth App**
+2. **Homepage URL**：`http://localhost:3000`（生产改为你的域名）
+3. **Authorization callback URL**：`http://localhost:3000/api/auth/callback/github`
+4. 复制 **Client ID** → `AUTH_GITHUB_ID`；生成 **Client Secret** → `AUTH_GITHUB_SECRET`
+
+### 18.4 环境变量
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `DATABASE_URL` | 是 | 须含 `?schema=app` |
+| `AUTH_SECRET` | 是 | `openssl rand -base64 32` |
+| `AUTH_URL` | 是 | 本地 `http://localhost:3000` |
+| `AUTH_TRUST_HOST` | 本地建议 | `true` |
+| `AUTH_GITHUB_ID` | 是 | OAuth Client ID |
+| `AUTH_GITHUB_SECRET` | 是 | OAuth Client Secret |
+
+见 `.env.example`。
+
+### 18.5 用户归属模型
+
+- **直接归属**：`Category.userId` → `User`
+- **间接归属**：`TimeBlock.categoryId`、`FocusSession.categoryId` → 须 `Category.userId === 当前用户`
+- **无** `TimeBlock.userId` / `FocusSession.userId` 列（有意保持 schema 最小）
+
+### 18.6 查询隔离策略（页面）
+
+- 每私有页：`const user = await requireUser()`
+- 列表：`categoriesForUser` / `timeBlocksForUser` / `focusSessionsForUser`
+- 日历 `blockId`：`timeBlocksForUser(user.id, { where: { id } })`，非本人无编辑块
+
+### 18.7 Server Action 保护策略
+
+- 每个 Action 开头 **`requireUser()`**（middleware 不够，Action 可被直接 POST）
+- 创建 TimeBlock / FocusSession：**`assertCategoryOwned`**
+- 更新/删除 TimeBlock / FocusSession：**`assert*Owned`** + **`updateMany`/`deleteMany`** 带 `category: { userId }`
+- 专注转换：转换前 `assertFocusSessionOwned` + `assertCategoryOwned`；事务 claim 含 `category: { userId }`
+
+### 18.8 迁移说明
+
+- 迁移：`20260529191846_auth_and_category_user`（Auth 表 + `Category.userId` NOT NULL）
+- 若库中已有无 `userId` 的 Category，迁移会失败
+- **开发库**可（需你手动确认）：`pnpm exec prisma migrate reset`（**清空全部数据**）
+- 成功后：`pnpm exec prisma migrate deploy` 或 `pnpm db:migrate`
+
+### 18.9 命令（Phase 6 验证与完成审计）
+
+**脚本（`package.json`）：** `typecheck` · `lint` · `test` · `build`（含 `prisma generate`）均存在。
+
+**2026-05-29 完成审计复验（全部通过）：**
+
+| 命令 | 结果 |
+|------|------|
+| `pnpm exec prisma generate` | ✅ |
+| `pnpm typecheck` | ✅ |
+| `pnpm lint` | ✅ |
+| `pnpm test` | ✅ 110 tests |
+| `pnpm build` | ✅（提示 middleware→proxy 为 Next 16 警告，非失败） |
+
+**本地启动：**
+
+```bash
+docker compose up -d
+cp .env.example .env    # 必填 AUTH_SECRET（非空）、GitHub OAuth
+pnpm exec prisma migrate deploy
+pnpm dev
+```
+
+**常见配置错误：** `AUTH_SECRET=""` → `MissingSecret`；行尾注释 `# AUTH_*` 在 zsh 可能导致 `pnpm dev` 失败——命令请分行执行。
+
+### 18.10 手动测试清单（双用户隔离）
+
+**准备**
+
+- [ ] `.env` 已配置 AUTH_* 与 GitHub OAuth
+- [ ] 数据库迁移已应用
+- [ ] 两个 GitHub 账号（或：Chrome 正常窗口 + 无痕窗口各登录一个账号）
+
+**用户 A**
+
+- [ ] `/login` → GitHub 登录成功 → 顶栏显示「退出」
+- [ ] 创建分类、时间块；`/focus` 完成或创建专注会话
+- [ ] `/dashboard`、`/calendar`、`/review/day` 仅显示 A 的数据
+- [ ] 记下 A 的某个 `category` id、`timeBlock` id（浏览器地址栏或列表）
+
+**用户 B**（换账号 / 换浏览器）
+
+- [ ] 登录后 **看不到** A 的分类、时间块、专注、看板数据
+- [ ] 访问 `/categories`、`/time-blocks` 等为空或仅 B 自己的数据
+- [ ] 访问 `/calendar?blockId=<A的timeBlockId>` → **无** A 的编辑面板（块不出现或无法编辑）
+- [ ] 未登录访问 `/dashboard` → 重定向到 `/login`
+- [ ] `/` 首页无需登录可访问
+- [ ] `/api/auth/*` 不被 middleware 拦截
+
+**登出**
+
+- [ ] 顶栏「退出」→ 回到可访问公开页；再访问 `/categories` → `/login`
+
+**删除分类边界（单用户）**
+
+- [ ] 分类下仅有专注记录、无时间块时，删除被阻止并显示 `has-records` 类提示
+
+### 18.11 已知限制
+
+- 无团队/共享/邀请；一用户一套私有数据
+- 无 E2E；隔离靠单元测试 + 上述手动清单
+- Build 可能提示 middleware → proxy（Next.js 16），当前仍用 `middleware.ts`
+- 跨午夜统计、专注刷新丢失等 Phase 5 限制仍在
+
+### 18.12 安全自检（代码层）
+
+| # | 项 | 状态 |
+|---|-----|------|
+| 1 | 私有页无全表 `prisma.findMany` | ✅ `src/app` 无业务 `prisma.*` |
+| 2 | Action 不单凭 `id` 写入 | ✅ `updateMany`/`deleteMany` + assert |
+| 3–4 | Category create/update/delete | ✅ |
+| 5–7 | TimeBlock create/update/delete | ✅ |
+| 8 | FocusSession create/update/convert | ✅ |
+| 9 | 日历编辑/拖拽 | ✅ |
+| 10–11 | middleware + `requireUser()` | ✅ |
+| 12–14 | `/` 公开、`/login`、Auth API | ✅ |
+
+## 19. Phase 7 — Docker 化（已完成）
+
+### 19.1 本阶段目标
+
+- 本地 Docker Compose 一键启动 PostgreSQL（`db`）
+- 生产 multi-stage Dockerfile + 可选 `app` + `db` 全栈
+- Prisma / Auth.js / 用户隔离在容器环境中可用
+- 文档：`docs/DOCKER.md`、更新 `.env.example` / README
+
+**未做**：新业务功能、UI 改动、认证逻辑重构、seed 数据。
+
+### 19.2 新增 / 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `docker-compose.yml` | `db`（healthcheck）+ `app`（build、env、`depends_on`） |
+| `Dockerfile` | deps → builder → runner；`output: standalone` |
+| `.dockerignore` | 排除 `.env`、`node_modules` 等 |
+| `next.config.ts` | `output: "standalone"` |
+| `scripts/docker-entrypoint.sh` | schema 引导 → `migrate deploy` → `node server.js` |
+| `docs/DOCKER.md` | Docker 开发与部署指南 |
+| `.env.example` | `NODE_ENV`；宿主机 vs 容器 `DATABASE_URL` 注释 |
+
+### 19.3 Docker Compose 服务
+
+| 服务 | 镜像 / 构建 | 端口 | 说明 |
+|------|-------------|------|------|
+| `db` | `postgres:16` | `5432:5432` | volume `timeblock_postgres_data`；用户/库见 compose |
+| `app` | `Dockerfile` | `3000:3000` | `env_file: .env`（可选）；`DATABASE_URL` 指向 `db` |
+
+### 19.4 Dockerfile 策略
+
+1. **deps**：`pnpm install --frozen-lockfile`
+2. **builder**：占位 `DATABASE_URL` → `prisma generate` → `next build`
+3. **runner**：复制 `.next/standalone`、static、`public`、`prisma/`、`prisma.config.ts`；全局 `prisma@7.8.0` CLI；`USER nextjs`
+
+### 19.5 Prisma 在 Docker 中
+
+- **Build**：`prisma generate`（无需真实数据库）
+- **Runtime**：entrypoint 执行 `CREATE SCHEMA IF NOT EXISTS app` + `prisma migrate deploy`
+- **开发机**：`pnpm exec prisma migrate dev` 或 `migrate deploy`
+- 连接串必须含 `?schema=app`
+
+### 19.6 必要环境变量
+
+与 §10 / §18.4 相同；Compose `app` 另设 `NODE_ENV=production`、`AUTH_TRUST_HOST=true`。
+
+### 19.7 启动流程
+
+**仅数据库 + 本地 dev：**
+
+```bash
+docker compose up -d db
+cp .env.example .env
+pnpm exec prisma generate && pnpm exec prisma migrate deploy
+pnpm dev
+```
+
+**全栈容器：**
+
+```bash
+docker compose build app
+docker compose up -d
+# 或 docker compose up app
+```
+
+### 19.8 GitHub OAuth（Docker 本地）
+
+- `AUTH_URL=http://localhost:3000`（改端口须同步 GitHub App）
+- Callback：`http://localhost:3000/api/auth/callback/github`
+
+### 19.9 验证命令（2026-05-29）
+
+| 命令 | 结果 |
+|------|------|
+| `docker compose config` | ✅ |
+| `pnpm exec prisma generate` | ✅ |
+| `pnpm typecheck` | ✅ |
+| `pnpm lint` | ✅ |
+| `pnpm test` | ✅ 110 tests |
+| `pnpm build` | ✅（middleware→proxy 警告） |
+| `docker compose build app` | ✅（pnpm 10.28.1 + Node 20） |
+| `docker compose up -d db` + `up app` | ✅ migrate deploy + Next Ready |
+| `curl localhost:3000/`、`/login` | ✅ 200 |
+
+### 19.10 已知问题
+
+- `app` 服务依赖 `.env` 中的 `AUTH_SECRET` 与 GitHub 密钥（`env_file` 可选，但 OAuth 需配置）
+- Next.js build 可能提示 middleware → proxy（非阻塞）
+- 无 Docker 业务 seed
+- 生产镜像含 `prisma-cli/node_modules` 以运行迁移，体积较大（Phase 8 可改为独立 migrate Job）
+
+### 19.11 下一阶段
+
+**Phase 8 — Sealos 部署**（镜像、App、PostgreSQL、环境变量、域名、OAuth、迁移策略）
+

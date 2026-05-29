@@ -11,6 +11,7 @@ export type CategoryRowData = {
   color: string;
   description: string | null;
   timeBlockCount: number;
+  focusSessionCount: number;
 };
 
 type Labels = {
@@ -18,6 +19,7 @@ type Labels = {
   color: string;
   descriptionOptional: string;
   timeBlockCountFormatted: string;
+  focusSessionCountFormatted: string;
   cannotDeleteFormatted: string | null;
   confirmDelete: string;
   edit: string;
@@ -34,7 +36,8 @@ type Props = {
 
 export function CategoryRow({ category, labels }: Props) {
   const [editing, setEditing] = useState(false);
-  const hasTimeBlocks = category.timeBlockCount > 0;
+  const hasRecords =
+    category.timeBlockCount > 0 || category.focusSessionCount > 0;
 
   if (!editing) {
     return (
@@ -52,6 +55,9 @@ export function CategoryRow({ category, labels }: Props) {
             ) : null}
             <p className="mt-1 text-xs text-zinc-400">
               {category.color} · {labels.timeBlockCountFormatted}
+              {category.focusSessionCount > 0
+                ? ` · ${labels.focusSessionCountFormatted}`
+                : ""}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -67,7 +73,7 @@ export function CategoryRow({ category, labels }: Props) {
               id={category.id}
               confirmMessage={labels.confirmDelete}
               deleteLabel={labels.delete}
-              disabled={hasTimeBlocks}
+              disabled={hasRecords}
             />
           </div>
         </div>

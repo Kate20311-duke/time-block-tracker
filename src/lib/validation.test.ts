@@ -3,7 +3,10 @@ import {
   clampCompletionLevel,
   getValidTimeBlockRange,
   isNonEmptyTrimmed,
+  isValidFocusSessionStatus,
   isValidTimeBlockStatus,
+  validateFocusSessionCreate,
+  validateFocusSessionPlannedDuration,
   validateTimeBlockCreate,
 } from "./validation";
 
@@ -91,5 +94,74 @@ describe("validateTimeBlockCreate", () => {
         completionLevel: 101,
       }),
     ).toBe("invalid_completion");
+  });
+});
+
+describe("validateFocusSessionPlannedDuration", () => {
+  it("accepts positive integers", () => {
+    expect(validateFocusSessionPlannedDuration(25)).toBeNull();
+  });
+
+  it("rejects zero or negative values", () => {
+    expect(validateFocusSessionPlannedDuration(0)).toBe(
+      "invalid_planned_duration",
+    );
+    expect(validateFocusSessionPlannedDuration(-5)).toBe(
+      "invalid_planned_duration",
+    );
+  });
+});
+
+describe("validateFocusSessionCreate", () => {
+  const start = new Date("2026-05-21T10:00:00");
+  const end = new Date("2026-05-21T10:25:00");
+
+  it("accepts valid create input", () => {
+    expect(
+      validateFocusSessionCreate({
+        categoryId: "cat_1",
+        plannedDurationMinutes: 25,
+        startTime: start,
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects invalid category and range", () => {
+    expect(
+      validateFocusSessionCreate({
+        categoryId: "",
+        plannedDurationMinutes: 25,
+        startTime: start,
+      }),
+    ).toBe("invalid_category");
+
+    expect(
+      validateFocusSessionCreate({
+        categoryId: "cat_1",
+        plannedDurationMinutes: 25,
+        startTime: start,
+        endTime: end,
+      }),
+    ).toBeNull();
+
+    expect(
+      validateFocusSessionCreate({
+        categoryId: "cat_1",
+        plannedDurationMinutes: 25,
+        startTime: start,
+        endTime: start,
+      }),
+    ).toBe("invalid_range");
+  });
+});
+
+describe("isValidFocusSessionStatus", () => {
+  it("accepts known statuses", () => {
+    expect(isValidFocusSessionStatus("running")).toBe(true);
+    expect(isValidFocusSessionStatus("converted")).toBe(true);
+  });
+
+  it("rejects unknown statuses", () => {
+    expect(isValidFocusSessionStatus("paused")).toBe(false);
   });
 });

@@ -24,7 +24,10 @@ vi.mock("@/components/language-switcher", () => ({
 describe("AppNav", () => {
   it("renders app name and main navigation links in Chinese", () => {
     const dict = getDictionary("zh");
-    render(<AppNav locale="zh" dict={dict} />);
+    const signOutAction = async () => {};
+    render(
+      <AppNav locale="zh" dict={dict} user={null} signOutAction={signOutAction} />,
+    );
 
     expect(screen.getByText(dict.app.brand)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: dict.nav.home })).toHaveAttribute(
@@ -43,9 +46,17 @@ describe("AppNav", () => {
     expect(
       screen.getByRole("link", { name: dict.nav.dashboard }),
     ).toHaveAttribute("href", "/dashboard");
+    expect(screen.getByRole("link", { name: dict.nav.focus })).toHaveAttribute(
+      "href",
+      "/focus",
+    );
     expect(screen.getByRole("link", { name: dict.nav.review })).toHaveAttribute(
       "href",
       "/review/day",
+    );
+    expect(screen.getByRole("link", { name: dict.nav.signIn })).toHaveAttribute(
+      "href",
+      "/login",
     );
   });
 });

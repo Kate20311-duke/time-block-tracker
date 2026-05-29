@@ -11,15 +11,23 @@ const NAV_ITEMS: { href: string; labelKey: keyof Dictionary["nav"] }[] = [
   { href: "/time-blocks", labelKey: "timeBlocks" },
   { href: "/calendar", labelKey: "calendar" },
   { href: "/dashboard", labelKey: "dashboard" },
+  { href: "/focus", labelKey: "focus" },
   { href: "/review/day", labelKey: "review" },
 ];
+
+type NavUser = {
+  name?: string | null;
+  email?: string | null;
+};
 
 type Props = {
   locale: Locale;
   dict: Dictionary;
+  user: NavUser | null;
+  signOutAction: () => Promise<void>;
 };
 
-export function AppNav({ locale, dict }: Props) {
+export function AppNav({ locale, dict, user, signOutAction }: Props) {
   const pathname = usePathname();
 
   return (
@@ -40,6 +48,23 @@ export function AppNav({ locale, dict }: Props) {
               en: dict.lang.en,
             }}
           />
+          {user ? (
+            <form action={signOutAction}>
+              <button
+                type="submit"
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+              >
+                {dict.nav.signOut}
+              </button>
+            </form>
+          ) : (
+            <Link
+              href="/login"
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+            >
+              {dict.nav.signIn}
+            </Link>
+          )}
           <nav
             aria-label={dict.nav.aria}
             className="flex flex-wrap items-center gap-1 sm:gap-2"

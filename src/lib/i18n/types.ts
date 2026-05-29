@@ -32,6 +32,16 @@ export type Dictionary = {
     calendar: string;
     dashboard: string;
     review: string;
+    focus: string;
+    signIn: string;
+    signOut: string;
+  };
+  auth: {
+    loginTitle: string;
+    loginSubtitle: string;
+    signInWithGitHub: string;
+    setupHint: string;
+    backHome: string;
   };
   home: {
     title: string;
@@ -44,6 +54,70 @@ export type Dictionary = {
       timeBlocks: { title: string; description: string };
       calendar: { title: string; description: string };
       dashboard: { title: string; description: string };
+      focus: { title: string; description: string };
+    };
+  };
+  focus: {
+    title: string;
+    subtitle: string;
+    setupTitle: string;
+    timerAria: string;
+    category: string;
+    selectCategory: string;
+    titleLabel: string;
+    titlePlaceholder: string;
+    note: string;
+    noteOptional: string;
+    notePlaceholder: string;
+    duration: string;
+    durationCustom: string;
+    minutesUnit: string;
+    needCategoryPrefix: string;
+    needCategorySuffix: string;
+    categoriesLink: string;
+    start: string;
+    pause: string;
+    resume: string;
+    complete: string;
+    abandon: string;
+    timeUp: string;
+    sessionActive: string;
+    successCompleted: string;
+    successAbandoned: string;
+    successConverted: string;
+    convertPrompt: string;
+    convertConfirm: string;
+    convertSkip: string;
+    defaultTimeBlockTitle: string;
+    working: string;
+    invalidDurationHint: string;
+    emptyNoCategoriesTitle: string;
+    historyTitle: string;
+    historyEmpty: string;
+    historyNoCompleted: string;
+    historyConverted: string;
+    historyNotConverted: string;
+    historyDuration: string;
+    historyCategory: string;
+    sessionStatus: {
+      planned: string;
+      running: string;
+      completed: string;
+      abandoned: string;
+      converted: string;
+    };
+    errors: {
+      missingFields: string;
+      invalidCategory: string;
+      invalidPlannedDuration: string;
+      invalidRange: string;
+      invalidStatus: string;
+      invalidState: string;
+      notFound: string;
+      updateFailed: string;
+      convertFailed: string;
+      alreadyConverted: string;
+      generic: string;
     };
   };
   calendar: {
@@ -90,10 +164,17 @@ export type Dictionary = {
     namePlaceholder: string;
     descriptionPlaceholder: string;
     timeBlockCount: string;
+    focusSessionCount: string;
     cannotDelete: string;
+    cannotDeleteRecords: string;
     confirmDelete: string;
     success: { created: string; updated: string; deleted: string };
-    errors: { hasTimeBlocks: string; deleteFailed: string; emptyName: string };
+    errors: {
+      hasTimeBlocks: string;
+      hasRecords: string;
+      deleteFailed: string;
+      emptyName: string;
+    };
   };
   timeBlocks: {
     title: string;
@@ -164,6 +245,23 @@ export type Dictionary = {
     uncategorized: string;
     emptyCategories: string;
     noData: string;
+    timeBlocksSection: string;
+    timeBlocksSectionNote: string;
+    focusSection: string;
+    focusSectionNote: string;
+    focusTodayTime: string;
+    focusWeekTime: string;
+    focusWeekTimeHint: string;
+    focusConvertedFocusMinutes: string;
+    focusUnconvertedFocusMinutes: string;
+    focusCompletedSessions: string;
+    focusAbandonedSessions: string;
+    focusCompletionRate: string;
+    focusConvertedSessions: string;
+    focusByCategory: string;
+    focusSessionCount: string;
+    focusConvertedInCategory: string;
+    focusNoData: string;
   };
   review: {
     dayTitle: string;

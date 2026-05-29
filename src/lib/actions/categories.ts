@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { assertCategoryOwned } from "@/lib/db/scoped";
+import { isScopedAccessError } from "@/lib/db/scoped-errors";
 import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/session";
 import { isNonEmptyTrimmed } from "@/lib/validation";
 
 function parseOptionalDescription(value: FormDataEntryValue | null): string | null {
@@ -11,6 +14,7 @@ function parseOptionalDescription(value: FormDataEntryValue | null): string | nu
 }
 
 export async function createCategory(formData: FormData): Promise<void> {
+  const user = await requireUser();
   const name = String(formData.get("name") ?? "").trim();
   const color = String(formData.get("color") ?? "#3b82f6").trim();
   const description = parseOptionalDescription(formData.get("description"));
@@ -20,7 +24,7 @@ export async function createCategory(formData: FormData): Promise<void> {
   }
 
   await prisma.category.create({
-    data: { name, color, description },
+    data: { name, color, description, userId: user.id },
   });
 
   revalidatePath("/categories");
@@ -29,6 +33,7 @@ export async function createCategory(formData: FormData): Promise<void> {
 }
 
 export async function updateCategory(formData: FormData): Promise<void> {
+  const user = await requireUser();
   const id = String(formData.get("id") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const color = String(formData.get("color") ?? "#3b82f6").trim();
@@ -38,8 +43,17 @@ export async function updateCategory(formData: FormData): Promise<void> {
     return;
   }
 
-  await prisma.category.update({
-    where: { id },
+  try {
+    await assertCategoryOwned(user.id, id);
+  } catch (error) {
+    if (isScopedAccessError(error)) {
+      return;
+    }
+    throw error;
+  }
+
+  await prisma.category.updateMany({
+    where: { id, userId: user.id },
     data: { name, color, description },
   });
 
@@ -49,22 +63,37 @@ export async function updateCategory(formData: FormData): Promise<void> {
 }
 
 export async function deleteCategory(formData: FormData): Promise<void> {
+  const user = await requireUser();
   const id = String(formData.get("id") ?? "").trim();
 
   if (!id) {
     return;
   }
 
-  const timeBlockCount = await prisma.timeBlock.count({
-    where: { categoryId: id },
-  });
+  try {
+    await assertCategoryOwned(user.id, id);
+  } catch (error) {
+    if (isScopedAccessError(error)) {
+      return;
+    }
+    throw error;
+  }
 
-  if (timeBlockCount > 0) {
-    redirect("/categories?error=has-time-blocks");
+  const [timeBlockCount, focusSessionCount] = await Promise.all([
+    prisma.timeBlock.count({
+      where: { categoryId: id, category: { userId: user.id } },
+    }),
+    prisma.focusSession.count({
+      where: { categoryId: id, category: { userId: user.id } },
+    }),
+  ]);
+
+  if (timeBlockCount > 0 || focusSessionCount > 0) {
+    redirect("/categories?error=has-records");
   }
 
   try {
-    await prisma.category.delete({ where: { id } });
+    await prisma.category.delete({ where: { id, userId: user.id } });
   } catch {
     redirect("/categories?error=delete_failed");
   }

@@ -4,185 +4,140 @@ Paste at the start of new coding sessions.
 
 ## Project
 
-Personal time-block planner + tracker.
+Personal time-block planner + Pomodoro focus tracker. **Phase 7 complete:** Docker (DB + production image).
 
-- **Phase 1 done**: Category/TimeBlock CRUD, basic dashboard, i18n, tests
-- **Phase 2.5 done**: Calendar day/week views + inline edit + drag + resize
-- **Phase 3 done (v1)**: Dashboard stats utilities + dashboard cards + basic charts (Recharts)
-- **Phase 4 done (v1)**: Completion tracking + review pages + dashboard completion metrics
-  - UI: edit status/completion/efficiency/reviewNote on `/time-blocks` and `/calendar`
-  - Review: `/review/day` and `/review/week`
-  - Stats: `summarizeCompletionQuality(...)`
+| Phase | Status |
+|-------|--------|
+| 1–6 | Done |
+| **7** | **Done** (Docker Compose db/app, Dockerfile, docs) |
+| **8+** | Sealos deploy; then stats/focus enhancements — see `PROJECT_STATUS.md` §16 / §19 |
 
 ## Stack
 
-Next.js 16 App Router · TS · Tailwind 4 · Prisma 7 · PostgreSQL (`app` schema) · pnpm · Node 20+ · Recharts
-
-## Local dev (Mac + Docker)
-
-- **DB**: Docker Desktop + `docker compose up -d`
-- **Env**: `cp .env.example .env` and set `DATABASE_URL` (must include `?schema=app`)
-- **Prisma**: `pnpm prisma generate` then `pnpm prisma migrate dev`
-- **App**: `pnpm dev` → `http://localhost:3000`
-- **Stop DB**: `docker compose down` (avoid `docker compose down -v` unless you want to wipe data)
+Next.js 16 App Router · TypeScript · Tailwind 4 · Prisma 7 · PostgreSQL `app` schema · pnpm · Node 20+ · Recharts · Vitest · **Auth.js v5** (`next-auth@beta`)
 
 ## Architecture
 
-- Pages: `src/app/` — all data routes `force-dynamic`
-- Layout: `app-nav.tsx` (client) + `language-switcher.tsx` (cookie + `router.refresh()`)
-- i18n: client `@/lib/i18n` · server `getLocale` from `@/lib/i18n/server` only
-- DB: `src/lib/prisma.ts`
-- Actions: `lib/actions/{categories,time-blocks,calendar-time-blocks}.ts` (+ `revalidatePath("/calendar")`)
-- Calendar: `src/lib/calendar.ts` (pure; includes snap/move/resize helpers) · tests in `calendar.test.ts`
-- Tests: `pnpm test` (54 tests, no E2E)
+```
+Browser → middleware (auth gate) → App Router pages (requireUser + *ForUser)
+                              → Server Actions (requireUser + assert*Owned)
+                              → src/lib/db/scoped.ts → prisma
+```
 
-## Routes
+- **Public:** `/`, `/login`, `/api/auth/*`
+- **Private:** `/categories`, `/time-blocks`, `/calendar`, `/dashboard`, `/focus`, `/review/*`
+- **No** REST API for business data; writes via Server Actions only
 
-| Route | What |
+## Auth / session
+
+| Piece | Path |
 |-------|------|
-| `/` | Home + quick links |
-| `/categories` | Category CRUD |
-| `/time-blocks` | Time block CRUD (create/edit here) |
-| `/calendar` | **Week (default) or day** calendar; see query params below |
-| `/dashboard` | Today + current week stats + category breakdown + basic charts |
-| `/review/day` | Daily review (summary + blocks) |
-| `/review/week` | Weekly review (summary + daily breakdown + items) |
+| Edge config | `src/auth.config.ts` |
+| Full Auth.js + Prisma adapter | `src/auth.ts` |
+| Routes | `src/app/api/auth/[...nextauth]/route.ts` |
+| Route protection | `src/middleware.ts` |
+| Session helpers | `src/lib/session.ts` — `getSessionUser()`, `requireUser()` |
 
-## Calendar URL
+- Provider: **GitHub OAuth only**
+- Session: **JWT** (`session: { strategy: "jwt" }`)
+- Sign-in page: `/login`
 
-| Param | Values | Default |
-|-------|--------|---------|
-| `date` | `YYYY-MM-DD` local | today (invalid → today) |
-| `view` | `week` \| `day` | **`week`** (omit `view` = week) |
+## Data model & ownership
 
-Examples: `/calendar` · `/calendar?date=2026-05-21` · `/calendar?date=2026-05-21&view=day`
+- **`User`** — Auth.js + `Category[]`
+- **`Category.userId`** — required; root of tenant isolation
+- **`TimeBlock`**, **`FocusSession`** — no `userId`; owned via **`category.userId`**
 
-- **Week**: Monday–Sunday week containing `date`; query `getWeekQueryRange`; 7 columns via `getWeekDays` + `layoutBlockInDay` per column
-- **Day**: single day `getDayQueryRange`; one column
-- **Cross-day blocks**: clipped per day; same block may appear in multiple columns (keys `{id}-{date}`)
-- **Edit**: selecting a block opens an inline edit panel on `/calendar` (save redirects back to calendar)
-- **Move/Resize**: drag within a day column updates schedule via server action, then refreshes calendar data
+Rule: never read/write private rows with `{ id }` alone.
 
-## Calendar components
+## Scoped helpers (`src/lib/db/scoped.ts`)
 
-| File | Role |
-|------|------|
-| `src/app/calendar/page.tsx` | Server page: fetch, nav, view switch |
-| `calendar-week-grid.tsx` | 7 columns + headers + hour axis |
-| `calendar-day-grid.tsx` | Day view: hour axis + one column |
-| `calendar-day-column.tsx` | Shared 24h column (`compact` in week) |
-| `calendar-block.tsx` | Positioned block (`category.color`) |
-| `calendar-draggable-block.tsx` | Drag-to-move + bottom resize handle (pointer events) |
-| `calendar-interactive-view.tsx` | Selection + inline edit panel + refresh/error UX |
-| `calendar-block-edit-panel.tsx` | Full edit form (save redirects back to `/calendar`) |
+| Helper | Use |
+|--------|-----|
+| `categoriesForUser(userId, opts?)` | Lists / dropdowns |
+| `timeBlocksForUser(userId, opts?)` | Calendar, dashboard, lists |
+| `focusSessionsForUser(userId, opts?)` | Focus, dashboard |
+| `assertCategoryOwned` | Before category-scoped creates |
+| `assertTimeBlockOwned` | Before block update/delete/schedule |
+| `assertFocusSessionOwned` | Before focus update/convert |
 
-## Key `src/lib/calendar.ts`
+Errors: `ScopedAccessError` / `isScopedAccessError`.
 
-| Function | Purpose |
-|----------|---------|
-| `parseCalendarDateParam` | `date` → start of day; fallback today |
-| `parseCalendarViewParam` | `view` → `day` or default `week` |
-| `formatCalendarDateParam` | Date → `YYYY-MM-DD` for links |
-| `startOfWeekMonday` / `endOfWeekMonday` | Mon 00:00 … next Mon 00:00 |
-| `getWeekDays` | Mon–Sun (7 dates) |
-| `getWeekQueryRange` / `getDayQueryRange` | Prisma overlap bounds |
-| `addCalendarDays` / `addCalendarWeeks` | Nav anchors |
-| `layoutBlockInDay` | Clip + % top/height for one day |
-| `formatWeekRangeHeading` / `formatCalendarColumnHeading` | Headings |
-| `CALENDAR_SNAP_MINUTES` | Snap interval (currently 5 minutes) |
-| `MIN_TIME_BLOCK_DURATION_MINUTES` | Minimum duration for move/resize (minutes) |
-| `calculateMovedRange` | Move start within a day (preserve duration; clamp 00:00–24:00) |
-| `calculateResizedRange` | Resize end within a day (endTime only; min duration; clamp) |
+## Server Action security rules
 
-## DB (schema `app`)
+1. **`requireUser()`** at the start of every business action.
+2. **Create** TimeBlock/FocusSession → `assertCategoryOwned(user.id, categoryId)`.
+3. **Update/delete** → `assert*Owned` then `updateMany`/`deleteMany` with `category: { userId }`.
+4. **Category delete** → count user's TimeBlocks + FocusSessions; redirect `?error=has-records`.
+5. **Focus convert** → `assertFocusSessionOwned` + transaction claim `category: { userId }`.
 
-`DATABASE_URL` must include `?schema=app`.
+Action files: `categories.ts`, `time-blocks.ts`, `calendar-time-blocks.ts`, `focus-sessions.ts`, `focus-shared.ts` (transaction).
 
-**Category:** id, name, color, description?  
-**TimeBlock:** id, title, note?, reviewNote?, start/end, status, completionLevel, efficiencyLevel?, categoryId  
+## Docker
 
-Status: `planned` \| `completed` \| `partial` \| `skipped` — UI via `getStatusLabel()`.
+| Piece | Path / command |
+|-------|----------------|
+| Compose | `docker-compose.yml` — services **`db`** (Postgres 16), **`app`** (Next standalone) |
+| Image | `Dockerfile` — multi-stage: deps → builder (`prisma generate` + `next build`) → runner |
+| Startup | `scripts/docker-entrypoint.sh` — `CREATE SCHEMA IF NOT EXISTS app` → `prisma migrate deploy` → `node server.js` |
+| Docs | `docs/DOCKER.md` |
 
-## Phase 4 fields (completion + review)
+- **Dev (host):** `docker compose up -d db` + `pnpm dev` — `DATABASE_URL` host `localhost`
+- **Full stack:** `docker compose up app` — `DATABASE_URL` host `db`; `.env` via `env_file` (optional file)
 
-- `status` (string): planned | completed | partial | skipped
-- `completionLevel` (int): 0–100
-- `efficiencyLevel` (string?, optional): low | medium | high
-- `reviewNote` (string?, optional): short reflection after the block
+**No seed data** in Docker startup.
 
-Saved via shared form parsing + validation in `src/lib/actions/time-block-shared.ts` (UI may omit these fields; null is allowed).
+## Env (see `.env.example`)
 
-## Phase 4.2 UI (editing)
+`DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `AUTH_TRUST_HOST`, `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, `NODE_ENV`
 
-- `/time-blocks`: create + inline edit support `efficiencyLevel` and `reviewNote`
-- `/calendar`: edit panel supports `efficiencyLevel` and `reviewNote`
+Callback: `http://localhost:3000/api/auth/callback/github`
 
-## Phase 4.3 stats (completion quality)
+### Auth.js in Docker
 
-- `summarizeCompletionQuality(blocks, categories?)` in `src/lib/stats.ts`
-- `dailyCompletionQualityForSelectedWeek(blocks, weekStart, categories?)` in `src/lib/stats.ts`
-- Rules:
-  - `completed`: full duration counts as completed minutes
-  - `skipped`: full duration counts as skipped minutes
-  - `partial`: completed minutes = duration * completionLevel%
-  - `planned`: completed minutes = 0
+- Set `AUTH_URL` to the URL users open in the browser (e.g. `http://localhost:3000`).
+- `AUTH_TRUST_HOST=true` when behind Compose port mapping or reverse proxy.
+- Do **not** bake `.env` into the image; use Compose `env_file` / platform secrets.
 
-## Phase 4.4 daily review
+## Local dev
 
-- Route: `/review/day` (server page)
-- Query: `?date=YYYY-MM-DD` (local, falls back to today)
-- Shows: daily blocks, completion summary (via `summarizeCompletionQuality`), category breakdown, incomplete/skipped list, reviewNote
+```bash
+nvm use && pnpm install
+docker compose up -d db
+cp .env.example .env   # fill AUTH_* and GitHub keys
+pnpm exec prisma generate
+pnpm exec prisma migrate deploy   # or migrate dev
+pnpm dev
+```
 
-## Phase 4.5 weekly review
+## Verification
 
-- Route: `/review/week` (server page)
-- Query: `?date=YYYY-MM-DD` (local, uses the week containing the date; Monday-start)
-- Shows: weekly completion summary, category breakdown, completion-by-category, Mon–Sun daily breakdown, items to review
+```bash
+pnpm exec prisma generate && pnpm typecheck && pnpm lint && pnpm test && pnpm build
+```
 
-## Phase 4.6 dashboard integration
+110 tests; no E2E. Phase 6 completion audit (2026-05-29): all checks green; no unscoped reads in `src/app/**`.
 
-- `/dashboard` now shows weekly completion quality metrics (planned, estimated completed, completion rate, average completion, skipped time)
-- Uses `summarizeCompletionQuality(...)` from `src/lib/stats.ts`
-- Links to `/review/day` and `/review/week`
+**Audit rules for new code:** pages → `requireUser` + `*ForUser`; actions → `requireUser` + `assert*Owned`; never `update({ where: { id } })` on private models.
 
-## Dashboard (Phase 3)
-
-- **Date conventions (local time)**:
-  - **Today**: local 00:00 … next day 00:00 (exclusive)
-  - **Week**: **Monday-start** week (Mon 00:00 … next Mon 00:00, exclusive) — consistent with `src/lib/calendar.ts`
-- **Current querying (simple)**: Dashboard queries only the TimeBlocks whose **`startTime` falls within** today/week ranges.
-- **Current time accounting (simple)**: cross-midnight blocks are counted fully toward the day/week where they **start** (documented limitation).
-- **Charts**: Recharts rendered in a dedicated client component (`"use client"`), server page remains server-rendered for data fetching.
-
-## Calendar limitations
-
-- No click-create / blank-space creation
-- Overlapping blocks stack (no columns); light colors + white text may be low contrast
-- Week columns `compact` (title only in cell; time in `title` attr)
-- Invalid `date` param: content falls back to today; URL not rewritten
-- No FullCalendar / shadcn
-- No conflict detection, no undo
-- No recurring events, no external calendar sync
-- No cross-column week dragging (date does not change by drag)
+Manual dual-GitHub-user checklist: `PROJECT_STATUS.md` §18.10.
 
 ## Do NOT add yet
 
-Auth · calendar click-create · additional chart libraries · Pomodoro · recurring events · external calendars · DB schema changes without request
+Teams · sharing · invites · payments · password login · dev Credentials in production · E2E (unless asked)
 
-## Next likely task
+## Security rules (always)
 
-Phase 5: improve stats accuracy (split cross-midnight duration per day), refine review filters/UX, and expand completion-quality visuals (keep dependencies light).
+1. Private pages → `requireUser()` + `*ForUser` helpers.
+2. Server Actions → `requireUser()` + `assert*Owned`; no `update({ where: { id } })` on private models.
+3. Do not query Category / TimeBlock / FocusSession without `userId` / `category.userId` filtering.
+4. Do not bypass `src/lib/db/scoped.ts`.
+5. Validate category ownership before creating TimeBlock or FocusSession.
+6. No Docker seed or shared demo data.
 
-## Commands
+## Next likely tasks (Phase 8)
 
-```bash
-nvm use
-pnpm install
-docker compose up -d
-pnpm prisma generate
-pnpm prisma migrate dev
-pnpm dev
-pnpm test && pnpm typecheck && pnpm lint && pnpm build
-```
+1. **Sealos deployment** — image registry, app, PostgreSQL, env, domain, OAuth callback, migrations
+2. Cross-midnight stats split; focus timer recovery; Review + Focus summary (see `PROJECT_STATUS.md` §16)
 
-Full status: `docs/PROJECT_STATUS.md`
+Full status: `docs/PROJECT_STATUS.md` §18–§19

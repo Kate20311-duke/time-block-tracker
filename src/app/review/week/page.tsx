@@ -7,12 +7,13 @@ import {
   parseCalendarDateParam,
   startOfWeekMonday,
 } from "@/lib/calendar";
-import { prisma } from "@/lib/prisma";
+import { categoriesForUser, timeBlocksForUser } from "@/lib/db/scoped";
 import {
   dailyCompletionQualityForSelectedWeek,
   durationMinutesSafe,
   summarizeCompletionQuality,
 } from "@/lib/stats";
+import { requireUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -48,10 +49,11 @@ export default async function ReviewWeekPage({
   const weekStart = startOfWeekMonday(selectedDay);
   const weekEnd = endOfWeekMonday(selectedDay);
   const weekStartParam = formatCalendarDateParam(weekStart);
+  const user = await requireUser();
 
   const [categories, weekBlocks] = await Promise.all([
-    prisma.category.findMany({ orderBy: { name: "asc" } }),
-    prisma.timeBlock.findMany({
+    categoriesForUser(user.id, { orderBy: { name: "asc" } }),
+    timeBlocksForUser(user.id, {
       where: { startTime: { gte: weekStart, lt: weekEnd } },
       include: { category: true },
       orderBy: { startTime: "asc" },

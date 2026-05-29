@@ -20,6 +20,24 @@ export function formatHoursFromMinutes(totalMinutes: number): string {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
 }
 
+/** Human-readable duration from total minutes (never labels minutes as hours). */
+export function formatDurationMinutes(
+  totalMinutes: number,
+  locale: Locale = "zh",
+): string {
+  const minutes = Math.max(0, Math.round(totalMinutes));
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (locale === "zh") {
+    if (h > 0 && m > 0) return `${h} 小时 ${m} 分钟`;
+    if (h > 0) return `${h} 小时`;
+    return `${m} 分钟`;
+  }
+  if (h > 0 && m > 0) return `${h}h ${m}min`;
+  if (h > 0) return `${h}h`;
+  return `${m}min`;
+}
+
 /** Parse datetime-local input value to Date (local time). */
 export function parseDateTimeLocal(value: string): Date | null {
   if (!value) return null;

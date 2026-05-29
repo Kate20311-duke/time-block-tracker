@@ -2,8 +2,9 @@ import { CategoryRow } from "@/components/category-row";
 import { SubmitButton } from "@/components/submit-button";
 import { createCategory } from "@/lib/actions/categories";
 import { formatMessage, getDictionary } from "@/lib/i18n";
+import { categoriesForUser } from "@/lib/db/scoped";
 import { getLocale } from "@/lib/i18n/server";
-import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +16,12 @@ export default async function CategoriesPage({
   const locale = await getLocale();
   const t = getDictionary(locale);
   const { success, error } = await searchParams;
+  const user = await requireUser();
 
-  const categories = await prisma.category.findMany({
+  const categories = await categoriesForUser(user.id, {
     orderBy: { createdAt: "desc" },
     include: {
-      _count: { select: { timeBlocks: true } },
+      _count: { select: { timeBlocks: true, focusSessions: true } },
     },
   });
 
@@ -33,9 +35,11 @@ export default async function CategoriesPage({
           : null;
 
   const errorMessage =
-    error === "has-time-blocks"
-      ? t.categories.errors.hasTimeBlocks
-      : error === "delete_failed"
+    error === "has-records"
+      ? t.categories.errors.hasRecords
+      : error === "has-time-blocks"
+        ? t.categories.errors.hasTimeBlocks
+        : error === "delete_failed"
         ? t.categories.errors.deleteFailed
         : error === "empty_name"
           ? t.categories.errors.emptyName
@@ -118,7 +122,9 @@ export default async function CategoriesPage({
         ) : (
           <ul className="space-y-4">
             {categories.map((category) => {
-              const hasTimeBlocks = category._count.timeBlocks > 0;
+              const timeBlockCount = category._count.timeBlocks;
+              const focusSessionCount = category._count.focusSessions;
+              const hasRecords = timeBlockCount > 0 || focusSessionCount > 0;
 
               return (
                 <CategoryRow
@@ -128,7 +134,8 @@ export default async function CategoriesPage({
                     name: category.name,
                     color: category.color,
                     description: category.description,
-                    timeBlockCount: category._count.timeBlocks,
+                    timeBlockCount,
+                    focusSessionCount,
                   }}
                   labels={{
                     name: t.categories.name,
@@ -136,12 +143,14 @@ export default async function CategoriesPage({
                     descriptionOptional: t.categories.descriptionOptional,
                     timeBlockCountFormatted: formatMessage(
                       t.categories.timeBlockCount,
-                      { count: category._count.timeBlocks },
+                      { count: timeBlockCount },
                     ),
-                    cannotDeleteFormatted: hasTimeBlocks
-                      ? formatMessage(t.categories.cannotDelete, {
-                          count: category._count.timeBlocks,
-                        })
+                    focusSessionCountFormatted: formatMessage(
+                      t.categories.focusSessionCount,
+                      { count: focusSessionCount },
+                    ),
+                    cannotDeleteFormatted: hasRecords
+                      ? t.categories.cannotDeleteRecords
                       : null,
                     confirmDelete: formatMessage(t.categories.confirmDelete, {
                       name: category.name,

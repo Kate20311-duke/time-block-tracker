@@ -6,8 +6,9 @@ import {
   getDayQueryRange,
   parseCalendarDateParam,
 } from "@/lib/calendar";
-import { prisma } from "@/lib/prisma";
+import { categoriesForUser, timeBlocksForUser } from "@/lib/db/scoped";
 import { durationMinutesSafe, summarizeCompletionQuality } from "@/lib/stats";
+import { requireUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -42,10 +43,11 @@ export default async function ReviewDayPage({
   const selectedDay = parseCalendarDateParam(date);
   const dateParam = formatCalendarDateParam(selectedDay);
   const { dayStart, dayEnd } = getDayQueryRange(selectedDay);
+  const user = await requireUser();
 
   const [categories, timeBlocks] = await Promise.all([
-    prisma.category.findMany({ orderBy: { name: "asc" } }),
-    prisma.timeBlock.findMany({
+    categoriesForUser(user.id, { orderBy: { name: "asc" } }),
+    timeBlocksForUser(user.id, {
       where: { startTime: { gte: dayStart, lt: dayEnd } },
       include: { category: true },
       orderBy: { startTime: "asc" },

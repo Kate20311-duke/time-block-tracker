@@ -9,8 +9,9 @@ import {
   getStatusLabel,
   type Dictionary,
 } from "@/lib/i18n";
+import { categoriesForUser, timeBlocksForUser } from "@/lib/db/scoped";
 import { getLocale } from "@/lib/i18n/server";
-import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/session";
 import {
   durationMinutes,
   formatDateTime,
@@ -60,13 +61,14 @@ export default async function TimeBlocksPage({
 
   const successMessage = resolveTimeBlockSuccess(success, t);
   const errorMessage = resolveTimeBlockError(error, t);
+  const user = await requireUser();
 
   const [timeBlocks, categories] = await Promise.all([
-    prisma.timeBlock.findMany({
+    timeBlocksForUser(user.id, {
       include: { category: true },
       orderBy: { startTime: "desc" },
     }),
-    prisma.category.findMany({ orderBy: { name: "asc" } }),
+    categoriesForUser(user.id, { orderBy: { name: "asc" } }),
   ]);
 
   const statusOptions = TIME_BLOCK_STATUSES.map((s) => ({

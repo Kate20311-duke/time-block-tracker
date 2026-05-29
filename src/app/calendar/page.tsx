@@ -22,8 +22,9 @@ import {
 } from "@/lib/calendar";
 import { TIME_BLOCK_STATUSES } from "@/lib/constants";
 import { getDictionary, getStatusLabel, type Dictionary } from "@/lib/i18n";
+import { categoriesForUser, timeBlocksForUser } from "@/lib/db/scoped";
 import { getLocale } from "@/lib/i18n/server";
-import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/session";
 import { toDateTimeLocalValue } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -158,8 +159,10 @@ export default async function CalendarPage({
       ? getWeekQueryRange(selectedDay).weekEnd
       : getDayQueryRange(selectedDay).dayEnd;
 
+  const user = await requireUser();
+
   const [timeBlocks, categories] = await Promise.all([
-    prisma.timeBlock.findMany({
+    timeBlocksForUser(user.id, {
       where: {
         startTime: { lt: rangeEnd },
         endTime: { gt: rangeStart },
@@ -167,21 +170,21 @@ export default async function CalendarPage({
       include: { category: true },
       orderBy: { startTime: "asc" },
     }),
-    prisma.category.findMany({ orderBy: { name: "asc" } }),
+    categoriesForUser(user.id, { orderBy: { name: "asc" } }),
   ]);
 
   const selectedBlockInRange = blockIdParam
     ? timeBlocks.find((b) => b.id === blockIdParam)
     : undefined;
 
-  const selectedBlockRaw =
-    selectedBlockInRange ??
-    (blockIdParam
-      ? await prisma.timeBlock.findUnique({
-          where: { id: blockIdParam },
-          include: { category: true },
-        })
-      : null);
+  let selectedBlockRaw = selectedBlockInRange ?? null;
+  if (!selectedBlockRaw && blockIdParam) {
+    const [ownedBlock] = await timeBlocksForUser(user.id, {
+      where: { id: blockIdParam },
+      include: { category: true },
+    });
+    selectedBlockRaw = ownedBlock ?? null;
+  }
 
   const selectedBlock = selectedBlockRaw
     ? toCalendarEditBlockData(selectedBlockRaw)

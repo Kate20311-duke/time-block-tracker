@@ -1,0 +1,35 @@
+# Dependencies and build output
+node_modules
+.next
+out
+dist
+
+# Environment and secrets (never copy into image)
+.env
+.env.*
+!.env.example
+
+# Git and IDE
+.git
+.gitignore
+.cursor
+.vscode
+*.md
+!README.md
+
+# Tests and dev tooling
+coverage
+*.test.ts
+*.test.tsx
+vitest.config.*
+.devbox-original
+
+# Docker (avoid recursive context)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Misc
+*.log
+.DS_Store
+pnpm-debug.log*

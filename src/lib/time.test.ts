@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   durationMinutes,
   formatDateTime,
+  formatDurationMinutes,
   parseDateTimeLocal,
   toDateTimeLocalValue,
 } from "./time";
@@ -44,5 +45,18 @@ describe("formatDateTime", () => {
   it("returns a non-empty localized string", () => {
     const text = formatDateTime(new Date("2026-05-21T10:00:00"));
     expect(text.length).toBeGreaterThan(0);
+  });
+});
+
+describe("formatDurationMinutes", () => {
+  it("formats minutes without labeling them as hours", () => {
+    expect(formatDurationMinutes(85, "zh")).toBe("1 小时 25 分钟");
+    expect(formatDurationMinutes(85, "en")).toBe("1h 25min");
+    expect(formatDurationMinutes(60, "zh")).toBe("1 小时");
+    expect(formatDurationMinutes(45, "zh")).toBe("45 分钟");
+  });
+
+  it("never displays raw minutes as hours", () => {
+    expect(formatDurationMinutes(85, "zh")).not.toContain("85 小时");
   });
 });

@@ -11,6 +11,7 @@ export default async function HomePage() {
     { href: "/time-blocks" as const, ...t.home.cards.timeBlocks },
     { href: "/calendar" as const, ...t.home.cards.calendar },
     { href: "/dashboard" as const, ...t.home.cards.dashboard },
+    { href: "/focus" as const, ...t.home.cards.focus },
   ];
 
   return (

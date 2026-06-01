@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import {
-  CalendarInteractiveView,
-  toCalendarEditBlockData,
-} from "@/components/calendar-interactive-view";
+import { CalendarInteractiveView } from "@/components/calendar-interactive-view";
+import { toCalendarEditBlockData } from "@/lib/calendar-edit";
 import type { CalendarColumnBlock } from "@/components/calendar-day-column";
 import {
   addCalendarDays,

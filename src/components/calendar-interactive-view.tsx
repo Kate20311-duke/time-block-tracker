@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarBlockEditPanel } from "@/components/calendar-block-edit-panel";
-import type { CalendarEditBlockData } from "@/components/calendar-block-edit-panel";
+import type { CalendarEditBlockData } from "@/lib/calendar-edit";
 import { CalendarDayGrid } from "@/components/calendar-day-grid";
 import { CalendarWeekGrid } from "@/components/calendar-week-grid";
 import type { WeekGridColumn } from "@/components/calendar-week-grid";
@@ -190,33 +190,4 @@ export function CalendarInteractiveView({
       ) : null}
     </div>
   );
-}
-
-/** Serialize server TimeBlock for the edit panel (dates as ISO strings). */
-export function toCalendarEditBlockData(block: {
-  id: string;
-  title: string;
-  note: string | null;
-  reviewNote: string | null;
-  categoryId: string;
-  status: string;
-  completionLevel: number;
-  efficiencyLevel: string | null;
-  startTime: Date;
-  endTime: Date;
-  category: { name: string; color: string };
-}): CalendarEditBlockData {
-  return {
-    id: block.id,
-    title: block.title,
-    note: block.note,
-    reviewNote: block.reviewNote,
-    categoryId: block.categoryId,
-    status: block.status,
-    completionLevel: block.completionLevel,
-    efficiencyLevel: block.efficiencyLevel,
-    startTimeIso: block.startTime.toISOString(),
-    endTimeIso: block.endTime.toISOString(),
-    category: block.category,
-  };
 }

@@ -2,20 +2,9 @@
 
 import { updateTimeBlockFromCalendar } from "@/lib/actions/calendar-time-blocks";
 import { SubmitButton } from "@/components/submit-button";
+import type { CalendarEditBlockData } from "@/lib/calendar-edit";
 
-export type CalendarEditBlockData = {
-  id: string;
-  title: string;
-  note: string | null;
-  reviewNote: string | null;
-  categoryId: string;
-  status: string;
-  completionLevel: number;
-  efficiencyLevel: string | null;
-  startTimeIso: string;
-  endTimeIso: string;
-  category: { name: string; color: string };
-};
+export type { CalendarEditBlockData };
 
 type CategoryOption = { id: string; name: string };
 

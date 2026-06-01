@@ -1,6 +1,16 @@
 /** Common Pomodoro / focus duration presets (minutes). */
 export const FOCUS_DURATION_PRESETS = [15, 25, 45, 50, 90] as const;
 
+/** Format seconds as HH:MM:SS for stopwatch elapsed display. */
+export function formatStopwatchElapsed(totalSeconds: number): string {
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
+  const seconds = safe % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+}
+
 /** Format seconds as M:SS or H:MM:SS for the countdown display. */
 export function formatFocusCountdown(totalSeconds: number): string {
   const safe = Math.max(0, Math.floor(totalSeconds));

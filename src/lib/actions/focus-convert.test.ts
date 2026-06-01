@@ -72,6 +72,9 @@ describe("convertFocusSessionInTransaction", () => {
         convertedToTimeBlock: true,
       },
     });
+    expect(tx.timeBlockCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ source: "pomodoro" }),
+    });
     expect(tx.timeBlockCreate).toHaveBeenCalledTimes(1);
     expect(tx.focusUpdate).toHaveBeenCalledWith({
       where: { id: "focus_1" },

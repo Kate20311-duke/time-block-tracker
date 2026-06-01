@@ -6,13 +6,27 @@
 
 ## 2. 当前阶段
 
+**Phase 9：正计时秒表（已完成）** — 详见 §21
+
 **Phase 7：Docker 化（已完成）** — 详见 §19
+
+**Phase 8A：Vercel + Neon 部署准备（已完成文档）** — 详见 §20；**日常流程**见 [WORKFLOW.md](./WORKFLOW.md)
 
 **Phase 6：用户认证与按用户数据隔离（已完成）** — 详见 §18
 
 **Phase 5 及更早**：专注、复盘、日历等 — 见上文各 Phase 小节
 
-**下一步（Phase 8）**：Sealos 部署（见 §19.11、§16）
+**下一步（推荐）**：专注页 UI 打磨 / 整体 redesign（见 §21.6）
+
+- **Phase 9（已完成）正计时秒表**
+  - `FocusSession.mode`：`pomodoro` | `stopwatch`（默认 `pomodoro`）
+  - `TimeBlock.source`：`manual` | `pomodoro` | `stopwatch`（默认 `manual`）
+  - Server Actions：`startStopwatch`、`completeStopwatchAndCreateTimeBlock`、`cancelStopwatch`
+  - 每用户最多一个 `status=running` 的 FocusSession（番茄钟与秒表互斥）
+  - 秒表结束：事务内 claim → 创建 `TimeBlock`（`source=stopwatch`）→ 链接 `timeBlockId`
+  - UI：`StopwatchTimer` + `ElapsedTimer`（客户端仅显示 HH:MM:SS，不写库）
+  - 迁移：`20260601120000_add_focus_mode_timeblock_source`
+  - 测试：`stopwatch-complete.test.ts` 等（113 tests）
 
 - **Phase 5.4（已完成第一版）Dashboard 专注统计**
   - 独立区块「专注统计（FocusSession）」：今天/本周专注时长、完成/放弃次数、完成率、已转换数量
@@ -437,6 +451,7 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 | status | String | 默认 `planned`；见下方状态值 |
 | completionLevel | Int | 0–100，默认 0 |
 | efficiencyLevel | String? | `"low" \| "medium" \| "high"`（可选） |
+| source | String | 默认 `manual`；`manual` \| `pomodoro` \| `stopwatch` |
 | categoryId | String | 外键 → Category |
 | createdAt | DateTime | 默认 now |
 | updatedAt | DateTime | 自动更新 |
@@ -455,7 +470,8 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 | categoryId | String | 外键 → Category |
 | startTime | DateTime | 开始时间 |
 | endTime | DateTime? | 结束时间（进行中可为空） |
-| plannedDurationMinutes | Int | 计划时长（分钟，须 > 0） |
+| mode | String | 默认 `pomodoro`；`pomodoro` \| `stopwatch` |
+| plannedDurationMinutes | Int | 计划时长（分钟，须 > 0）；秒表用占位值 `1`（UI 用实际经过时长） |
 | actualDurationMinutes | Int? | 实际时长（完成/放弃时可填） |
 | status | String | 默认 `planned`；见下方 |
 | convertedToTimeBlock | Boolean | 是否已转为 TimeBlock，默认 false |
@@ -477,7 +493,10 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 | `updateFocusSessionStatus` | 更新 status（已 converted 的不可改） |
 | `completeFocusSession` | `completed` + `endTime` + `actualDurationMinutes` |
 | `abandonFocusSession` | `abandoned`；可选 `endTime` |
-| `convertFocusSessionToTimeBlock` | 仅 `completed` 且未转换；创建 `TimeBlock`（`completed`, 100%）并链接 |
+| `convertFocusSessionToTimeBlock` | 仅 `completed` 且未转换；创建 `TimeBlock`（`source=pomodoro`）并链接 |
+| `startStopwatch` | 创建 `mode=stopwatch`、`status=running`；拒绝已有 running 会话 |
+| `completeStopwatchAndCreateTimeBlock` | 事务结束秒表并创建 `TimeBlock`（`source=stopwatch`） |
+| `cancelStopwatch` | `abandoned`，不创建 TimeBlock |
 
 ### 迁移
 
@@ -485,6 +504,7 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 - `20260521180044_add_category_description`
 - `20260528030837_add_timeblock_review_fields`（新增 `TimeBlock.efficiencyLevel`、`TimeBlock.reviewNote`）
 - `20260529120000_add_focus_session`（新增 `FocusSession` 表）
+- `20260601120000_add_focus_mode_timeblock_source`（`FocusSession.mode`、`TimeBlock.source`）
 
 ## 7. 已实现页面
 
@@ -495,7 +515,7 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 | `/time-blocks` | 动态 | 时间块 CRUD（列表 + 表单） |
 | `/calendar` | 动态 | **周/日视图**（默认周）；`?date=`、`?view=day\|week` |
 | `/dashboard` | 动态 | 时间块统计 + 图表 + 专注会话统计（分区展示） |
-| `/focus` | 动态 | 番茄钟专注：配置会话 + 倒计时 + 完成/放弃 |
+| `/focus` | 动态 | 正计时秒表 + 番茄钟；秒表结束自动写入时间块 |
 
 全局布局：`src/app/layout.tsx` + `src/components/app-nav.tsx`（顶栏、当前路由高亮）。
 
@@ -653,7 +673,7 @@ docs/AI_CONTEXT.md
   - 无自定义日期筛选（仅默认“今天/本周”）
   - **跨午夜 TimeBlock 的统计口径（简化版）**：当前 Dashboard 统计会把**整段时长**计入其 `startTime` 所在的那一天/那一周（不会按天裁剪拆分）。例如 23:00–01:00 会全部算在开始日。
   - 图表为基础版：无日期选择器、无月统计、无高级交互（hover/tooltip 以 Recharts 默认实现为主）
-- **专注**：暂停状态不写入数据库；刷新页面会丢失进行中的倒计时
+- **专注**：番茄钟暂停不写入数据库；刷新后番茄钟倒计时 UI 不恢复（秒表 `running` 会话会从数据库恢复）
 - **无** 重复事件、外部日历、shadcn、E2E
 - **Node 20.19+** 运行 Prisma 7 CLI
 
@@ -702,13 +722,14 @@ pnpm dev                          # http://localhost:3000/focus
 - [ ] `/focus` 历史三条：**converted(25)**、**completed 未转换(30)**、**abandoned(20)**
 - [ ] 页面有记录时间 / 专注时间分区说明，勿将两栏相加
 
-## 16. 建议下一阶段（Phase 8 及以后）
+## 16. 建议下一阶段（Phase 8B 及以后）
 
-1. **Sealos 部署**（Phase 8）：镜像仓库、应用、PostgreSQL、环境变量、域名、OAuth callback、线上 `migrate deploy`
-2. **统计精度**：跨午夜 TimeBlock / FocusSession 按天裁剪拆分（与日历一致）
-3. **专注增强**：localStorage 恢复进行中计时、可选浏览器通知
-4. **复盘**：Review 页纳入 FocusSession 摘要（可选）
-5. 更远期：重复事件、外部日历、E2E、多因素认证
+1. **Sealos 部署**（Phase 8B）：复用 Phase 7 Docker 镜像；镜像仓库、应用、PostgreSQL、环境变量、域名、OAuth callback
+2. **Vercel + Neon 实际上线**（Phase 8A 文档已就绪）：按 `docs/DEPLOYMENT_VERCEL_NEON.md` 手动部署并验证
+3. **统计精度**：跨午夜 TimeBlock / FocusSession 按天裁剪拆分（与日历一致）
+4. **专注增强**：localStorage 恢复进行中计时、可选浏览器通知
+5. **复盘**：Review 页纳入 FocusSession 摘要（可选）
+6. 更远期：重复事件、外部日历、E2E、多因素认证
 
 ## 17. Devbox（可选/历史）
 
@@ -949,5 +970,133 @@ docker compose up -d
 
 ### 19.11 下一阶段
 
-**Phase 8 — Sealos 部署**（镜像、App、PostgreSQL、环境变量、域名、OAuth、迁移策略）
+**Phase 8A — Vercel + Neon**（文档）→ **Phase 8B — Sealos**（Docker 镜像路径）
+
+## 20. Phase 8A — Vercel + Neon 部署准备（已完成）
+
+### 20.1 本阶段目标
+
+- 文档化 Vercel + Neon 部署路径（**无新用户功能**）
+- 保留 Phase 7 Docker / 未来 Sealos（Phase 8B）路径
+- 确认现有 `package.json` build 脚本与 Auth/Prisma 配置可用于 Vercel
+
+**未做**：实际上线部署、Sealos、Neon serverless driver 改造、移除 Docker 文件。
+
+### 20.2 部署就绪结论
+
+| 项 | 状态 | 说明 |
+|----|------|------|
+| `build` 脚本 | ✅ | `prisma generate && next build`；**未**在 build 中跑 migrate |
+| `postinstall` | — | 无；generate 在 build 内 |
+| Prisma + Neon | ✅ | `DATABASE_URL` + `?schema=app`；`prisma.config.ts` 读 env |
+| Auth 变量名 | ✅ | `AUTH_URL`（非 `NEXTAUTH_URL`）、`AUTH_GITHUB_*`、`AUTH_TRUST_HOST` |
+| middleware | ⚠️ | Next 16 可能警告 middleware→proxy；不阻塞 Vercel |
+| `output: standalone` | ℹ️ | 为 Docker 保留；Vercel 忽略 standalone 产物 |
+| 本地 Docker | ✅ | 未改动 `docker-compose.yml` / `Dockerfile` |
+
+### 20.3 新增 / 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `docs/DEPLOYMENT_VERCEL_NEON.md` | 完整 Vercel + Neon 首次部署指南 |
+| `docs/WORKFLOW.md` | 本地开发 + 部署上线 + 双环境 + 用量说明 |
+| `.env.example` | Neon / Vercel 注释 |
+| `README.md` | 链接 WORKFLOW / 部署文档 |
+| `docs/PROJECT_STATUS.md` | 本节 |
+| `docs/AI_CONTEXT.md` | Phase 8A 摘要 |
+
+**无业务代码变更**（Phase 8A 仅文档 + `.env.example` 注释）。
+
+### 20.4 Vercel 环境变量（生产）
+
+与 §10 / §18.4 相同，额外注意：
+
+- `DATABASE_URL`：Neon **Pooled** URL + `schema=app`
+- `AUTH_URL`：`https://<vercel-domain>`（非 localhost）
+- 迁移：**手动** `pnpm exec prisma migrate deploy` 指向 Neon（不在 Vercel build 中）
+
+### 20.5 已知风险（上线时）
+
+- Vercel 构建前须已配置 `DATABASE_URL`（`prisma.config.ts` 需要）
+- Serverless + `pg.Pool`：高并发宜用 Neon pooler URL
+- GitHub OAuth callback 须与 `AUTH_URL` 一致
+
+### 20.6 下一阶段
+
+**Phase 8B — Sealos**：使用 Phase 7 `Dockerfile` + `docs/DOCKER.md`
+
+## 21. Phase 9 — 正计时秒表（已完成）
+
+### 21.1 目标
+
+用户选择分类、可选标题/备注 → **开始计时**（从 `00:00:00` 向上）→ **结束并保存** 自动创建已完成 `TimeBlock`（真实 `startTime` / `endTime`）。
+
+### 21.2 数据模型
+
+| 模型 | 字段 | 说明 |
+|------|------|------|
+| `FocusSession` | `mode` | `pomodoro`（默认）或 `stopwatch` |
+| `TimeBlock` | `source` | `manual`（默认）、`pomodoro`（番茄转换）、`stopwatch`（秒表结束） |
+
+秒表 `plannedDurationMinutes` 使用常量 `STOPWATCH_PLANNED_DURATION_PLACEHOLDER_MINUTES = 1`（满足 DB/校验；展示与统计用 `actualDurationMinutes` 或起止时间）。
+
+取消秒表：`status=abandoned`（与番茄「放弃」一致，未新增 `canceled` 状态）。
+
+### 21.3 Server Actions（`src/lib/actions/focus-sessions.ts`）
+
+| Action | 行为 |
+|--------|------|
+| `startStopwatch` | `requireUser` + `assertCategoryOwned` + 无其它 `running` 会话 |
+| `completeStopwatchAndCreateTimeBlock` | `completeStopwatchInTransaction`：claim `running`+`stopwatch`+未转换 → 创建块 → `timeBlockId` |
+| `cancelStopwatch` | `updateMany` 条件 claim，`abandoned`，无 TimeBlock |
+| `createFocusSession`（番茄） | 同样检查无 `running`；写入 `mode=pomodoro` |
+
+防重复：`updateMany` 条件 claim；第二次结束返回 `already_converted`，不创建第二块。
+
+### 21.4 UI 组件
+
+| 组件 | 说明 |
+|------|------|
+| `src/components/stopwatch-timer.tsx` | 秒表表单与进行中/结束/取消 |
+| `src/components/elapsed-timer.tsx` | 接收 `startTimeIso`，客户端 HH:MM:SS |
+| `src/components/focus-timer.tsx` | 番茄钟（行为不变；与其它 running 会话互斥提示） |
+
+`/focus` 服务端加载 `status=running` 会话；秒表模式刷新后恢复 UI。
+
+### 21.5 与番茄钟差异
+
+| | 番茄钟 | 秒表 |
+|--|--------|------|
+| 计时方向 | 倒计时 | 正计时 |
+| 计划时长 | 用户选择 | 占位 1 分钟（不用作 UI） |
+| 结束 | `complete` → 可选「转为时间块」 | 一步「结束并保存」 |
+| 最终 FocusSession | 常 `converted`（若转换） | `completed` + `convertedToTimeBlock=true` |
+| TimeBlock.source | `pomodoro` | `stopwatch` |
+
+### 21.6 Dashboard / 重复计数
+
+- **时间块统计**：仅 `TimeBlock`（`src/lib/stats.ts`）— 秒表保存后计入此处。
+- **专注统计**：仅 `FocusSession`（`src/lib/focus-stats.ts`）— 已保存秒表计为 `convertedToTimeBlock` 的 completed 会话。
+- **与 Phase 5.6 相同**：两栏为双视角，勿将「记录时间」与「专注时长」简单相加；未改 Dashboard 结构。
+
+### 21.7 手动测试清单
+
+- [ ] 开始秒表 → 计时递增 → 结束并保存 → `/time-blocks` 与 `/calendar` 出现一条 `completed` 块
+- [ ] 秒表进行中刷新 `/focus` → 仍显示进行中与已用时长
+- [ ] 已有 running 秒表时无法再开番茄钟 / 第二个秒表（提示 `session_already_running`）
+- [ ] 双击「结束并保存」仅一条 TimeBlock
+- [ ] 取消秒表 → 无 TimeBlock；FocusSession 为 `abandoned`
+- [ ] 用户 B 无法操作用户 A 的 session id
+- [ ] Dashboard：时间块时长含秒表记录；专注区「已写入时间块」计数合理
+
+### 21.8 已知限制
+
+- 番茄钟进行中刷新仍不恢复倒计时 UI（仅 DB 中 `running` 行存在）
+- 秒表无暂停（Phase 9 范围外）
+- `TimeBlock.source` 尚未在列表 UI 展示
+- 无浏览器通知 / PWA
+
+### 21.9 建议下一阶段
+
+专注页 UI 打磨（分区视觉、历史列表标注 mode/source）、可选番茄刷新恢复（localStorage）。
 

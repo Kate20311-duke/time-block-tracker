@@ -1,10 +1,12 @@
 import {
   TIME_BLOCK_STATUSES,
   TIME_BLOCK_EFFICIENCY_LEVELS,
+  FOCUS_SESSION_MODES,
   FOCUS_SESSION_STATUSES,
   type TimeBlockStatus,
   type TimeBlockEfficiencyLevel,
   type FocusSessionStatus,
+  type FocusSessionMode,
 } from "@/lib/constants";
 
 export function isNonEmptyTrimmed(value: string): boolean {
@@ -85,6 +87,12 @@ export function isValidFocusSessionStatus(
   return (FOCUS_SESSION_STATUSES as readonly string[]).includes(status);
 }
 
+export function isValidFocusSessionMode(
+  mode: string,
+): mode is FocusSessionMode {
+  return (FOCUS_SESSION_MODES as readonly string[]).includes(mode);
+}
+
 export type FocusSessionValidationError =
   | "missing_fields"
   | "invalid_category"
@@ -127,6 +135,7 @@ export function validateFocusSessionCreate(input: {
   startTime: Date | null;
   endTime?: Date | null;
   status?: string;
+  mode?: string;
 }): FocusSessionValidationError | null {
   if (!isNonEmptyTrimmed(input.categoryId)) {
     return "invalid_category";
@@ -148,6 +157,9 @@ export function validateFocusSessionCreate(input: {
     return rangeError;
   }
   if (input.status && !isValidFocusSessionStatus(input.status)) {
+    return "invalid_status";
+  }
+  if (input.mode && !isValidFocusSessionMode(input.mode)) {
     return "invalid_status";
   }
   return null;

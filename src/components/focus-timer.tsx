@@ -36,6 +36,8 @@ type BusyAction =
 type Props = {
   categories: FocusCategoryOption[];
   labels: Dictionary["focus"];
+  /** Another focus session (e.g. stopwatch) is already running in the DB. */
+  sessionBlocked?: boolean;
 };
 
 const inputClass =
@@ -66,7 +68,7 @@ function labelWhenBusy(
   return busy && action === current ? working : label;
 }
 
-export function FocusTimer({ categories, labels }: Props) {
+export function FocusTimer({ categories, labels, sessionBlocked = false }: Props) {
   const router = useRouter();
   const [phase, setPhase] = useState<TimerPhase>("setup");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -315,6 +317,12 @@ export function FocusTimer({ categories, labels }: Props) {
 
   return (
     <div className="space-y-6 sm:space-y-8">
+      {sessionBlocked && phase === "setup" ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {labels.pomodoroBlockedByOtherSession}
+        </p>
+      ) : null}
+
       <section
         className="rounded-lg border border-zinc-200 bg-white p-4 text-center sm:p-6"
         aria-busy={busy}
@@ -385,7 +393,8 @@ export function FocusTimer({ categories, labels }: Props) {
       ) : null}
 
       <section className="rounded-lg border border-zinc-200 bg-white p-4 sm:p-6">
-        <h2 className="mb-4 text-lg font-semibold">{labels.setupTitle}</h2>
+        <h2 className="mb-1 text-lg font-semibold">{labels.pomodoroTitle}</h2>
+        <p className="mb-4 text-sm text-zinc-600">{labels.pomodoroSubtitle}</p>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-sm sm:col-span-2">
@@ -488,7 +497,7 @@ export function FocusTimer({ categories, labels }: Props) {
         <button
           type="button"
           onClick={handleStart}
-          disabled={busy || configLocked || plannedMinutes <= 0}
+          disabled={busy || configLocked || plannedMinutes <= 0 || sessionBlocked}
           className={primaryBtn}
         >
           {labelWhenBusy(labels.start, labels.working, busy, "start", busyAction)}

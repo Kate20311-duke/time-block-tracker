@@ -159,7 +159,12 @@ Auth.js 会报 `MissingSecret`。在 `.env` 中设置非空 `AUTH_SECRET`。
 
 开发库可手动确认后执行 `pnpm exec prisma migrate reset`（**清空全部数据**）。生产/Sealos 勿随意 reset。
 
-## Sealos 部署前准备（Phase 8）
+## Vercel + Neon（Phase 8A）
+
+线上部署若走 **Vercel**（不用 Docker），见 [DEPLOYMENT_VERCEL_NEON.md](./DEPLOYMENT_VERCEL_NEON.md)。  
+日常开发 → 部署流程见 [WORKFLOW.md](./WORKFLOW.md)。
+
+## Sealos 部署前准备（Phase 8B）
 
 - 将 `docker compose build app` 产物推送到镜像仓库
 - 托管 PostgreSQL 或外部实例，`DATABASE_URL` 含 `?schema=app`

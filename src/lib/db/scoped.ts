@@ -147,3 +147,16 @@ export async function assertFocusSessionOwned(
 
   return session;
 }
+
+/** At most one running focus session per user (any mode). */
+export async function runningFocusSessionForUser(
+  userId: string,
+  options?: Omit<FocusSessionFindManyArgs, "where" | "take">,
+): Promise<FocusSession | null> {
+  const sessions = await focusSessionsForUser(userId, {
+    ...options,
+    where: { status: "running" },
+    take: 1,
+  });
+  return sessions[0] ?? null;
+}

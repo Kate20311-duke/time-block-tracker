@@ -4,13 +4,14 @@ Paste at the start of new coding sessions.
 
 ## Project
 
-Personal time-block planner + Pomodoro focus tracker. **Phase 7 complete:** Docker (DB + production image).
+Personal time-block planner + Pomodoro + **stopwatch** focus tracker. **Phase 9:** stopwatch → auto TimeBlock.
 
 | Phase | Status |
 |-------|--------|
-| 1–6 | Done |
-| **7** | **Done** (Docker Compose db/app, Dockerfile, docs) |
-| **8+** | Sealos deploy; then stats/focus enhancements — see `PROJECT_STATUS.md` §16 / §19 |
+| 1–7 | Done |
+| **8A** | **Done** (Vercel + Neon deployment guide) |
+| **9** | **Done** (stopwatch / positive timer on `/focus`) |
+| **Next** | Focus page UI polish — see `PROJECT_STATUS.md` §21.9 |
 
 ## Stack
 
@@ -47,6 +48,8 @@ Browser → middleware (auth gate) → App Router pages (requireUser + *ForUser)
 - **`User`** — Auth.js + `Category[]`
 - **`Category.userId`** — required; root of tenant isolation
 - **`TimeBlock`**, **`FocusSession`** — no `userId`; owned via **`category.userId`**
+- **`FocusSession.mode`**: `pomodoro` | `stopwatch` (default `pomodoro`)
+- **`TimeBlock.source`**: `manual` | `pomodoro` | `stopwatch` (default `manual`)
 
 Rule: never read/write private rows with `{ id }` alone.
 
@@ -57,6 +60,7 @@ Rule: never read/write private rows with `{ id }` alone.
 | `categoriesForUser(userId, opts?)` | Lists / dropdowns |
 | `timeBlocksForUser(userId, opts?)` | Calendar, dashboard, lists |
 | `focusSessionsForUser(userId, opts?)` | Focus, dashboard |
+| `runningFocusSessionForUser(userId, opts?)` | At most one `status=running` session |
 | `assertCategoryOwned` | Before category-scoped creates |
 | `assertTimeBlockOwned` | Before block update/delete/schedule |
 | `assertFocusSessionOwned` | Before focus update/convert |
@@ -70,8 +74,20 @@ Errors: `ScopedAccessError` / `isScopedAccessError`.
 3. **Update/delete** → `assert*Owned` then `updateMany`/`deleteMany` with `category: { userId }`.
 4. **Category delete** → count user's TimeBlocks + FocusSessions; redirect `?error=has-records`.
 5. **Focus convert** → `assertFocusSessionOwned` + transaction claim `category: { userId }`.
+6. **One running focus session per user** — `startStopwatch` / `createFocusSession` call `runningFocusSessionForUser` first.
 
 Action files: `categories.ts`, `time-blocks.ts`, `calendar-time-blocks.ts`, `focus-sessions.ts`, `focus-shared.ts` (transaction).
+
+### Focus modes (Phase 9)
+
+| Mode | Start | End | TimeBlock |
+|------|-------|-----|-----------|
+| **Pomodoro** | `createFocusSession` (`mode=pomodoro`, countdown client-only) | `completeFocusSession` → optional `convertFocusSessionToTimeBlock` (`source=pomodoro`) | Manual convert step |
+| **Stopwatch** | `startStopwatch` | `completeStopwatchAndCreateTimeBlock` (`source=stopwatch`) or `cancelStopwatch` | Auto on complete |
+
+Duplicate TimeBlock prevention: `updateMany` claim (`convertedToTimeBlock: false`, correct `status`/`mode`) **before** `timeBlock.create` in `convertFocusSessionInTransaction` / `completeStopwatchInTransaction`.
+
+Dashboard: TimeBlock totals from `stats.ts` only; FocusSession totals from `focus-stats.ts` only — do not merge the two headline numbers.
 
 ## Docker
 
@@ -87,6 +103,20 @@ Action files: `categories.ts`, `time-blocks.ts`, `calendar-time-blocks.ts`, `foc
 
 **No seed data** in Docker startup.
 
+## Deployment paths
+
+| Path | Doc | Notes |
+|------|-----|-------|
+| **Dev + deploy workflow** | `docs/WORKFLOW.md` | **Local first, then push to Vercel** |
+| **Local dev** | `docs/DOCKER.md` | `docker compose up -d db` + `pnpm dev` |
+| **Docker full stack** | `docs/DOCKER.md` | Phase 7 `Dockerfile` + Compose `app` |
+| **Vercel + Neon** | `docs/DEPLOYMENT_VERCEL_NEON.md` | First-time setup; manual `migrate deploy` to Neon |
+| **Sealos (future 8B)** | `docs/DOCKER.md` | Reuse Docker image |
+
+Vercel build: `pnpm run build` (`prisma generate && next build`). **Do not** run migrate in Vercel build by default.
+
+Neon `DATABASE_URL` must include `?schema=app`. Prefer Neon **pooled** URL in Vercel production env.
+
 ## Env (see `.env.example`)
 
 `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `AUTH_TRUST_HOST`, `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`, `NODE_ENV`
@@ -101,10 +131,12 @@ Callback: `http://localhost:3000/api/auth/callback/github`
 
 ## Local dev
 
+See **`docs/WORKFLOW.md`** for daily dev + deploy. Quick start:
+
 ```bash
 nvm use && pnpm install
 docker compose up -d db
-cp .env.example .env   # fill AUTH_* and GitHub keys
+cp .env.example .env   # fill AUTH_* and GitHub keys (localhost OAuth)
 pnpm exec prisma generate
 pnpm exec prisma migrate deploy   # or migrate dev
 pnpm dev
@@ -116,7 +148,7 @@ pnpm dev
 pnpm exec prisma generate && pnpm typecheck && pnpm lint && pnpm test && pnpm build
 ```
 
-110 tests; no E2E. Phase 6 completion audit (2026-05-29): all checks green; no unscoped reads in `src/app/**`.
+113 tests; no E2E. Phase 9: `stopwatch-complete.test.ts`, `formatStopwatchElapsed` in `focus.test.ts`.
 
 **Audit rules for new code:** pages → `requireUser` + `*ForUser`; actions → `requireUser` + `assert*Owned`; never `update({ where: { id } })` on private models.
 
@@ -135,9 +167,10 @@ Teams · sharing · invites · payments · password login · dev Credentials in 
 5. Validate category ownership before creating TimeBlock or FocusSession.
 6. No Docker seed or shared demo data.
 
-## Next likely tasks (Phase 8)
+## Next likely tasks
 
-1. **Sealos deployment** — image registry, app, PostgreSQL, env, domain, OAuth callback, migrations
-2. Cross-midnight stats split; focus timer recovery; Review + Focus summary (see `PROJECT_STATUS.md` §16)
+1. **Focus page UI polish** — layout, mode badges, history `mode`/`source` labels
+2. Pomodoro refresh recovery (localStorage) — optional
+3. Cross-midnight stats; Review + Focus summary
 
-Full status: `docs/PROJECT_STATUS.md` §18–§19
+Full status: `docs/PROJECT_STATUS.md` §21

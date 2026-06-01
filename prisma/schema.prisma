@@ -87,6 +87,7 @@ model TimeBlock {
   completionLevel Int           @default(0)
   efficiencyLevel String?
   reviewNote      String?
+  source          String        @default("manual")
   categoryId      String
   category        Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   focusSession    FocusSession?
@@ -100,6 +101,7 @@ model FocusSession {
   id                     String     @id @default(cuid())
   title                  String?
   note                   String?
+  mode                   String     @default("pomodoro")
   categoryId             String
   category               Category   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   startTime              DateTime

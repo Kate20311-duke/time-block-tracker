@@ -22,6 +22,17 @@ export const FOCUS_SESSION_STATUSES = [
 
 export type FocusSessionStatus = (typeof FOCUS_SESSION_STATUSES)[number];
 
+export const FOCUS_SESSION_MODES = ["pomodoro", "stopwatch"] as const;
+
+export type FocusSessionMode = (typeof FOCUS_SESSION_MODES)[number];
+
+/** Placeholder for stopwatch sessions; UI uses elapsed time, not this value. */
+export const STOPWATCH_PLANNED_DURATION_PLACEHOLDER_MINUTES = 1;
+
+export const TIME_BLOCK_SOURCES = ["manual", "pomodoro", "stopwatch"] as const;
+
+export type TimeBlockSource = (typeof TIME_BLOCK_SOURCES)[number];
+
 export const NAV_ROUTES = [
   { href: "/" },
   { href: "/categories" },

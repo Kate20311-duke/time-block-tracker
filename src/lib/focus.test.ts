@@ -2,8 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   focusSessionDisplayMinutes,
   formatFocusCountdown,
+  formatStopwatchElapsed,
   parsePlannedFocusMinutes,
 } from "./focus";
+
+describe("formatStopwatchElapsed", () => {
+  it("always uses HH:MM:SS", () => {
+    expect(formatStopwatchElapsed(0)).toBe("00:00:00");
+    expect(formatStopwatchElapsed(90)).toBe("00:01:30");
+    expect(formatStopwatchElapsed(3661)).toBe("01:01:01");
+  });
+});
 
 describe("formatFocusCountdown", () => {
   it("formats minutes and seconds", () => {

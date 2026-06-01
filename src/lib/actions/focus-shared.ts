@@ -1,3 +1,7 @@
+import {
+  STOPWATCH_PLANNED_DURATION_PLACEHOLDER_MINUTES,
+  type FocusSessionMode,
+} from "@/lib/constants";
 import { durationMinutes } from "@/lib/time";
 import {
   isValidFocusSessionStatus,
@@ -22,6 +26,7 @@ export type FocusSessionActionError =
   | "not_found"
   | "invalid_state"
   | "already_converted"
+  | "session_already_running"
   | "update_failed"
   | "convert_failed";
 
@@ -71,6 +76,45 @@ export function parseFocusSessionCreateInput(input: {
     startTime: fields.startTime,
     endTime: null,
     status: fields.status,
+  });
+
+  return { fields, error };
+}
+
+/** Build stopwatch create payload (positive timer; no planned countdown). */
+export function parseStopwatchCreateInput(input: {
+  categoryId: string;
+  title?: string | null;
+  note?: string | null;
+}): {
+  fields: {
+    title: string | null;
+    note: string | null;
+    categoryId: string;
+    startTime: Date;
+    plannedDurationMinutes: number;
+    status: string;
+    mode: FocusSessionMode;
+  };
+  error: FocusSessionValidationError | null;
+} {
+  const fields = {
+    title: parseOptionalText(input.title),
+    note: parseOptionalText(input.note),
+    categoryId: String(input.categoryId ?? "").trim(),
+    startTime: new Date(),
+    plannedDurationMinutes: STOPWATCH_PLANNED_DURATION_PLACEHOLDER_MINUTES,
+    status: "running",
+    mode: "stopwatch" as const,
+  };
+
+  const error = validateFocusSessionCreate({
+    categoryId: fields.categoryId,
+    plannedDurationMinutes: fields.plannedDurationMinutes,
+    startTime: fields.startTime,
+    endTime: null,
+    status: fields.status,
+    mode: fields.mode,
   });
 
   return { fields, error };
@@ -136,9 +180,9 @@ export function defaultTimeBlockTitleFromFocus(
 }
 
 export class FocusConvertTransactionError extends Error {
-  readonly code: "already_converted";
+  readonly code: "already_converted" | "invalid_state";
 
-  constructor(code: "already_converted") {
+  constructor(code: "already_converted" | "invalid_state") {
     super(code);
     this.code = code;
   }
@@ -174,8 +218,30 @@ export type FocusConvertTransactionClient = {
         endTime: Date;
         status: string;
         completionLevel: number;
+        source: string;
       };
     }): Promise<{ id: string }>;
+  };
+};
+
+export type StopwatchCompleteTransactionClient = FocusConvertTransactionClient & {
+  focusSession: FocusConvertTransactionClient["focusSession"] & {
+    updateMany(args: {
+      where: {
+        id: string;
+        convertedToTimeBlock: boolean;
+        status: string;
+        mode: string;
+        category: { userId: string };
+      };
+      data: {
+        status: string;
+        convertedToTimeBlock: boolean;
+        endTime: Date;
+        actualDurationMinutes: number;
+        timeBlockId?: string;
+      };
+    }): Promise<{ count: number }>;
   };
 };
 
@@ -223,6 +289,7 @@ export async function convertFocusSessionInTransaction(
       endTime: range.end,
       status: "completed",
       completionLevel: 100,
+      source: "pomodoro",
     },
   });
 
@@ -232,4 +299,69 @@ export async function convertFocusSessionInTransaction(
   });
 
   return { timeBlockId: block.id };
+}
+
+/**
+ * End a running stopwatch and create its TimeBlock in one transaction.
+ * Claim runs before create to prevent duplicate blocks on double-submit.
+ */
+export async function completeStopwatchInTransaction(
+  session: {
+    id: string;
+    title: string | null;
+    note: string | null;
+    categoryId: string;
+    startTime: Date;
+  },
+  title: string,
+  endTime: Date,
+  userId: string,
+  tx: StopwatchCompleteTransactionClient,
+): Promise<{ timeBlockId: string; actualDurationMinutes: number }> {
+  const rangeError = validateFocusSessionTimeRange(session.startTime, endTime);
+  if (rangeError) {
+    throw new FocusConvertTransactionError("invalid_state");
+  }
+
+  const actualDurationMinutes = durationMinutes(session.startTime, endTime);
+
+  const claimed = await tx.focusSession.updateMany({
+    where: {
+      id: session.id,
+      convertedToTimeBlock: false,
+      status: "running",
+      mode: "stopwatch",
+      category: { userId },
+    },
+    data: {
+      status: "completed",
+      convertedToTimeBlock: true,
+      endTime,
+      actualDurationMinutes,
+    },
+  });
+
+  if (claimed.count === 0) {
+    throw new FocusConvertTransactionError("already_converted");
+  }
+
+  const block = await tx.timeBlock.create({
+    data: {
+      title,
+      note: session.note,
+      categoryId: session.categoryId,
+      startTime: session.startTime,
+      endTime,
+      status: "completed",
+      completionLevel: 100,
+      source: "stopwatch",
+    },
+  });
+
+  await tx.focusSession.update({
+    where: { id: session.id },
+    data: { timeBlockId: block.id },
+  });
+
+  return { timeBlockId: block.id, actualDurationMinutes };
 }

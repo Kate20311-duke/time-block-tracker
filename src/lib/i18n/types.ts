@@ -61,6 +61,8 @@ export type Dictionary = {
     title: string;
     subtitle: string;
     setupTitle: string;
+    pomodoroTitle: string;
+    pomodoroSubtitle: string;
     timerAria: string;
     category: string;
     selectCategory: string;
@@ -89,6 +91,21 @@ export type Dictionary = {
     convertConfirm: string;
     convertSkip: string;
     defaultTimeBlockTitle: string;
+    stopwatchTitle: string;
+    stopwatchSubtitle: string;
+    stopwatchModeLabel: string;
+    stopwatchTimerAria: string;
+    stopwatchStart: string;
+    stopwatchEndAndSave: string;
+    stopwatchCancel: string;
+    stopwatchStartedAt: string;
+    stopwatchUntitled: string;
+    stopwatchTitlePlaceholder: string;
+    stopwatchDefaultTimeBlockTitle: string;
+    stopwatchSuccessSaved: string;
+    stopwatchSuccessCanceled: string;
+    stopwatchBlockedByOtherSession: string;
+    pomodoroBlockedByOtherSession: string;
     working: string;
     invalidDurationHint: string;
     emptyNoCategoriesTitle: string;
@@ -117,6 +134,7 @@ export type Dictionary = {
       updateFailed: string;
       convertFailed: string;
       alreadyConverted: string;
+      sessionAlreadyRunning: string;
       generic: string;
     };
   };

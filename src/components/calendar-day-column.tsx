@@ -72,8 +72,8 @@ export function CalendarDayColumn({
             <CalendarDraggableBlock
               key={block.id}
               blockId={block.blockId}
-              startTimeIso={block.startTimeIso}
-              endTimeIso={block.endTimeIso}
+              visibleStartIso={block.layout.visibleStart.toISOString()}
+              visibleEndIso={block.layout.visibleEnd.toISOString()}
               calendarDate={calendarDate}
               gridContainerRef={gridContainerRef}
               title={block.title}

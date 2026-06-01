@@ -11,6 +11,7 @@ Personal time-block planner + Pomodoro + **stopwatch** focus tracker. **Phase 9:
 | 1–7 | Done |
 | **8A** | **Done** (Vercel + Neon deployment guide) |
 | **9** | **Done** (stopwatch / positive timer on `/focus`) |
+| **9.2** | **Done** (calendar drag stability — day view only) |
 | **Next** | Focus page UI polish — see `PROJECT_STATUS.md` §21.9 |
 
 ## Stack
@@ -88,6 +89,14 @@ Action files: `categories.ts`, `time-blocks.ts`, `calendar-time-blocks.ts`, `foc
 Duplicate TimeBlock prevention: `updateMany` claim (`convertedToTimeBlock: false`, correct `status`/`mode`) **before** `timeBlock.create` in `convertFocusSessionInTransaction` / `completeStopwatchInTransaction`.
 
 Dashboard: TimeBlock totals from `stats.ts` only; FocusSession totals from `focus-stats.ts` only — do not merge the two headline numbers.
+
+### Calendar drag (Phase 9.2)
+
+- **Day view:** drag uses `layout.visibleStart` / `visibleEnd` (not full block ISO) for duration + save via `updateTimeBlockSchedule`.
+- **Preview + save:** `calculateSnappedDragTopPx` → 5-min snap during move and on release (`CALENDAR_SNAP_MINUTES`).
+- **Week view:** drag **disabled**; `CalendarBlock` only; hint `t.calendar.drag.dayViewOnly`.
+- **Cross-midnight:** dragging a clipped segment may save as a **same-day** block (documented limitation). No cross-day drag this phase.
+- **Resize:** bottom handle only; `stopPropagation`; uses visible segment start for `calculateResizedRange`.
 
 ### Phase 9.1 — zombie running + category delete
 

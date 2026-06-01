@@ -4,10 +4,12 @@ import { useRef, useState } from "react";
 import { updateTimeBlockSchedule } from "@/lib/actions/calendar-time-blocks";
 import {
   CALENDAR_GRID_HEIGHT_PX,
-  calculateResizedRange,
   calculateMovedRange,
+  calculateResizedRange,
+  calculateSnappedDragTopPx,
   parseCalendarDateParam,
   pixelYToMinutes,
+  snapMinutes,
 } from "@/lib/calendar";
 
 const DRAG_THRESHOLD_PX = 5;
@@ -15,8 +17,8 @@ const RESIZE_HANDLE_HEIGHT_PX = 10;
 
 type Props = {
   blockId: string;
-  startTimeIso: string;
-  endTimeIso: string;
+  visibleStartIso: string;
+  visibleEndIso: string;
   calendarDate: string;
   gridContainerRef: React.RefObject<HTMLDivElement | null>;
   title: string;
@@ -33,8 +35,8 @@ type Props = {
 
 export function CalendarDraggableBlock({
   blockId,
-  startTimeIso,
-  endTimeIso,
+  visibleStartIso,
+  visibleEndIso,
   calendarDate,
   gridContainerRef,
   title,
@@ -63,9 +65,49 @@ export function CalendarDraggableBlock({
   const initialTopPxRef = useRef(0);
   const initialHeightPxRef = useRef(0);
 
-  const originalStart = new Date(startTimeIso);
-  const originalEnd = new Date(endTimeIso);
+  const segmentStart = new Date(visibleStartIso);
+  const segmentEnd = new Date(visibleEndIso);
   const selectedDay = parseCalendarDateParam(calendarDate);
+
+  const blockTopPxInGrid = (clientY: number, container: HTMLElement) => {
+    const containerRect = container.getBoundingClientRect();
+    return clientY - containerRect.top - grabOffsetYRef.current;
+  };
+
+  const movedRangeFromPointer = (clientY: number) => {
+    const container = gridContainerRef.current;
+    if (!container) {
+      return { ok: false as const };
+    }
+    const topPx = blockTopPxInGrid(clientY, container);
+    const targetStartMinutes = snapMinutes(
+      pixelYToMinutes(topPx, CALENDAR_GRID_HEIGHT_PX),
+    );
+    return calculateMovedRange(
+      segmentStart,
+      segmentEnd,
+      targetStartMinutes,
+      selectedDay,
+    );
+  };
+
+  const updateDragPreview = (clientY: number) => {
+    const container = gridContainerRef.current;
+    if (!container) return;
+
+    const topPx = blockTopPxInGrid(clientY, container);
+    const snappedTopPx = calculateSnappedDragTopPx(
+      topPx,
+      segmentStart,
+      segmentEnd,
+      selectedDay,
+      CALENDAR_GRID_HEIGHT_PX,
+    );
+    if (snappedTopPx === null) {
+      return;
+    }
+    setDragOffsetPx(snappedTopPx - initialTopPxRef.current);
+  };
 
   const clearBodyDragStyles = () => {
     document.body.style.userSelect = "";
@@ -103,23 +145,7 @@ export function CalendarDraggableBlock({
     dragStartedRef.current = false;
     setIsDragging(false);
 
-    const container = gridContainerRef.current;
-    if (!container) {
-      setDragOffsetPx(0);
-      onSaveEnd(false);
-      return;
-    }
-
-    const containerRect = container.getBoundingClientRect();
-    const newTopPx = clientY - containerRect.top - grabOffsetYRef.current;
-    const targetStartMinutes = pixelYToMinutes(newTopPx, CALENDAR_GRID_HEIGHT_PX);
-
-    const moved = calculateMovedRange(
-      originalStart,
-      originalEnd,
-      targetStartMinutes,
-      selectedDay,
-    );
+    const moved = movedRangeFromPointer(clientY);
 
     setDragOffsetPx(0);
 
@@ -166,10 +192,12 @@ export function CalendarDraggableBlock({
       initialTopPxRef.current -
       initialHeightPxRef.current;
     const targetEndYpx = initialTopPxRef.current + initialHeightPxRef.current + newHeightPx;
-    const targetEndMinutes = pixelYToMinutes(targetEndYpx, CALENDAR_GRID_HEIGHT_PX);
+    const targetEndMinutes = snapMinutes(
+      pixelYToMinutes(targetEndYpx, CALENDAR_GRID_HEIGHT_PX),
+    );
 
     const resized = calculateResizedRange(
-      originalStart,
+      segmentStart,
       targetEndMinutes,
       selectedDay,
     );
@@ -226,13 +254,7 @@ export function CalendarDraggableBlock({
           document.body.style.cursor = "grabbing";
         }
 
-        const container = gridContainerRef.current;
-        if (!container) return;
-
-        const containerRect = container.getBoundingClientRect();
-        const newTopPx =
-          e.clientY - containerRect.top - grabOffsetYRef.current;
-        setDragOffsetPx(newTopPx - initialTopPxRef.current);
+        updateDragPreview(e.clientY);
       }}
       onPointerUp={(e) => {
         if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;

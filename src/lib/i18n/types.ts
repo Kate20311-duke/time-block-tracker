@@ -169,6 +169,7 @@ export type Dictionary = {
     };
     drag: {
       saveFailed: string;
+      dayViewOnly: string;
     };
     detail: {
       panelAria: string;

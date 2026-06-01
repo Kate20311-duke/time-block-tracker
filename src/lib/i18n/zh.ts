@@ -182,6 +182,7 @@ export const zh: Dictionary = {
     },
     drag: {
       saveFailed: "拖动保存失败，已恢复为最新数据。",
+      dayViewOnly: "拖动改时间仅在日视图可用；请切换到日视图进行精确调整。",
     },
     detail: {
       panelAria: "时间块详情",

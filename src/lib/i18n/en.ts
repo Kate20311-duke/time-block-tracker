@@ -188,6 +188,8 @@ export const en: Dictionary = {
     },
     drag: {
       saveFailed: "Could not save the moved time block. The calendar was refreshed.",
+      dayViewOnly:
+        "Drag to reschedule is available in day view. Switch to day view for precise adjustments.",
     },
     detail: {
       panelAria: "Time block details",

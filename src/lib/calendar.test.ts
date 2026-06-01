@@ -6,6 +6,7 @@ import {
   CALENDAR_SNAP_MINUTES,
   calculateMovedRange,
   calculateResizedRange,
+  calculateSnappedDragTopPx,
   clampMinutesToDay,
   endOfDay,
   endOfWeekMonday,
@@ -296,6 +297,93 @@ describe("calculateResizedRange", () => {
     const lateStart = new Date(2026, 4, 21, 23, 58);
     const result = calculateResizedRange(lateStart, 23 * 60 + 59, day);
     expect(result.ok).toBe(false);
+  });
+});
+
+describe("calculateSnappedDragTopPx", () => {
+  const day = parseCalendarDateParam("2026-05-21");
+
+  it("preserves visible segment duration when moving", () => {
+    const segmentStart = new Date(2026, 4, 21, 9, 0);
+    const segmentEnd = new Date(2026, 4, 21, 9, 30);
+    const pointerY = (10 * 60 / 1440) * CALENDAR_GRID_HEIGHT_PX;
+
+    const topPx = calculateSnappedDragTopPx(
+      pointerY,
+      segmentStart,
+      segmentEnd,
+      day,
+    );
+
+    expect(topPx).not.toBeNull();
+    const moved = calculateMovedRange(
+      segmentStart,
+      segmentEnd,
+      (topPx! / CALENDAR_GRID_HEIGHT_PX) * 1440,
+      day,
+    );
+    expect(moved.ok).toBe(true);
+    if (moved.ok) {
+      const duration =
+        (moved.endTime.getTime() - moved.startTime.getTime()) / 60_000;
+      expect(duration).toBe(30);
+      expect(moved.startTime.getHours()).toBe(10);
+      expect(moved.startTime.getMinutes()).toBe(0);
+    }
+  });
+
+  it("snaps preview top to 5-minute grid", () => {
+    const segmentStart = new Date(2026, 4, 21, 9, 0);
+    const segmentEnd = new Date(2026, 4, 21, 10, 0);
+    const blockTopPx = ((9 * 60 + 2) / 1440) * CALENDAR_GRID_HEIGHT_PX;
+    const topPx = calculateSnappedDragTopPx(
+      blockTopPx,
+      segmentStart,
+      segmentEnd,
+      day,
+    );
+
+    expect(topPx).not.toBeNull();
+    const minutes = (topPx! / CALENDAR_GRID_HEIGHT_PX) * 1440;
+    expect(minutes % CALENDAR_SNAP_MINUTES).toBe(0);
+  });
+
+  it("clamps cross-midnight visible segment drag to same day", () => {
+    const block = {
+      startTime: new Date(2026, 4, 20, 22, 0),
+      endTime: new Date(2026, 4, 21, 2, 0),
+    };
+    const layout = layoutBlockInDay(block, day);
+    expect(layout).not.toBeNull();
+
+    const latePointerY = (22 * 60 / 1440) * CALENDAR_GRID_HEIGHT_PX;
+    const topPx = calculateSnappedDragTopPx(
+      latePointerY,
+      layout!.visibleStart,
+      layout!.visibleEnd,
+      day,
+    );
+
+    expect(topPx).not.toBeNull();
+    const targetMinutes = (topPx! / CALENDAR_GRID_HEIGHT_PX) * 1440;
+    const moved = calculateMovedRange(
+      layout!.visibleStart,
+      layout!.visibleEnd,
+      targetMinutes,
+      day,
+    );
+    expect(moved.ok).toBe(true);
+    if (moved.ok) {
+      const visibleDuration =
+        (layout!.visibleEnd.getTime() - layout!.visibleStart.getTime()) / 60_000;
+      const resultDuration =
+        (moved.endTime.getTime() - moved.startTime.getTime()) / 60_000;
+      expect(resultDuration).toBe(visibleDuration);
+      expect(moved.startTime.getTime()).toBeGreaterThanOrEqual(
+        startOfDay(day).getTime(),
+      );
+      expect(moved.endTime.getTime()).toBeLessThanOrEqual(endOfDay(day).getTime());
+    }
   });
 });
 

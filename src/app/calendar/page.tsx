@@ -386,6 +386,7 @@ export default async function CalendarPage({
           notFoundMessage={t.calendar.detail.notFound}
           noCategoriesMessage={t.timeBlocks.cannotEditNoCategories}
           dragSaveFailedMessage={t.calendar.drag.saveFailed}
+          dragDayViewOnlyMessage={t.calendar.drag.dayViewOnly}
           dayBlocks={
             view === "day"
               ? mapBlocksForDay(timeBlocks, selectedDay)

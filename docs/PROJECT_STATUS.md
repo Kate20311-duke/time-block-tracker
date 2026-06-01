@@ -6,6 +6,8 @@
 
 ## 2. 当前阶段
 
+**Phase 9.2：日历拖拽稳定性（已完成）** — 详见 §23
+
 **Phase 9：正计时秒表（已完成）** — 详见 §21
 
 **Phase 7：Docker 化（已完成）** — 详见 §19
@@ -87,9 +89,9 @@
 - **Phase 2.5：已完成（交互能力）**
   - **calendar-specific server actions**：`src/lib/actions/calendar-time-blocks.ts`
   - **click-to-edit from calendar**：点击块打开 `/calendar?blockId=...` 的页内编辑面板
-  - **day view drag-to-move**：日视图列内纵向拖拽移动（保持时长、5 分钟吸附、00:00–24:00 夹取）
+  - **day view drag-to-move**：日视图列内纵向拖拽（可见段时长、5 分钟吸附、预览与保存一致、00:00–24:00 夹取）— Phase 9.2 加固
   - **day view bottom resize**：日视图底部手柄 resize（只改 `endTime`、5 分钟吸附、最小时长、00:00–24:00 夹取）
-  - **week view column-internal interactions（受限）**：周视图列内拖拽/底部 resize（不跨列、不改日期）
+  - **week view drag**：**已暂时关闭**（Phase 9.2）；周视图仍可点击块编辑；精确拖动请用日视图
   - **00:00–24:00 全日交互范围**：拖拽/resize 的计算与 clamp 都以单日网格为边界
   - **可配置吸附间隔**：`CALENDAR_SNAP_MINUTES`（当前 5 分钟）
   - **可配置最小时长**：`MIN_TIME_BLOCK_DURATION_MINUTES`
@@ -1139,4 +1141,56 @@ docker compose up -d
 
 - `planned` 仍阻挡分类删除（极少使用）
 - 已完成未转换的 FocusSession 仍阻挡删除（需先转换或后续产品决策）
+
+## 23. Phase 9.2 — 日历拖拽稳定性（已完成）
+
+### 23.1 修复的问题
+
+| 问题 | 原因 | 修复 |
+|------|------|------|
+| 拖放落点不可预测 | 拖拽用整段 `startTime`/`endTime` 而非列内可见段；跨午夜块时长与视觉不符 | 传入 `visibleStart`/`visibleEnd` 计算移动与保存 |
+| 松手后块「跳一下」 | 拖动预览未吸附，仅在 `pointerup` 吸附 | `calculateSnappedDragTopPx` + 移动过程同步 5 分钟吸附 |
+| 周视图拖拽混乱 | 多列同块 + 整段时长 | **周视图关闭拖拽**；提示改用日视图 |
+
+### 23.2 当前行为
+
+| 视图 | 拖拽 | Resize | 点击编辑 |
+|------|------|--------|----------|
+| **日视图** | ✅ 纵向移动（可见段时长） | ✅ 底部手柄 | ✅ |
+| **周视图** | ❌ 已禁用 | ❌ | ✅ |
+
+- **吸附**：`CALENDAR_SNAP_MINUTES` = 5（预览与保存一致）
+- **边界**：结果夹在当日 `00:00–24:00`；`endTime > startTime`；最小时长 `MIN_TIME_BLOCK_DURATION_MINUTES`
+- **保存**：`updateTimeBlockSchedule`（用户隔离不变）；失败刷新并提示
+
+### 23.3 跨午夜块（已知产品限制）
+
+在日视图中拖动**裁剪后的可见段**，保存后会把该时间块改为**当日内的起止时间**（可见段时长不变）。不会保留跨日多段；完整跨日编辑留待后续 Phase。
+
+### 23.4 新增/修改
+
+| 文件 | 说明 |
+|------|------|
+| `src/lib/calendar.ts` | `minutesToPixelY`、`calculateSnappedDragTopPx` |
+| `src/components/calendar-draggable-block.tsx` | 可见段 ISO、吸附预览、resize 用可见起点 |
+| `src/components/calendar-day-column.tsx` | 传入 `visibleStartIso` / `visibleEndIso` |
+| `src/components/calendar-week-grid.tsx` | 移除 `enableDrag` |
+| `src/lib/calendar.test.ts` | 可见段移动 / 吸附 / 跨午夜裁剪用例 |
+
+### 23.5 手动测试清单
+
+- [ ] 日视图：拖 30 分钟块下移 30 分钟，时长仍为 30 分钟
+- [ ] 日视图：拖动过程与松手位置均为 5 分钟格
+- [ ] 日视图：刷新后位置与保存一致
+- [ ] 日视图：拖到顶部/底部不越界
+- [ ] 日视图：底部 resize 改时长；拖块体不触发 resize
+- [ ] 周视图：块可显示、不可拖；点击仍可编辑
+- [ ] 跨午夜块：日视图拖动可见段行为可预期（可能变为同日块）
+- [ ] 保存失败时出现错误提示且数据恢复
+
+### 23.6 建议后续
+
+- 周视图可靠的目标列检测 + 列内拖拽
+- 真正的跨日 / 跨午夜块编辑（不强制合并为单日）
+- 可选：resize 预览也做 5 分钟吸附
 

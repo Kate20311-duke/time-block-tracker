@@ -152,6 +152,42 @@ export function pixelYToMinutes(
   return (clampedY / height) * MINUTES_PER_DAY;
 }
 
+/** Minutes from 00:00 to pixel offset from the top of the day grid. */
+export function minutesToPixelY(
+  minutes: number,
+  containerHeightPx: number = CALENDAR_GRID_HEIGHT_PX,
+): number {
+  const height = containerHeightPx > 0 ? containerHeightPx : CALENDAR_GRID_HEIGHT_PX;
+  return (clampMinutesToDay(minutes) / MINUTES_PER_DAY) * height;
+}
+
+/**
+ * Snap a drag position (grid Y in px) to a valid top offset for a visible segment.
+ * Preserves visible-segment duration and clamps to the calendar day.
+ */
+export function calculateSnappedDragTopPx(
+  blockTopPxInGrid: number,
+  segmentStart: Date,
+  segmentEnd: Date,
+  selectedDay: Date,
+  containerHeightPx: number = CALENDAR_GRID_HEIGHT_PX,
+): number | null {
+  const targetStartMinutes = snapMinutes(
+    pixelYToMinutes(blockTopPxInGrid, containerHeightPx),
+  );
+  const moved = calculateMovedRange(
+    segmentStart,
+    segmentEnd,
+    targetStartMinutes,
+    selectedDay,
+  );
+  if (!moved.ok) {
+    return null;
+  }
+  const startMinutes = dateToMinutesFromDayStart(moved.startTime, selectedDay);
+  return minutesToPixelY(startMinutes, containerHeightPx);
+}
+
 /** Minutes from 00:00 to CSS top %. */
 export function minutesToTopPercent(minutes: number): number {
   return (clampMinutesToDay(minutes) / MINUTES_PER_DAY) * 100;

@@ -49,6 +49,7 @@ type Props = {
   notFoundMessage?: string;
   noCategoriesMessage?: string;
   dragSaveFailedMessage?: string;
+  dragDayViewOnlyMessage?: string;
 };
 
 function buildCalendarPath(
@@ -90,6 +91,7 @@ export function CalendarInteractiveView({
   notFoundMessage,
   noCategoriesMessage,
   dragSaveFailedMessage,
+  dragDayViewOnlyMessage,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -140,8 +142,11 @@ export function CalendarInteractiveView({
           columns={weekColumns}
           selectedBlockId={selectedBlockId}
           onBlockSelect={handleBlockSelect}
-          onScheduleSaveEnd={handleScheduleSaveEnd}
         />
+      ) : null}
+
+      {view === "week" && dragDayViewOnlyMessage ? (
+        <p className="text-sm text-zinc-500">{dragDayViewOnlyMessage}</p>
       ) : null}
 
       {dragError ? (

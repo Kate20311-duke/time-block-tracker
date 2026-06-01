@@ -11,6 +11,7 @@ import {
   endOfDay,
   endOfWeekMonday,
   formatCalendarDateParam,
+  getCalendarTimeZone,
   getWeekDays,
   getWeekQueryRange,
   layoutBlockInDay,
@@ -24,27 +25,49 @@ import {
   startOfDay,
   startOfWeekMonday,
 } from "./calendar";
+import {
+  getCalendarWeekday,
+  zonedStartOfCalendarDay,
+} from "./calendar-timezone";
+
+/** Wall-clock time on a calendar date in the app timezone. */
+function atCalendarTime(
+  dateParam: string,
+  hours: number,
+  minutes = 0,
+  timeZone = getCalendarTimeZone(),
+): Date {
+  return new Date(
+    zonedStartOfCalendarDay(dateParam, timeZone).getTime() +
+      (hours * 60 + minutes) * 60_000,
+  );
+}
 
 describe("parseCalendarDateParam", () => {
   it("parses a valid YYYY-MM-DD param", () => {
     const day = parseCalendarDateParam("2026-05-21");
-    expect(day.getFullYear()).toBe(2026);
-    expect(day.getMonth()).toBe(4);
-    expect(day.getDate()).toBe(21);
-    expect(day.getHours()).toBe(0);
+    expect(formatCalendarDateParam(day)).toBe("2026-05-21");
   });
 
   it("falls back to today for invalid params", () => {
-    const today = startOfDay(new Date());
-    expect(parseCalendarDateParam("not-a-date").getDate()).toBe(today.getDate());
-    expect(parseCalendarDateParam("2026-13-40").getDate()).toBe(today.getDate());
-    expect(parseCalendarDateParam(undefined).getDate()).toBe(today.getDate());
+    const todayParam = formatCalendarDateParam(new Date());
+    expect(formatCalendarDateParam(parseCalendarDateParam("not-a-date"))).toBe(
+      todayParam,
+    );
+    expect(formatCalendarDateParam(parseCalendarDateParam("2026-13-40"))).toBe(
+      todayParam,
+    );
+    expect(formatCalendarDateParam(parseCalendarDateParam(undefined))).toBe(
+      todayParam,
+    );
   });
 });
 
 describe("formatCalendarDateParam", () => {
   it("formats a date as YYYY-MM-DD", () => {
-    expect(formatCalendarDateParam(new Date(2026, 4, 21))).toBe("2026-05-21");
+    expect(formatCalendarDateParam(atCalendarTime("2026-05-21", 12))).toBe(
+      "2026-05-21",
+    );
   });
 });
 
@@ -53,7 +76,9 @@ describe("addCalendarDays", () => {
     const base = parseCalendarDateParam("2026-05-21");
     const next = addCalendarDays(base, 1);
     expect(formatCalendarDateParam(next)).toBe("2026-05-22");
-    expect(next.getHours()).toBe(0);
+    expect(formatCalendarDateParam(next)).toBe(
+      formatCalendarDateParam(zonedStartOfCalendarDay("2026-05-22")),
+    );
   });
 });
 
@@ -72,7 +97,7 @@ describe("parseCalendarViewParam", () => {
 describe("startOfWeekMonday", () => {
   it("returns Monday for a Wednesday anchor", () => {
     const wed = parseCalendarDateParam("2026-05-21");
-    expect(wed.getDay()).toBe(4);
+    expect(getCalendarWeekday("2026-05-21")).toBe(4);
     const mon = startOfWeekMonday(wed);
     expect(formatCalendarDateParam(mon)).toBe("2026-05-18");
   });
@@ -84,7 +109,7 @@ describe("startOfWeekMonday", () => {
 
   it("returns previous Monday when anchor is Sunday", () => {
     const sun = parseCalendarDateParam("2026-05-24");
-    expect(sun.getDay()).toBe(0);
+    expect(getCalendarWeekday("2026-05-24")).toBe(0);
     expect(formatCalendarDateParam(startOfWeekMonday(sun))).toBe("2026-05-18");
   });
 });
@@ -96,8 +121,8 @@ describe("getWeekDays", () => {
     expect(days).toHaveLength(7);
     expect(formatCalendarDateParam(days[0])).toBe("2026-05-18");
     expect(formatCalendarDateParam(days[6])).toBe("2026-05-24");
-    expect(days[0].getDay()).toBe(1);
-    expect(days[6].getDay()).toBe(0);
+    expect(getCalendarWeekday(formatCalendarDateParam(days[0]))).toBe(1);
+    expect(getCalendarWeekday(formatCalendarDateParam(days[6]))).toBe(0);
   });
 });
 
@@ -169,8 +194,8 @@ describe("calculateMovedRange", () => {
   const day = parseCalendarDateParam("2026-05-21");
 
   it("moves a block while preserving duration", () => {
-    const originalStart = new Date(2026, 4, 21, 9, 0);
-    const originalEnd = new Date(2026, 4, 21, 10, 30);
+    const originalStart = atCalendarTime("2026-05-21", 9, 0);
+    const originalEnd = atCalendarTime("2026-05-21", 10, 30);
 
     const result = calculateMovedRange(
       originalStart,
@@ -181,8 +206,11 @@ describe("calculateMovedRange", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.startTime.getHours()).toBe(12);
-      expect(result.startTime.getMinutes()).toBe(0);
+      expect(formatCalendarDateParam(result.startTime)).toBe("2026-05-21");
+      expect(
+        (result.startTime.getTime() - zonedStartOfCalendarDay("2026-05-21").getTime()) /
+          60_000,
+      ).toBe(12 * 60);
       const duration =
         (result.endTime.getTime() - result.startTime.getTime()) / 60_000;
       expect(duration).toBe(90);
@@ -190,8 +218,8 @@ describe("calculateMovedRange", () => {
   });
 
   it("snaps moved start to 5 minutes", () => {
-    const originalStart = new Date(2026, 4, 21, 9, 0);
-    const originalEnd = new Date(2026, 4, 21, 9, 30);
+    const originalStart = atCalendarTime("2026-05-21", 9, 0);
+    const originalEnd = atCalendarTime("2026-05-21", 9, 30);
 
     const result = calculateMovedRange(
       originalStart,
@@ -202,13 +230,16 @@ describe("calculateMovedRange", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.startTime.getMinutes()).toBe(0);
+      expect(
+        (result.startTime.getTime() - zonedStartOfCalendarDay("2026-05-21").getTime()) %
+          (60 * 60_000),
+      ).toBe(0);
     }
   });
 
   it("clamps move so the block stays inside the day", () => {
-    const originalStart = new Date(2026, 4, 21, 9, 0);
-    const originalEnd = new Date(2026, 4, 21, 11, 0);
+    const originalStart = atCalendarTime("2026-05-21", 9, 0);
+    const originalEnd = atCalendarTime("2026-05-21", 11, 0);
 
     const result = calculateMovedRange(
       originalStart,
@@ -227,7 +258,7 @@ describe("calculateMovedRange", () => {
   });
 
   it("rejects invalid move when duration exceeds the day", () => {
-    const originalStart = new Date(2026, 4, 21, 0, 0);
+    const originalStart = atCalendarTime("2026-05-21", 0, 0);
     const originalEnd = new Date(
       originalStart.getTime() + 25 * 60 * 60_000,
     );
@@ -238,7 +269,7 @@ describe("calculateMovedRange", () => {
   });
 
   it("rejects zero or negative duration", () => {
-    const t = new Date(2026, 4, 21, 10, 0);
+    const t = atCalendarTime("2026-05-21", 10, 0);
     expect(calculateMovedRange(t, t, 60, day).ok).toBe(false);
   });
 });
@@ -247,20 +278,22 @@ describe("calculateResizedRange", () => {
   const day = parseCalendarDateParam("2026-05-21");
 
   it("changes endTime only and keeps originalStart", () => {
-    const originalStart = new Date(2026, 4, 21, 9, 0);
+    const originalStart = atCalendarTime("2026-05-21", 9, 0);
 
     const result = calculateResizedRange(originalStart, 11 * 60, day);
 
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.startTime).toEqual(originalStart);
-      expect(result.endTime.getHours()).toBe(11);
-      expect(result.endTime.getMinutes()).toBe(0);
+      expect(
+        (result.endTime.getTime() - zonedStartOfCalendarDay("2026-05-21").getTime()) /
+          60_000,
+      ).toBe(11 * 60);
     }
   });
 
   it("enforces minimum duration", () => {
-    const originalStart = new Date(2026, 4, 21, 9, 0);
+    const originalStart = atCalendarTime("2026-05-21", 9, 0);
 
     const result = calculateResizedRange(
       originalStart,
@@ -277,13 +310,13 @@ describe("calculateResizedRange", () => {
   });
 
   it("rejects end before start", () => {
-    const originalStart = new Date(2026, 4, 21, 11, 0);
+    const originalStart = atCalendarTime("2026-05-21", 11, 0);
 
     expect(calculateResizedRange(originalStart, 10 * 60, day).ok).toBe(false);
   });
 
   it("snaps end to 5-minute intervals", () => {
-    const originalStart = new Date(2026, 4, 21, 9, 0);
+    const originalStart = atCalendarTime("2026-05-21", 9, 0);
 
     const result = calculateResizedRange(originalStart, 10 * 60 + 3, day);
 
@@ -294,7 +327,7 @@ describe("calculateResizedRange", () => {
   });
 
   it("does not push endTime past 24:00 when enforcing minimum duration", () => {
-    const lateStart = new Date(2026, 4, 21, 23, 58);
+    const lateStart = atCalendarTime("2026-05-21", 23, 58);
     const result = calculateResizedRange(lateStart, 23 * 60 + 59, day);
     expect(result.ok).toBe(false);
   });
@@ -304,8 +337,8 @@ describe("calculateSnappedDragTopPx", () => {
   const day = parseCalendarDateParam("2026-05-21");
 
   it("preserves visible segment duration when moving", () => {
-    const segmentStart = new Date(2026, 4, 21, 9, 0);
-    const segmentEnd = new Date(2026, 4, 21, 9, 30);
+    const segmentStart = atCalendarTime("2026-05-21", 9, 0);
+    const segmentEnd = atCalendarTime("2026-05-21", 9, 30);
     const pointerY = (10 * 60 / 1440) * CALENDAR_GRID_HEIGHT_PX;
 
     const topPx = calculateSnappedDragTopPx(
@@ -327,14 +360,16 @@ describe("calculateSnappedDragTopPx", () => {
       const duration =
         (moved.endTime.getTime() - moved.startTime.getTime()) / 60_000;
       expect(duration).toBe(30);
-      expect(moved.startTime.getHours()).toBe(10);
-      expect(moved.startTime.getMinutes()).toBe(0);
+      expect(
+        (moved.startTime.getTime() - zonedStartOfCalendarDay("2026-05-21").getTime()) /
+          60_000,
+      ).toBe(10 * 60);
     }
   });
 
   it("snaps preview top to 5-minute grid", () => {
-    const segmentStart = new Date(2026, 4, 21, 9, 0);
-    const segmentEnd = new Date(2026, 4, 21, 10, 0);
+    const segmentStart = atCalendarTime("2026-05-21", 9, 0);
+    const segmentEnd = atCalendarTime("2026-05-21", 10, 0);
     const blockTopPx = ((9 * 60 + 2) / 1440) * CALENDAR_GRID_HEIGHT_PX;
     const topPx = calculateSnappedDragTopPx(
       blockTopPx,
@@ -350,8 +385,8 @@ describe("calculateSnappedDragTopPx", () => {
 
   it("clamps cross-midnight visible segment drag to same day", () => {
     const block = {
-      startTime: new Date(2026, 4, 20, 22, 0),
-      endTime: new Date(2026, 4, 21, 2, 0),
+      startTime: atCalendarTime("2026-05-20", 22, 0),
+      endTime: atCalendarTime("2026-05-21", 2, 0),
     };
     const layout = layoutBlockInDay(block, day);
     expect(layout).not.toBeNull();
@@ -393,8 +428,8 @@ describe("layoutBlockInDay", () => {
   it("positions a block fully inside the day", () => {
     const layout = layoutBlockInDay(
       {
-        startTime: new Date(2026, 4, 21, 9, 0),
-        endTime: new Date(2026, 4, 21, 10, 30),
+        startTime: atCalendarTime("2026-05-21", 9, 0),
+        endTime: atCalendarTime("2026-05-21", 10, 30),
       },
       day,
     );
@@ -407,8 +442,8 @@ describe("layoutBlockInDay", () => {
   it("clips a block that starts before the day", () => {
     const layout = layoutBlockInDay(
       {
-        startTime: new Date(2026, 4, 20, 22, 0),
-        endTime: new Date(2026, 4, 21, 2, 0),
+        startTime: atCalendarTime("2026-05-20", 22, 0),
+        endTime: atCalendarTime("2026-05-21", 2, 0),
       },
       day,
     );
@@ -422,8 +457,8 @@ describe("layoutBlockInDay", () => {
   it("clips a block that ends after the day", () => {
     const layout = layoutBlockInDay(
       {
-        startTime: new Date(2026, 4, 21, 23, 0),
-        endTime: new Date(2026, 4, 22, 1, 0),
+        startTime: atCalendarTime("2026-05-21", 23, 0),
+        endTime: atCalendarTime("2026-05-22", 1, 0),
       },
       day,
     );
@@ -437,8 +472,8 @@ describe("layoutBlockInDay", () => {
     expect(
       layoutBlockInDay(
         {
-          startTime: new Date(2026, 4, 20, 9, 0),
-          endTime: new Date(2026, 4, 20, 10, 0),
+          startTime: atCalendarTime("2026-05-20", 9, 0),
+          endTime: atCalendarTime("2026-05-20", 10, 0),
         },
         day,
       ),

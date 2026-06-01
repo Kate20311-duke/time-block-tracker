@@ -1,4 +1,15 @@
 import type { Locale } from "@/lib/i18n/types";
+import {
+  addCalendarDateParam,
+  formatCalendarDateParamInTimeZone,
+  getCalendarTimeZone,
+  getCalendarWeekday,
+  getDayBoundsForDateParam,
+  zonedEndOfCalendarDay,
+  zonedStartOfCalendarDay,
+} from "@/lib/calendar-timezone";
+
+export { getCalendarTimeZone } from "@/lib/calendar-timezone";
 
 /** Minutes in a calendar day (00:00–24:00). */
 export const MINUTES_PER_DAY = 24 * 60;
@@ -23,54 +34,48 @@ export type CalendarView = "day" | "week";
 
 const DATE_PARAM_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Local midnight at the start of the given calendar day. */
+/** Midnight at the start of the calendar day containing `date` (app timezone). */
 export function startOfDay(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  const tz = getCalendarTimeZone();
+  return zonedStartOfCalendarDay(formatCalendarDateParamInTimeZone(date, tz), tz);
 }
 
-/** Exclusive end of the calendar day (midnight next day, local). */
+/** Exclusive end of that calendar day (app timezone). */
 export function endOfDay(date: Date): Date {
-  const d = startOfDay(date);
-  d.setDate(d.getDate() + 1);
-  return d;
+  const tz = getCalendarTimeZone();
+  return zonedEndOfCalendarDay(formatCalendarDateParamInTimeZone(date, tz), tz);
 }
 
 /** Parse `YYYY-MM-DD` from URL; invalid or missing values fall back to today. */
 export function parseCalendarDateParam(param: string | undefined): Date {
+  const tz = getCalendarTimeZone();
   if (!param || !DATE_PARAM_PATTERN.test(param)) {
-    return startOfDay(new Date());
+    return zonedStartOfCalendarDay(
+      formatCalendarDateParamInTimeZone(new Date(), tz),
+      tz,
+    );
   }
 
-  const [year, month, day] = param.split("-").map(Number);
-  const parsed = new Date(year, month - 1, day);
-
-  if (
-    parsed.getFullYear() !== year ||
-    parsed.getMonth() !== month - 1 ||
-    parsed.getDate() !== day
-  ) {
-    return startOfDay(new Date());
+  if (formatCalendarDateParamInTimeZone(zonedStartOfCalendarDay(param, tz), tz) !== param) {
+    return zonedStartOfCalendarDay(
+      formatCalendarDateParamInTimeZone(new Date(), tz),
+      tz,
+    );
   }
 
-  return startOfDay(parsed);
+  return zonedStartOfCalendarDay(param, tz);
 }
 
-/** Format a date as `YYYY-MM-DD` for calendar navigation links. */
+/** Format a date as `YYYY-MM-DD` for calendar navigation links (app timezone). */
 export function formatCalendarDateParam(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const y = date.getFullYear();
-  const m = pad(date.getMonth() + 1);
-  const d = pad(date.getDate());
-  return `${y}-${m}-${d}`;
+  return formatCalendarDateParamInTimeZone(date, getCalendarTimeZone());
 }
 
-/** Add days to a calendar day (result is always start-of-day). */
+/** Add days to a calendar day (result is start-of-day in app timezone). */
 export function addCalendarDays(date: Date, days: number): Date {
-  const d = startOfDay(date);
-  d.setDate(d.getDate() + days);
-  return d;
+  const tz = getCalendarTimeZone();
+  const param = formatCalendarDateParamInTimeZone(date, tz);
+  return zonedStartOfCalendarDay(addCalendarDateParam(param, days), tz);
 }
 
 /** Parse `?view=`; missing or invalid values default to `week`. */
@@ -79,12 +84,15 @@ export function parseCalendarViewParam(param: string | undefined): CalendarView 
   return "week";
 }
 
-/** Monday 00:00 local for the week containing `date`. */
+/** Monday 00:00 (app timezone) for the week containing `date`. */
 export function startOfWeekMonday(date: Date): Date {
-  const d = startOfDay(date);
-  const daysFromMonday = (d.getDay() + 6) % 7;
-  d.setDate(d.getDate() - daysFromMonday);
-  return d;
+  const tz = getCalendarTimeZone();
+  const anchorParam = formatCalendarDateParamInTimeZone(date, tz);
+  const daysFromMonday = (getCalendarWeekday(anchorParam, tz) + 6) % 7;
+  return zonedStartOfCalendarDay(
+    addCalendarDateParam(anchorParam, -daysFromMonday),
+    tz,
+  );
 }
 
 /** Exclusive end of the Monday-based week (next Monday 00:00). */
@@ -335,8 +343,9 @@ export function layoutBlockInDay(
   block: TimeRange,
   day: Date,
 ): DayBlockLayout | null {
-  const dayStart = startOfDay(day);
-  const dayEnd = endOfDay(day);
+  const tz = getCalendarTimeZone();
+  const dateParam = formatCalendarDateParamInTimeZone(day, tz);
+  const { dayStart, dayEnd } = getDayBoundsForDateParam(dateParam, tz);
 
   if (block.endTime <= dayStart || block.startTime >= dayEnd) {
     return null;
@@ -375,6 +384,7 @@ export function getDayQueryRange(day: Date): {
 
 export function formatCalendarDayHeading(date: Date, locale: Locale): string {
   return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
+    timeZone: getCalendarTimeZone(),
     weekday: "long",
     year: "numeric",
     month: "long",
@@ -385,6 +395,7 @@ export function formatCalendarDayHeading(date: Date, locale: Locale): string {
 /** Short label for a week column header (e.g. Mon 5/19). */
 export function formatCalendarColumnHeading(date: Date, locale: Locale): string {
   return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
+    timeZone: getCalendarTimeZone(),
     weekday: "short",
     month: "numeric",
     day: "numeric",
@@ -394,16 +405,21 @@ export function formatCalendarColumnHeading(date: Date, locale: Locale): string 
 /** Range label for the week containing `weekStart` (Mon–Sun). */
 export function formatWeekRangeHeading(weekStart: Date, locale: Locale): string {
   const loc = locale === "zh" ? "zh-CN" : "en-US";
+  const tz = getCalendarTimeZone();
   const sunday = addCalendarDays(startOfWeekMonday(weekStart), 6);
   const start = startOfWeekMonday(weekStart);
-  const sameYear = start.getFullYear() === sunday.getFullYear();
+  const sameYear =
+    formatCalendarDateParamInTimeZone(start, tz).slice(0, 4) ===
+    formatCalendarDateParamInTimeZone(sunday, tz).slice(0, 4);
 
   const startFmt = new Intl.DateTimeFormat(loc, {
+    timeZone: tz,
     month: "short",
     day: "numeric",
     ...(sameYear ? {} : { year: "numeric" }),
   });
   const endFmt = new Intl.DateTimeFormat(loc, {
+    timeZone: tz,
     month: "short",
     day: "numeric",
     year: "numeric",

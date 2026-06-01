@@ -127,6 +127,17 @@ export const en: Dictionary = {
     historyEmpty: "No focus sessions yet. Completed sessions will appear here.",
     historyNoCompleted:
       "Sessions exist, but none are completed or ready to convert yet.",
+    historyHasRunning:
+      "You have an unfinished focus or timer session. Abandon or cancel it below.",
+    historyOnlyNonCompleted:
+      "No completed focus sessions yet (abandoned or unfinished sessions are listed below).",
+    historyAbandonRunning: "Abandon",
+    historyCancelRunning: "Cancel timer",
+    pomodoroModeBadge: "Pomodoro",
+    stopwatchModeBadge: "Stopwatch",
+    orphanPomodoroMessage:
+      "An unfinished Pomodoro session was found (often after a page refresh). Abandon it before starting a new one.",
+    orphanPomodoroAbandon: "Abandon unfinished session",
     historyConverted: "Converted to time block",
     historyNotConverted: "Not converted",
     historyDuration: "Duration",
@@ -203,6 +214,10 @@ export const en: Dictionary = {
       "This category still has {count} time blocks and cannot be deleted",
     cannotDeleteRecords:
       "This category still has related time blocks or focus sessions and cannot be deleted",
+    cannotDeleteTimeBlocks: "{count} time block(s) remain",
+    cannotDeleteActiveFocus: "{count} active focus session(s) remain",
+    cannotDeleteCompletedFocus:
+      "{count} completed or converted focus session(s) remain",
     confirmDelete:
       'Delete category "{name}"? This action cannot be undone.',
     success: {
@@ -213,6 +228,12 @@ export const en: Dictionary = {
     errors: {
       hasTimeBlocks:
         "Cannot delete: this category still has related time blocks",
+      hasTimeBlocksDetail:
+        "Cannot delete: {timeBlocks} time block(s) and {blockingFocus} non-abandoned focus session(s) ({activeFocus} active).",
+      hasActiveFocusDetail:
+        "Cannot delete: {activeFocus} running or planned focus session(s). End or abandon them first.",
+      hasCompletedFocusDetail:
+        "Cannot delete: {blockingFocus} completed or converted focus session(s) remain.",
       hasRecords:
         "Cannot delete: this category still has related time blocks or focus sessions",
       deleteFailed: "Delete failed. Please try again later",

@@ -89,6 +89,13 @@ Duplicate TimeBlock prevention: `updateMany` claim (`convertedToTimeBlock: false
 
 Dashboard: TimeBlock totals from `stats.ts` only; FocusSession totals from `focus-stats.ts` only — do not merge the two headline numbers.
 
+### Phase 9.1 — zombie running + category delete
+
+- **Statuses:** `planned` | `running` | `completed` | `abandoned` | `converted` — stopwatch cancel uses `abandoned` (no `canceled`).
+- **FocusHistory:** always lists recent sessions; banner if `running` vs only non-completed; running rows call `abandonFocusSession` or `cancelStopwatch`.
+- **Pomodoro after refresh:** `orphanRunningPomodoro` on `/focus` → abandon via server (`focus-timer.tsx`).
+- **Category delete:** block on TimeBlocks + non-`abandoned` FocusSessions; in transaction `deleteMany` `abandoned` then delete category. Helpers: `src/lib/focus-session-status.ts`.
+
 ## Docker
 
 | Piece | Path / command |

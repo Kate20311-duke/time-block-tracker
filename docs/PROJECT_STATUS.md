@@ -1100,3 +1100,43 @@ docker compose up -d
 
 专注页 UI 打磨（分区视觉、历史列表标注 mode/source）、可选番茄刷新恢复（localStorage）。
 
+## 22. Phase 9.1 — 专注僵尸会话与分类删除（已完成）
+
+### 22.1 修复的问题
+
+| 问题 | 原因 | 修复 |
+|------|------|------|
+| 放弃后仍提示「有进行中」 | `historyNoCompleted` 在无 completed 时隐藏列表且文案误导 | 始终展示列表；区分 running / 仅 abandoned |
+| 刷新后无法放弃番茄钟 | 放弃依赖客户端 `sessionId` | 服务端 `running` 番茄显示「放弃未结束的会话」 |
+| 历史里无法处理 running | 列表被隐藏 | running 行显示放弃/取消按钮 |
+| 分类删不掉（仅 abandoned） | 删除统计全部 FocusSession | 删除时清理 `abandoned`；仅 TimeBlock / 非 abandoned 阻挡 |
+
+### 22.2 分类删除新规则
+
+- **阻挡**：该分类下存在 TimeBlock；或 `running` / `planned` / `completed` / `converted` 的 FocusSession
+- **不阻挡**：仅有 `abandoned` 的 FocusSession（删除分类时在事务内 `deleteMany` 清理 abandoned 后删分类）
+- **无 schema 变更**；`FocusSession.categoryId` 仍为 `onDelete: Restrict`
+
+### 22.3 新增/修改
+
+| 文件 | 说明 |
+|------|------|
+| `src/lib/focus-session-status.ts` | `isFocusSessionRunning`、`blocksCategoryDeletionFocusStatus` 等 |
+| `src/components/focus-history.tsx` | 列表常显、banner、running 操作 |
+| `src/components/focus-timer.tsx` | `orphanRunningPomodoro` 恢复放弃 |
+| `src/lib/actions/categories.ts` | 分步校验 + 事务删除 abandoned |
+| `src/app/categories/page.tsx` | 按阻挡原因显示不可删文案 |
+
+### 22.4 手动测试清单
+
+- [ ] 番茄开始 → 刷新 → 番茄区「放弃未结束的会话」→ 历史无 running
+- [ ] 秒表开始 → 刷新 → 秒表区取消或历史「取消计时」
+- [ ] 仅 abandoned 专注、无时间块 → 可删除分类
+- [ ] 有 TimeBlock 或 running/completed 专注 → 不可删，提示含数量
+- [ ] 历史仅有 abandoned 时显示「尚无已完成…」，不显示「有进行中」
+
+### 22.5 已知限制
+
+- `planned` 仍阻挡分类删除（极少使用）
+- 已完成未转换的 FocusSession 仍阻挡删除（需先转换或后续产品决策）
+

@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { assertCategoryOwned } from "@/lib/db/scoped";
 import { isScopedAccessError } from "@/lib/db/scoped-errors";
+import {
+  FOCUS_SESSION_CATEGORY_BLOCKING_STATUSES,
+} from "@/lib/focus-session-status";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { isNonEmptyTrimmed } from "@/lib/validation";
@@ -79,22 +82,56 @@ export async function deleteCategory(formData: FormData): Promise<void> {
     throw error;
   }
 
-  const [timeBlockCount, focusSessionCount] = await Promise.all([
-    prisma.timeBlock.count({
-      where: { categoryId: id, category: { userId: user.id } },
-    }),
-    prisma.focusSession.count({
-      where: { categoryId: id, category: { userId: user.id } },
-    }),
-  ]);
+  const categoryScope = { categoryId: id, category: { userId: user.id } };
 
-  if (timeBlockCount > 0 || focusSessionCount > 0) {
-    redirect("/categories?error=has-records");
+  const [timeBlockCount, activeFocusCount, remainingFocusCount] =
+    await Promise.all([
+      prisma.timeBlock.count({ where: categoryScope }),
+      prisma.focusSession.count({
+        where: { ...categoryScope, status: { in: ["running", "planned"] } },
+      }),
+      prisma.focusSession.count({
+        where: {
+          ...categoryScope,
+          status: { in: [...FOCUS_SESSION_CATEGORY_BLOCKING_STATUSES] },
+        },
+      }),
+    ]);
+
+  if (timeBlockCount > 0) {
+    redirect(
+      `/categories?error=has-time-blocks&timeBlocks=${timeBlockCount}&activeFocus=${activeFocusCount}&blockingFocus=${remainingFocusCount}`,
+    );
+  }
+
+  if (activeFocusCount > 0) {
+    redirect(
+      `/categories?error=has-active-focus&timeBlocks=0&activeFocus=${activeFocusCount}&blockingFocus=${remainingFocusCount}`,
+    );
   }
 
   try {
-    await prisma.category.delete({ where: { id, userId: user.id } });
-  } catch {
+    await prisma.$transaction(async (tx) => {
+      await tx.focusSession.deleteMany({
+        where: { ...categoryScope, status: "abandoned" },
+      });
+
+      const remainingFocus = await tx.focusSession.count({
+        where: categoryScope,
+      });
+
+      if (remainingFocus > 0) {
+        throw new Error("HAS_REMAINING_FOCUS");
+      }
+
+      await tx.category.delete({ where: { id, userId: user.id } });
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "HAS_REMAINING_FOCUS") {
+      redirect(
+        `/categories?error=has-completed-focus&timeBlocks=0&activeFocus=0&blockingFocus=${remainingFocusCount}`,
+      );
+    }
     redirect("/categories?error=delete_failed");
   }
 

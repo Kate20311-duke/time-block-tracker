@@ -33,11 +33,20 @@ type BusyAction =
   | "skip"
   | null;
 
+export type OrphanRunningPomodoro = {
+  id: string;
+  title: string | null;
+  categoryName: string;
+  plannedDurationMinutes: number;
+};
+
 type Props = {
   categories: FocusCategoryOption[];
   labels: Dictionary["focus"];
   /** Another focus session (e.g. stopwatch) is already running in the DB. */
   sessionBlocked?: boolean;
+  /** Server-side running Pomodoro after refresh (no local sessionId). */
+  orphanRunningPomodoro?: OrphanRunningPomodoro | null;
 };
 
 const inputClass =
@@ -68,7 +77,12 @@ function labelWhenBusy(
   return busy && action === current ? working : label;
 }
 
-export function FocusTimer({ categories, labels, sessionBlocked = false }: Props) {
+export function FocusTimer({
+  categories,
+  labels,
+  sessionBlocked = false,
+  orphanRunningPomodoro = null,
+}: Props) {
   const router = useRouter();
   const [phase, setPhase] = useState<TimerPhase>("setup");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -315,9 +329,60 @@ export function FocusTimer({ categories, labels, sessionBlocked = false }: Props
     );
   }
 
+  const handleAbandonOrphan = async () => {
+    if (!orphanRunningPomodoro || busy) return;
+
+    setBusy(true);
+    setBusyAction("abandon");
+    setErrorMessage(null);
+
+    const result = await abandonFocusSession({
+      id: orphanRunningPomodoro.id,
+      endTime: new Date(),
+    });
+
+    setBusy(false);
+    setBusyAction(null);
+
+    if (!result.ok) {
+      setErrorMessage(resolveFocusError(result.error, labels));
+      return;
+    }
+
+    setStatusMessage(labels.successAbandoned);
+    router.refresh();
+  };
+
   return (
     <div className="space-y-6 sm:space-y-8">
-      {sessionBlocked && phase === "setup" ? (
+      {orphanRunningPomodoro ? (
+        <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm text-amber-950">{labels.orphanPomodoroMessage}</p>
+          <p className="mt-2 text-sm text-amber-900">
+            {orphanRunningPomodoro.title?.trim() || labels.defaultTimeBlockTitle}
+            {" · "}
+            {orphanRunningPomodoro.categoryName}
+            {" · "}
+            {orphanRunningPomodoro.plannedDurationMinutes} {labels.minutesUnit}
+          </p>
+          <button
+            type="button"
+            onClick={handleAbandonOrphan}
+            disabled={busy}
+            className="mt-3 min-h-11 rounded border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {labelWhenBusy(
+              labels.orphanPomodoroAbandon,
+              labels.working,
+              busy,
+              "abandon",
+              busyAction,
+            )}
+          </button>
+        </section>
+      ) : null}
+
+      {sessionBlocked && phase === "setup" && !orphanRunningPomodoro ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {labels.pomodoroBlockedByOtherSession}
         </p>
@@ -497,7 +562,13 @@ export function FocusTimer({ categories, labels, sessionBlocked = false }: Props
         <button
           type="button"
           onClick={handleStart}
-          disabled={busy || configLocked || plannedMinutes <= 0 || sessionBlocked}
+          disabled={
+            busy ||
+            configLocked ||
+            plannedMinutes <= 0 ||
+            sessionBlocked ||
+            orphanRunningPomodoro !== null
+          }
           className={primaryBtn}
         >
           {labelWhenBusy(labels.start, labels.working, busy, "start", busyAction)}

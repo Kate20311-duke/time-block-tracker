@@ -57,10 +57,21 @@ export default async function FocusPage() {
     runningSession !== null &&
     (runningSession.mode !== "stopwatch" || runningStopwatch === null);
 
+  const orphanRunningPomodoro =
+    runningSession?.mode === "pomodoro" && runningSession.status === "running"
+      ? {
+          id: runningSession.id,
+          title: runningSession.title,
+          categoryName: runningSession.category.name,
+          plannedDurationMinutes: runningSession.plannedDurationMinutes,
+        }
+      : null;
+
   const historyItems: FocusHistoryItem[] = recentSessions.map((session) => ({
     id: session.id,
     title: session.title,
     status: session.status,
+    mode: session.mode,
     plannedDurationMinutes: session.plannedDurationMinutes,
     actualDurationMinutes: session.actualDurationMinutes,
     convertedToTimeBlock: session.convertedToTimeBlock,
@@ -92,6 +103,7 @@ export default async function FocusPage() {
         categories={categories}
         labels={t.focus}
         sessionBlocked={anotherSessionRunning || runningStopwatch !== null}
+        orphanRunningPomodoro={orphanRunningPomodoro}
       />
 
       <FocusHistory

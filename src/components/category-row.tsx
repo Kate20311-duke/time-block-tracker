@@ -36,8 +36,7 @@ type Props = {
 
 export function CategoryRow({ category, labels }: Props) {
   const [editing, setEditing] = useState(false);
-  const hasRecords =
-    category.timeBlockCount > 0 || category.focusSessionCount > 0;
+  const deleteDisabled = labels.cannotDeleteFormatted !== null;
 
   if (!editing) {
     return (
@@ -73,7 +72,7 @@ export function CategoryRow({ category, labels }: Props) {
               id={category.id}
               confirmMessage={labels.confirmDelete}
               deleteLabel={labels.delete}
-              disabled={hasRecords}
+              disabled={deleteDisabled}
             />
           </div>
         </div>

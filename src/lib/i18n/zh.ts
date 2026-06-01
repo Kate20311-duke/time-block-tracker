@@ -124,6 +124,15 @@ export const zh: Dictionary = {
     historyTitle: "最近专注记录",
     historyEmpty: "还没有专注记录。完成一次专注后会显示在这里。",
     historyNoCompleted: "有进行中的记录，但尚无已完成或可转换的专注。",
+    historyHasRunning: "你有未结束的专注/计时会话，可在下方放弃或取消。",
+    historyOnlyNonCompleted: "尚无已完成的专注记录（下方为已放弃或未完成的会话）。",
+    historyAbandonRunning: "放弃",
+    historyCancelRunning: "取消计时",
+    pomodoroModeBadge: "番茄钟",
+    stopwatchModeBadge: "秒表",
+    orphanPomodoroMessage:
+      "检测到未结束的番茄钟会话（可能因刷新页面）。请放弃后再开始新的专注。",
+    orphanPomodoroAbandon: "放弃未结束的会话",
     historyConverted: "已转为时间块",
     historyNotConverted: "未转换",
     historyDuration: "时长",
@@ -197,6 +206,9 @@ export const zh: Dictionary = {
     focusSessionCount: "{count} 个专注记录",
     cannotDelete: "该分类下仍有 {count} 个时间块，无法删除",
     cannotDeleteRecords: "该分类下仍有关联的时间块或专注记录，无法删除",
+    cannotDeleteTimeBlocks: "仍有 {count} 条时间块",
+    cannotDeleteActiveFocus: "仍有 {count} 条进行中的专注",
+    cannotDeleteCompletedFocus: "仍有 {count} 条已完成/已转换的专注",
     confirmDelete: "确定删除分类「{name}」吗？此操作不可撤销。",
     success: {
       created: "分类已创建",
@@ -206,6 +218,12 @@ export const zh: Dictionary = {
     errors: {
       hasTimeBlocks:
         "无法删除：该分类下仍有关联的时间块，请先删除或移动这些时间块",
+      hasTimeBlocksDetail:
+        "无法删除：该分类下有 {timeBlocks} 条时间块、{blockingFocus} 条未放弃的专注（进行中 {activeFocus} 条）。",
+      hasActiveFocusDetail:
+        "无法删除：该分类下有 {activeFocus} 条进行中/计划中的专注，请先结束或放弃。",
+      hasCompletedFocusDetail:
+        "无法删除：该分类下仍有 {blockingFocus} 条已完成或已转换的专注记录。",
       hasRecords:
         "无法删除：该分类下仍有关联的时间块或专注记录，请先处理这些记录",
       deleteFailed: "删除失败，请稍后重试",

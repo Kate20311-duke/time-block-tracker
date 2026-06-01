@@ -223,7 +223,11 @@ export async function abandonFocusSession(input: {
 
   try {
     const updated = await prisma.focusSession.updateMany({
-      where: { id: session.id, category: { userId: user.id } },
+      where: {
+        id: session.id,
+        status: { in: ["running", "planned"] },
+        category: { userId: user.id },
+      },
       data: {
         status: "abandoned",
         endTime,

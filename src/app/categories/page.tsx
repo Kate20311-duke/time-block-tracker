@@ -3,6 +3,10 @@ import { SubmitButton } from "@/components/submit-button";
 import { createCategory } from "@/lib/actions/categories";
 import { formatMessage, getDictionary } from "@/lib/i18n";
 import { categoriesForUser } from "@/lib/db/scoped";
+import {
+  isFocusSessionPlanned,
+  isFocusSessionRunning,
+} from "@/lib/focus-session-status";
 import { getLocale } from "@/lib/i18n/server";
 import { requireUser } from "@/lib/session";
 
@@ -11,17 +15,28 @@ export const dynamic = "force-dynamic";
 export default async function CategoriesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; error?: string }>;
+  searchParams: Promise<{
+    success?: string;
+    error?: string;
+    timeBlocks?: string;
+    activeFocus?: string;
+    blockingFocus?: string;
+  }>;
 }) {
   const locale = await getLocale();
   const t = getDictionary(locale);
-  const { success, error } = await searchParams;
+  const { success, error, timeBlocks, activeFocus, blockingFocus } =
+    await searchParams;
   const user = await requireUser();
 
   const categories = await categoriesForUser(user.id, {
     orderBy: { createdAt: "desc" },
     include: {
       _count: { select: { timeBlocks: true, focusSessions: true } },
+      focusSessions: {
+        where: { status: { not: "abandoned" } },
+        select: { id: true, status: true },
+      },
     },
   });
 
@@ -38,12 +53,25 @@ export default async function CategoriesPage({
     error === "has-records"
       ? t.categories.errors.hasRecords
       : error === "has-time-blocks"
-        ? t.categories.errors.hasTimeBlocks
-        : error === "delete_failed"
-        ? t.categories.errors.deleteFailed
-        : error === "empty_name"
-          ? t.categories.errors.emptyName
-          : null;
+        ? formatMessage(t.categories.errors.hasTimeBlocksDetail, {
+            timeBlocks: timeBlocks ?? "0",
+            activeFocus: activeFocus ?? "0",
+            blockingFocus: blockingFocus ?? "0",
+          })
+        : error === "has-active-focus"
+          ? formatMessage(t.categories.errors.hasActiveFocusDetail, {
+              activeFocus: activeFocus ?? "0",
+              blockingFocus: blockingFocus ?? "0",
+            })
+          : error === "has-completed-focus"
+            ? formatMessage(t.categories.errors.hasCompletedFocusDetail, {
+                blockingFocus: blockingFocus ?? "0",
+              })
+            : error === "delete_failed"
+              ? t.categories.errors.deleteFailed
+              : error === "empty_name"
+                ? t.categories.errors.emptyName
+                : null;
 
   const createFormKey = success === "created" ? "created" : "default";
 
@@ -124,7 +152,30 @@ export default async function CategoriesPage({
             {categories.map((category) => {
               const timeBlockCount = category._count.timeBlocks;
               const focusSessionCount = category._count.focusSessions;
-              const hasRecords = timeBlockCount > 0 || focusSessionCount > 0;
+              const blockingFocusSessions = category.focusSessions;
+              const activeFocusCount = blockingFocusSessions.filter(
+                (s) =>
+                  isFocusSessionRunning(s.status) ||
+                  isFocusSessionPlanned(s.status),
+              ).length;
+              const blockingFocusCount = blockingFocusSessions.length;
+              const canDelete =
+                timeBlockCount === 0 && blockingFocusCount === 0;
+              const cannotDeleteDetail =
+                timeBlockCount > 0
+                  ? formatMessage(t.categories.cannotDeleteTimeBlocks, {
+                      count: timeBlockCount,
+                    })
+                  : activeFocusCount > 0
+                    ? formatMessage(t.categories.cannotDeleteActiveFocus, {
+                        count: activeFocusCount,
+                      })
+                    : blockingFocusCount > 0
+                      ? formatMessage(
+                          t.categories.cannotDeleteCompletedFocus,
+                          { count: blockingFocusCount },
+                        )
+                      : null;
 
               return (
                 <CategoryRow
@@ -149,9 +200,9 @@ export default async function CategoriesPage({
                       t.categories.focusSessionCount,
                       { count: focusSessionCount },
                     ),
-                    cannotDeleteFormatted: hasRecords
-                      ? t.categories.cannotDeleteRecords
-                      : null,
+                    cannotDeleteFormatted: canDelete
+                      ? null
+                      : cannotDeleteDetail ?? t.categories.cannotDeleteRecords,
                     confirmDelete: formatMessage(t.categories.confirmDelete, {
                       name: category.name,
                     }),

@@ -112,6 +112,14 @@ export type Dictionary = {
     historyTitle: string;
     historyEmpty: string;
     historyNoCompleted: string;
+    historyHasRunning: string;
+    historyOnlyNonCompleted: string;
+    historyAbandonRunning: string;
+    historyCancelRunning: string;
+    pomodoroModeBadge: string;
+    stopwatchModeBadge: string;
+    orphanPomodoroMessage: string;
+    orphanPomodoroAbandon: string;
     historyConverted: string;
     historyNotConverted: string;
     historyDuration: string;
@@ -189,10 +197,16 @@ export type Dictionary = {
     success: { created: string; updated: string; deleted: string };
     errors: {
       hasTimeBlocks: string;
+      hasTimeBlocksDetail: string;
+      hasActiveFocusDetail: string;
+      hasCompletedFocusDetail: string;
       hasRecords: string;
       deleteFailed: string;
       emptyName: string;
     };
+    cannotDeleteTimeBlocks: string;
+    cannotDeleteActiveFocus: string;
+    cannotDeleteCompletedFocus: string;
   };
   timeBlocks: {
     title: string;

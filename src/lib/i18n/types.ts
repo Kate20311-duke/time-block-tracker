@@ -169,8 +169,10 @@ export type Dictionary = {
     };
     drag: {
       saveFailed: string;
-      dayViewOnly: string;
+      weekViewHint: string;
+      dragDisabledInWeek: string;
     };
+    continuedSegment: string;
     detail: {
       panelAria: string;
       close: string;

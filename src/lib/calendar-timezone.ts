@@ -1,15 +1,20 @@
 /**
  * Calendar civil dates and day boundaries in a single IANA timezone.
- * Vercel runs in UTC; datetime-local input uses the browser TZ.
- * Default Asia/Shanghai — override with NEXT_PUBLIC_CALENDAR_TIMEZONE.
+ * User-facing pages pass explicit timeZone from getUserCalendarTimeZone().
+ * getCalendarTimeZone() is legacy fallback for default parameters and non-migrated call sites.
  */
 
-const DEFAULT_CALENDAR_TIMEZONE = "Asia/Shanghai";
+/** Fallback when no cookie/env; prefer UTC via resolveCalendarTimeZone in TZ-1. */
+const LEGACY_DEFAULT_CALENDAR_TIMEZONE = "Asia/Shanghai";
 
+/**
+ * @deprecated Prefer getUserCalendarTimeZone() in Server Components.
+ * Default parameter on calendar/stats helpers only — not used on /calendar, /dashboard, /review.
+ */
 export function getCalendarTimeZone(): string {
   return (
     process.env.NEXT_PUBLIC_CALENDAR_TIMEZONE?.trim() ||
-    DEFAULT_CALENDAR_TIMEZONE
+    LEGACY_DEFAULT_CALENDAR_TIMEZONE
   );
 }
 

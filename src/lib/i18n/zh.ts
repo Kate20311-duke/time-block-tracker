@@ -182,8 +182,11 @@ export const zh: Dictionary = {
     },
     drag: {
       saveFailed: "拖动保存失败，已恢复为最新数据。",
-      dayViewOnly: "拖动改时间仅在日视图可用；请切换到日视图进行精确调整。",
+      weekViewHint:
+        "可在周视图列内拖动同日时间块；跨午夜或调整长度请进入日视图。",
+      dragDisabledInWeek: "跨午夜块请在日视图中拖动",
     },
+    continuedSegment: "续",
     detail: {
       panelAria: "时间块详情",
       close: "关闭",
@@ -309,7 +312,7 @@ export const zh: Dictionary = {
       "记录时间来自时间块，含已转为时间块的专注。未转换的专注不计入此处。",
     focusSection: "专注统计（FocusSession）",
     focusSectionNote:
-      "专注时间来自专注记录。已写入时间块的专注会同时出现在上方记录时间与本区专注总时长中；请勿将记录时间与专注总时长直接相加。",
+      "专注时间来自专注记录，按会话开始时间归入今日/本周（与上方时间块按区间重叠裁剪的统计方式不同）。已写入时间块的专注会同时出现在记录时间与本区专注总时长中；请勿将二者直接相加。",
     focusTodayTime: "今天专注总时长",
     focusWeekTime: "本周专注总时长",
     focusWeekTimeHint: "含全部已完成/已转换专注",

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { deleteTimeBlock, updateTimeBlock } from "@/lib/actions/time-blocks";
 import { DeleteConfirmButton } from "@/components/delete-confirm-button";
 import { SubmitButton } from "@/components/submit-button";
+import { TimeBlockDatetimeFields } from "@/components/time-block-datetime-fields";
 
 export type TimeBlockRowData = {
   id: string;
@@ -49,8 +50,7 @@ type Props = {
   categories: CategoryOption[];
   statusOptions: { value: string; label: string }[];
   efficiencyOptions: { value: string; label: string }[];
-  startTimeLocal: string;
-  endTimeLocal: string;
+  userTimeZone: string;
   labels: Labels;
 };
 
@@ -59,8 +59,7 @@ export function TimeBlockRow({
   categories,
   statusOptions,
   efficiencyOptions,
-  startTimeLocal,
-  endTimeLocal,
+  userTimeZone,
   labels,
 }: Props) {
   const [editing, setEditing] = useState(false);
@@ -118,7 +117,11 @@ export function TimeBlockRow({
 
   return (
     <li className="rounded-lg border border-zinc-200 bg-white p-4">
-      <form action={updateTimeBlock} className="grid gap-3 sm:grid-cols-2">
+      <form
+        id={`time-block-edit-${block.id}`}
+        action={updateTimeBlock}
+        className="grid gap-3 sm:grid-cols-2"
+      >
         <input type="hidden" name="id" value={block.id} />
         <label className="flex flex-col gap-1 text-sm sm:col-span-2">
           <span className="font-medium">{labels.titleLabel}</span>
@@ -159,26 +162,14 @@ export function TimeBlockRow({
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">{labels.startTime}</span>
-          <input
-            name="startTime"
-            type="datetime-local"
-            required
-            defaultValue={startTimeLocal}
-            className="rounded border border-zinc-300 px-3 py-2"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">{labels.endTime}</span>
-          <input
-            name="endTime"
-            type="datetime-local"
-            required
-            defaultValue={endTimeLocal}
-            className="rounded border border-zinc-300 px-3 py-2"
-          />
-        </label>
+        <TimeBlockDatetimeFields
+          formId={`time-block-edit-${block.id}`}
+          startLabel={labels.startTime}
+          endLabel={labels.endTime}
+          timeZone={userTimeZone}
+          startTimeIso={block.startTime.toISOString()}
+          endTimeIso={block.endTime.toISOString()}
+        />
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium">{labels.completionRange}</span>
           <input

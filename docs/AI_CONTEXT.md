@@ -12,7 +12,14 @@ Personal time-block planner + Pomodoro + **stopwatch** focus tracker. **Phase 9:
 | **8A** | **Done** (Vercel + Neon deployment guide) |
 | **9** | **Done** (stopwatch / positive timer on `/focus`) |
 | **9.2** | **Done** (calendar drag stability — day view only) |
-| **Next** | Focus page UI polish — see `PROJECT_STATUS.md` §21.9 |
+| **9.3–9.5** | **Done** (day layout/overlap; week overview) |
+| **9.6** | **Done** (week-view same-day column drag only) |
+| **TZ-1** | **Done** (browser TZ cookie + `getUserCalendarTimeZone`) |
+| **TZ-2** | **Done** (forms submit UTC ISO; strict server parse) |
+| **TZ-3** | **Done** (calendar query/layout/labels use user TZ) |
+| **TZ-4** | **Done** (dashboard/review use user TZ) |
+| **TZ-4.5** | **Done** (list durations + redirect paths) |
+| **TZ-5** | **Done** (audit, tests, docs, deploy checklist) — see `PROJECT_STATUS.md` §33 |
 
 ## Stack
 
@@ -90,13 +97,49 @@ Duplicate TimeBlock prevention: `updateMany` claim (`convertedToTimeBlock: false
 
 Dashboard: TimeBlock totals from `stats.ts` only; FocusSession totals from `focus-stats.ts` only — do not merge the two headline numbers.
 
+### Timezone model (TZ-1–TZ-5)
+
+- **Database:** UTC `DateTime` instants (`startTime` / `endTime`).
+- **User TZ:** Browser-detected → cookie **`calendar_time_zone`** (`TimezoneInitializer` in root layout).
+- **Server:** `getUserCalendarTimeZone()` — cookie → `NEXT_PUBLIC_CALENDAR_TIMEZONE` → `UTC` (env is **fallback only**).
+- **URL `?date=YYYY-MM-DD`:** Local calendar date in `userTimeZone` (`parseCalendarDateParam` — not `new Date("YYYY-MM-DD")`).
+- **Queries:** `getDayQueryRange` / `getWeekQueryRange` compute civil boundaries in user TZ, convert to UTC for Prisma overlap filters.
+- **Forms:** Browser converts `datetime-local` → `startTimeIso` / `endTimeIso`; Server Actions reject timezone-less schedule fields.
+- **Dashboard / Review:** Same model as calendar (`getDashboardDateRanges`, clipped durations via `stats.ts`).
+- **Focus:** Sessions attributed by **start time** in user TZ (not overlap-clipped); do not merge Focus + TimeBlock headline totals.
+- **Limitations:** No saved per-user TZ preference; traveling users rely on cookie refresh. `getCalendarTimeZone()` / `Asia/Shanghai` remain default args on some helpers only.
+- **Manual QA:** `PROJECT_STATUS.md` §33 — NY + Shanghai checklist, Neon UTC check, Vercel smoke test.
+
+### TimeBlock forms (TZ-2)
+
+- **Client:** `TimeBlockDatetimeFields` — `datetime-local` inputs sync hidden `startTimeIso` / `endTimeIso` via `datetimeLocalValueToUtcIso()` (browser local wall time → UTC ISO).
+- **Edit defaults:** `instantToDatetimeLocalValue(iso, userTimeZone)` where `userTimeZone` = `getUserCalendarTimeZone()` on the server.
+- **Server:** `parseTimeBlockScheduleFromForm` — **requires** valid `startTimeIso` / `endTimeIso`; ignores `startTime` / `endTime` (no server-side datetime-local parse). Missing/invalid ISO → `missing_fields`.
+- **Submit sync:** `TimeBlockDatetimeFields` syncs hidden ISO on capture-phase `submit` (via `formId`); blocks submit if conversion fails.
+- **Pages:** `/time-blocks` create + edit; calendar edit panel. Calendar drag/resize already sent ISO (unchanged).
+- **Do not** use `new Date("YYYY-MM-DDTHH:mm")` in Server Actions for user-entered schedule times.
+
+### Calendar layout (Phase 9.3 + TZ-3)
+
+- **Visible segment:** `getVisibleSegmentInDay(block, day, userTimeZone)` → clip to user TZ day bounds from cookie.
+- **Multi-block layout:** `layoutBlocksInDay` + `assignOverlapColumns` — overlap uses visible intervals; adjacent blocks do not overlap.
+- **Labels:** `formatCalendarBlockTimeLabel` — clipped segments show visible time + `t.calendar.continuedSegment`.
+- **Position:** `calendarBlockPositionStyle` — `leftPercent` / `widthPercent` for overlap columns.
+
 ### Calendar drag (Phase 9.2)
 
 - **Day view:** drag uses `layout.visibleStart` / `visibleEnd` (not full block ISO) for duration + save via `updateTimeBlockSchedule`.
 - **Preview + save:** `calculateSnappedDragTopPx` → 5-min snap during move and on release (`CALENDAR_SNAP_MINUTES`).
-- **Week view:** drag **disabled**; `CalendarBlock` only; hint `t.calendar.drag.dayViewOnly`.
+- **Week view:** same-day column drag only; hint `t.calendar.drag.weekViewHint`.
 - **Cross-midnight:** dragging a clipped segment may save as a **same-day** block (documented limitation). No cross-day drag this phase.
 - **Resize:** bottom handle only; `stopPropagation`; uses visible segment start for `calculateResizedRange`.
+
+### Week view (Phase 9.4–9.6)
+
+- **Overview + column drag:** same-day blocks only via `canDragCalendarColumnBlockInWeekView`; column `calendarDate` fixes the day (no cross-column).
+- **No week resize** — `enableResize={false}` when `compact` week column.
+- **Cross-midnight:** not draggable in week view; `CalendarBlock` + `dragDisabledInWeek` hint; use day view to drag/resize.
+- **Day view:** full drag + resize (precise edit mode).
 
 ### Phase 9.1 — zombie running + category delete
 
@@ -164,7 +207,7 @@ pnpm dev
 pnpm exec prisma generate && pnpm typecheck && pnpm lint && pnpm test && pnpm build
 ```
 
-113 tests; no E2E. Phase 9: `stopwatch-complete.test.ts`, `formatStopwatchElapsed` in `focus.test.ts`.
+175 tests; no E2E. Timezone: `stats-list-duration.test.ts`, `calendar-redirect-timezone.test.ts`.
 
 **Audit rules for new code:** pages → `requireUser` + `*ForUser`; actions → `requireUser` + `assert*Owned`; never `update({ where: { id } })` on private models.
 

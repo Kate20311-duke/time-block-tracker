@@ -9,6 +9,7 @@ import {
 } from "@/lib/db/scoped";
 import { getDashboardDateRanges } from "@/lib/dashboard-ranges";
 import { requireUser } from "@/lib/session";
+import { getUserCalendarTimeZone } from "@/lib/user-calendar-timezone.server";
 import { formatDurationMinutes } from "@/lib/time";
 import {
   filterFocusSessionsByStartInRange,
@@ -17,11 +18,12 @@ import {
 import {
   completionStatusCounts,
   completionStatusTotalMinutes,
-  dailyStartTotalsForSelectedWeek,
-  durationMinutesSafe,
+  clipTimeBlockToWindow,
+  dailyTotalsForSelectedWeek,
   summarizeCompletionQuality,
   totalMinutesByCategory,
   totalRecordedMinutes,
+  totalRecordedMinutesInRange,
   UNCATEGORIZED_ID,
 } from "@/lib/stats";
 
@@ -35,22 +37,28 @@ export default async function DashboardPage() {
   const locale = await getLocale();
   const t = getDictionary(locale);
 
-  const { todayStart, todayEnd, weekStart, weekEnd } = getDashboardDateRanges();
   const user = await requireUser();
+  const userTimeZone = await getUserCalendarTimeZone();
+  const { todayStart, todayEnd, weekStart, weekEnd } = getDashboardDateRanges(
+    new Date(),
+    userTimeZone,
+  );
 
   const [categories, todayBlocks, weekBlocks, weekFocusSessions] =
     await Promise.all([
       categoriesForUser(user.id, { orderBy: { name: "asc" } }),
       timeBlocksForUser(user.id, {
         where: {
-          startTime: { gte: todayStart, lt: todayEnd },
+          startTime: { lt: todayEnd },
+          endTime: { gt: todayStart },
         },
         include: { category: true },
         orderBy: { startTime: "asc" },
       }),
       timeBlocksForUser(user.id, {
         where: {
-          startTime: { gte: weekStart, lt: weekEnd },
+          startTime: { lt: weekEnd },
+          endTime: { gt: weekStart },
         },
         include: { category: true },
         orderBy: { startTime: "asc" },
@@ -81,13 +89,15 @@ export default async function DashboardPage() {
   const todayFocusSummary = summarizeFocusSessions(todayFocusSessions, categories);
   const weekFocusSummary = summarizeFocusSessions(focusSessionsLite, categories);
 
-  const todayRecordedMinutes = todayBlocks.reduce(
-    (sum, b) => sum + durationMinutesSafe(b.startTime, b.endTime),
-    0,
+  const todayRecordedMinutes = totalRecordedMinutesInRange(
+    todayBlocks,
+    todayStart,
+    todayEnd,
   );
-  const weekRecordedMinutes = weekBlocks.reduce(
-    (sum, b) => sum + durationMinutesSafe(b.startTime, b.endTime),
-    0,
+  const weekRecordedMinutes = totalRecordedMinutesInRange(
+    weekBlocks,
+    weekStart,
+    weekEnd,
   );
 
   const todayBlockCount = todayBlocks.length;
@@ -104,12 +114,26 @@ export default async function DashboardPage() {
     efficiencyLevel: b.efficiencyLevel,
   }));
 
-  const weekStatusMinutes = completionStatusTotalMinutes(weekBlocksLite);
-  const weekCategoryMinutes = totalMinutesByCategory(weekBlocksLite, categories);
-  const weekTotalMinutesForBreakdown = totalRecordedMinutes(weekBlocksLite);
-  const weekCompletionQuality = summarizeCompletionQuality(weekBlocksLite, categories);
+  const weekBlocksInRange = weekBlocksLite
+    .map((b) => clipTimeBlockToWindow(b, weekStart, weekEnd))
+    .filter((b): b is (typeof weekBlocksLite)[number] => b !== null);
 
-  const weekDailyTotals = dailyStartTotalsForSelectedWeek(weekBlocksLite, weekStart);
+  const weekStatusMinutes = completionStatusTotalMinutes(weekBlocksInRange);
+  const weekCategoryMinutes = totalMinutesByCategory(
+    weekBlocksInRange,
+    categories,
+  );
+  const weekTotalMinutesForBreakdown = totalRecordedMinutes(weekBlocksInRange);
+  const weekCompletionQuality = summarizeCompletionQuality(
+    weekBlocksInRange,
+    categories,
+  );
+
+  const weekDailyTotals = dailyTotalsForSelectedWeek(
+    weekBlocksLite,
+    weekStart,
+    userTimeZone,
+  );
 
   const categoryPie = weekCategoryMinutes
     .filter((r) => r.totalMinutes > 0)
@@ -128,6 +152,7 @@ export default async function DashboardPage() {
   const dailyBars = weekDailyTotals.map((d) => ({
     dayLabel: new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
       weekday: "short",
+      timeZone: userTimeZone,
     }).format(d.dayStart),
     hours: Math.round((d.totalMinutes / 60) * 10) / 10,
   }));

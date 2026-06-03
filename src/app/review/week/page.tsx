@@ -2,18 +2,19 @@ import Link from "next/link";
 import { getDictionary, getStatusLabel } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n/server";
 import {
-  endOfWeekMonday,
   formatCalendarDateParam,
+  getWeekQueryRange,
   parseCalendarDateParam,
-  startOfWeekMonday,
 } from "@/lib/calendar";
 import { categoriesForUser, timeBlocksForUser } from "@/lib/db/scoped";
 import {
+  clipBlocksToRange,
   dailyCompletionQualityForSelectedWeek,
-  durationMinutesSafe,
+  formatBlockDurationInRange,
   summarizeCompletionQuality,
 } from "@/lib/stats";
 import { requireUser } from "@/lib/session";
+import { getUserCalendarTimeZone } from "@/lib/user-calendar-timezone.server";
 
 export const dynamic = "force-dynamic";
 
@@ -45,16 +46,20 @@ export default async function ReviewWeekPage({
   const t = getDictionary(locale);
   const { date } = await searchParams;
 
-  const selectedDay = parseCalendarDateParam(date);
-  const weekStart = startOfWeekMonday(selectedDay);
-  const weekEnd = endOfWeekMonday(selectedDay);
-  const weekStartParam = formatCalendarDateParam(weekStart);
   const user = await requireUser();
+  const userTimeZone = await getUserCalendarTimeZone();
+
+  const selectedDay = parseCalendarDateParam(date, userTimeZone);
+  const { weekStart, weekEnd } = getWeekQueryRange(selectedDay, userTimeZone);
+  const weekStartParam = formatCalendarDateParam(weekStart, userTimeZone);
 
   const [categories, weekBlocks] = await Promise.all([
     categoriesForUser(user.id, { orderBy: { name: "asc" } }),
     timeBlocksForUser(user.id, {
-      where: { startTime: { gte: weekStart, lt: weekEnd } },
+      where: {
+        startTime: { lt: weekEnd },
+        endTime: { gt: weekStart },
+      },
       include: { category: true },
       orderBy: { startTime: "asc" },
     }),
@@ -69,11 +74,13 @@ export default async function ReviewWeekPage({
     efficiencyLevel: b.efficiencyLevel,
   }));
 
-  const summary = summarizeCompletionQuality(weekBlocksLite, categories);
+  const weekBlocksInRange = clipBlocksToRange(weekBlocksLite, weekStart, weekEnd);
+  const summary = summarizeCompletionQuality(weekBlocksInRange, categories);
   const daily = dailyCompletionQualityForSelectedWeek(
     weekBlocksLite,
     weekStart,
     categories,
+    userTimeZone,
   );
 
   const calendarHref = `/calendar?date=${encodeURIComponent(weekStartParam)}`;
@@ -180,6 +187,7 @@ export default async function ReviewWeekPage({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <span className="font-medium text-zinc-900">
                       {new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
+                        timeZone: userTimeZone,
                         weekday: "long",
                         month: "numeric",
                         day: "numeric",
@@ -277,7 +285,14 @@ export default async function ReviewWeekPage({
             ) : (
               <ul className="space-y-3">
                 {reviewItems.map((b) => {
-                  const minutes = durationMinutesSafe(b.startTime, b.endTime);
+                  const durationLabel = formatBlockDurationInRange(
+                    b.startTime,
+                    b.endTime,
+                    weekStart,
+                    weekEnd,
+                    locale,
+                    "week",
+                  );
                   return (
                     <li
                       key={b.id}
@@ -295,7 +310,7 @@ export default async function ReviewWeekPage({
                               {b.title}
                             </span>
                             <span className="text-xs text-zinc-500">
-                              · {minutes} {t.timeBlocks.minutesUnit}
+                              · {durationLabel}
                             </span>
                           </div>
                           <p className="mt-1 text-sm text-zinc-600">

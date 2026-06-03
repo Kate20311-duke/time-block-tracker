@@ -12,6 +12,8 @@ import {
   getDayQueryRange,
   getWeekDays,
   getWeekQueryRange,
+  getVisibleSegmentInDay,
+  layoutBlocksInDay,
   layoutBlockInDay,
   parseCalendarDateParam,
   parseCalendarViewParam,
@@ -23,7 +25,7 @@ import { getDictionary, getStatusLabel, type Dictionary } from "@/lib/i18n";
 import { categoriesForUser, timeBlocksForUser } from "@/lib/db/scoped";
 import { getLocale } from "@/lib/i18n/server";
 import { requireUser } from "@/lib/session";
-import { toDateTimeLocalValue } from "@/lib/time";
+import { getUserCalendarTimeZone } from "@/lib/user-calendar-timezone.server";
 
 export const dynamic = "force-dynamic";
 
@@ -40,10 +42,11 @@ type CalendarErrorParam = keyof typeof CALENDAR_ERROR_MAP;
 function buildCalendarHref(
   date: Date,
   view: CalendarView,
+  timeZone: string,
   blockId?: string,
 ): string {
   const params = new URLSearchParams({
-    date: formatCalendarDateParam(date),
+    date: formatCalendarDateParam(date, timeZone),
   });
   if (view === "day") {
     params.set("view", "day");
@@ -86,16 +89,34 @@ type TimeBlockWithCategory = {
 function mapBlocksForDay(
   timeBlocks: TimeBlockWithCategory[],
   day: Date,
+  timeZone: string,
 ): CalendarColumnBlock[] {
+  const dayLayouts = layoutBlocksInDay(
+    timeBlocks.map((block) => ({
+      startTime: block.startTime,
+      endTime: block.endTime,
+    })),
+    day,
+    timeZone,
+  );
+
   return timeBlocks
     .map((block) => {
-      const layout = layoutBlockInDay(
+      const segment = getVisibleSegmentInDay(
         { startTime: block.startTime, endTime: block.endTime },
         day,
+        timeZone,
+      );
+      if (!segment) return null;
+
+      const layout = dayLayouts.find(
+        (l) =>
+          l.visibleStart.getTime() === segment.visibleStart.getTime() &&
+          l.visibleEnd.getTime() === segment.visibleEnd.getTime(),
       );
       if (!layout) return null;
 
-      const dayKey = formatCalendarDateParam(day);
+      const dayKey = formatCalendarDateParam(day, timeZone);
       return {
         id: `${block.id}-${dayKey}`,
         blockId: block.id,
@@ -134,30 +155,31 @@ export default async function CalendarPage({
   const successMessage = resolveCalendarSuccess(success, t);
   const errorMessage = resolveCalendarError(error, t);
 
-  const view = parseCalendarViewParam(viewParam);
-  const selectedDay = parseCalendarDateParam(dateParam);
-  const calendarDate = formatCalendarDateParam(selectedDay);
-  const today = parseCalendarDateParam(undefined);
-  const todayKey = formatCalendarDateParam(today);
-  const isToday =
-    formatCalendarDateParam(selectedDay) === todayKey;
+  const user = await requireUser();
+  const userTimeZone = await getUserCalendarTimeZone();
 
-  const weekStart = startOfWeekMonday(selectedDay);
-  const currentWeekStart = startOfWeekMonday(today);
+  const view = parseCalendarViewParam(viewParam);
+  const selectedDay = parseCalendarDateParam(dateParam, userTimeZone);
+  const calendarDate = formatCalendarDateParam(selectedDay, userTimeZone);
+  const today = parseCalendarDateParam(undefined, userTimeZone);
+  const todayKey = formatCalendarDateParam(today, userTimeZone);
+  const isToday =
+    formatCalendarDateParam(selectedDay, userTimeZone) === todayKey;
+
+  const weekStart = startOfWeekMonday(selectedDay, userTimeZone);
+  const currentWeekStart = startOfWeekMonday(today, userTimeZone);
   const isCurrentWeek =
-    formatCalendarDateParam(weekStart) ===
-    formatCalendarDateParam(currentWeekStart);
+    formatCalendarDateParam(weekStart, userTimeZone) ===
+    formatCalendarDateParam(currentWeekStart, userTimeZone);
 
   const rangeStart =
     view === "week"
-      ? getWeekQueryRange(selectedDay).weekStart
-      : getDayQueryRange(selectedDay).dayStart;
+      ? getWeekQueryRange(selectedDay, userTimeZone).weekStart
+      : getDayQueryRange(selectedDay, userTimeZone).dayStart;
   const rangeEnd =
     view === "week"
-      ? getWeekQueryRange(selectedDay).weekEnd
-      : getDayQueryRange(selectedDay).dayEnd;
-
-  const user = await requireUser();
+      ? getWeekQueryRange(selectedDay, userTimeZone).weekEnd
+      : getDayQueryRange(selectedDay, userTimeZone).dayEnd;
 
   const [timeBlocks, categories] = await Promise.all([
     timeBlocksForUser(user.id, {
@@ -193,24 +215,26 @@ export default async function CalendarPage({
       return layoutBlockInDay(
         { startTime: block.startTime, endTime: block.endTime },
         selectedDay,
+        userTimeZone,
       );
     }
-    return getWeekDays(weekStart).some((day) =>
+    return getWeekDays(weekStart, userTimeZone).some((day) =>
       layoutBlockInDay(
         { startTime: block.startTime, endTime: block.endTime },
         day,
+        userTimeZone,
       ),
     );
   });
 
   const prevAnchor =
     view === "week"
-      ? addCalendarWeeks(selectedDay, -1)
-      : addCalendarDays(selectedDay, -1);
+      ? addCalendarWeeks(selectedDay, -1, userTimeZone)
+      : addCalendarDays(selectedDay, -1, userTimeZone);
   const nextAnchor =
     view === "week"
-      ? addCalendarWeeks(selectedDay, 1)
-      : addCalendarDays(selectedDay, 1);
+      ? addCalendarWeeks(selectedDay, 1, userTimeZone)
+      : addCalendarDays(selectedDay, 1, userTimeZone);
 
   const statusOptions = TIME_BLOCK_STATUSES.map((s) => ({
     value: s,
@@ -260,13 +284,13 @@ export default async function CalendarPage({
         aria-label={t.calendar.viewSwitcherAria}
       >
         <Link
-          href={buildCalendarHref(selectedDay, "week")}
+          href={buildCalendarHref(selectedDay, "week", userTimeZone)}
           className={viewSwitcherClass(view === "week")}
         >
           {t.calendar.weekView}
         </Link>
         <Link
-          href={buildCalendarHref(selectedDay, "day")}
+          href={buildCalendarHref(selectedDay, "day", userTimeZone)}
           className={viewSwitcherClass(view === "day")}
         >
           {t.calendar.dayView}
@@ -276,8 +300,8 @@ export default async function CalendarPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-lg font-semibold text-zinc-900">
           {view === "week"
-            ? formatWeekRangeHeading(weekStart, locale)
-            : formatCalendarDayHeading(selectedDay, locale)}
+            ? formatWeekRangeHeading(weekStart, locale, userTimeZone)
+            : formatCalendarDayHeading(selectedDay, locale, userTimeZone)}
         </p>
         <nav
           aria-label={t.calendar.dateNavAria}
@@ -286,21 +310,21 @@ export default async function CalendarPage({
           {view === "week" ? (
             <>
               <Link
-                href={buildCalendarHref(prevAnchor, "week")}
+                href={buildCalendarHref(prevAnchor, "week", userTimeZone)}
                 className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
               >
                 {t.calendar.prevWeek}
               </Link>
               {!isCurrentWeek ? (
                 <Link
-                  href={buildCalendarHref(today, "week")}
+                  href={buildCalendarHref(today, "week", userTimeZone)}
                   className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
                 >
                   {t.calendar.thisWeek}
                 </Link>
               ) : null}
               <Link
-                href={buildCalendarHref(nextAnchor, "week")}
+                href={buildCalendarHref(nextAnchor, "week", userTimeZone)}
                 className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
               >
                 {t.calendar.nextWeek}
@@ -309,21 +333,21 @@ export default async function CalendarPage({
           ) : (
             <>
               <Link
-                href={buildCalendarHref(prevAnchor, "day")}
+                href={buildCalendarHref(prevAnchor, "day", userTimeZone)}
                 className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
               >
                 {t.calendar.prevDay}
               </Link>
               {!isToday ? (
                 <Link
-                  href={buildCalendarHref(today, "day")}
+                  href={buildCalendarHref(today, "day", userTimeZone)}
                   className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
                 >
                   {t.calendar.today}
                 </Link>
               ) : null}
               <Link
-                href={buildCalendarHref(nextAnchor, "day")}
+                href={buildCalendarHref(nextAnchor, "day", userTimeZone)}
                 className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
               >
                 {t.calendar.nextDay}
@@ -372,35 +396,34 @@ export default async function CalendarPage({
           categories={categories.map((c) => ({ id: c.id, name: c.name }))}
           statusOptions={statusOptions}
           efficiencyOptions={efficiencyOptions}
-          startTimeLocal={
-            selectedBlockRaw
-              ? toDateTimeLocalValue(selectedBlockRaw.startTime)
-              : ""
+          userTimeZone={userTimeZone}
+          startTimeIso={
+            selectedBlockRaw ? selectedBlockRaw.startTime.toISOString() : ""
           }
-          endTimeLocal={
-            selectedBlockRaw
-              ? toDateTimeLocalValue(selectedBlockRaw.endTime)
-              : ""
+          endTimeIso={
+            selectedBlockRaw ? selectedBlockRaw.endTime.toISOString() : ""
           }
           formLabels={formLabels}
           notFoundMessage={t.calendar.detail.notFound}
           noCategoriesMessage={t.timeBlocks.cannotEditNoCategories}
           dragSaveFailedMessage={t.calendar.drag.saveFailed}
-          dragDayViewOnlyMessage={t.calendar.drag.dayViewOnly}
+          weekViewDragHintMessage={t.calendar.drag.weekViewHint}
+          continuedSegmentLabel={t.calendar.continuedSegment}
+          dragDisabledInWeekHint={t.calendar.drag.dragDisabledInWeek}
           dayBlocks={
             view === "day"
-              ? mapBlocksForDay(timeBlocks, selectedDay)
+              ? mapBlocksForDay(timeBlocks, selectedDay, userTimeZone)
               : undefined
           }
           weekColumns={
             view === "week"
-              ? getWeekDays(weekStart).map((day) => {
-                  const dayKey = formatCalendarDateParam(day);
+              ? getWeekDays(weekStart, userTimeZone).map((day) => {
+                  const dayKey = formatCalendarDateParam(day, userTimeZone);
                   return {
                     day,
-                    dayHref: buildCalendarHref(day, "day"),
+                    dayHref: buildCalendarHref(day, "day", userTimeZone),
                     isToday: dayKey === todayKey,
-                    blocks: mapBlocksForDay(timeBlocks, day),
+                    blocks: mapBlocksForDay(timeBlocks, day, userTimeZone),
                   };
                 })
               : undefined

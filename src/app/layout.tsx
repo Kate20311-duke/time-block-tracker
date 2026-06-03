@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { auth } from "@/auth";
 import { AppNav } from "@/components/app-nav";
+import { TimezoneInitializer } from "@/components/timezone-initializer";
 import { signOutAction } from "@/lib/actions/auth";
 import { getDictionary } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n/server";
@@ -41,6 +42,7 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-zinc-50 text-zinc-900">
+        <TimezoneInitializer />
         <AppNav
           locale={locale}
           dict={dict}

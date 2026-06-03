@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SubmitButton } from "@/components/submit-button";
+import { TimeBlockDatetimeFields } from "@/components/time-block-datetime-fields";
 import { TimeBlockRow } from "@/components/time-block-row";
 import { createTimeBlock } from "@/lib/actions/time-blocks";
 import { TIME_BLOCK_STATUSES } from "@/lib/constants";
@@ -12,10 +13,10 @@ import {
 import { categoriesForUser, timeBlocksForUser } from "@/lib/db/scoped";
 import { getLocale } from "@/lib/i18n/server";
 import { requireUser } from "@/lib/session";
+import { getUserCalendarTimeZone } from "@/lib/user-calendar-timezone.server";
 import {
   durationMinutes,
-  formatDateTime,
-  toDateTimeLocalValue,
+  formatDateTimeInTimeZone,
 } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +63,7 @@ export default async function TimeBlocksPage({
   const successMessage = resolveTimeBlockSuccess(success, t);
   const errorMessage = resolveTimeBlockError(error, t);
   const user = await requireUser();
+  const userTimeZone = await getUserCalendarTimeZone();
 
   const [timeBlocks, categories] = await Promise.all([
     timeBlocksForUser(user.id, {
@@ -121,6 +123,7 @@ export default async function TimeBlocksPage({
           </p>
         ) : (
           <form
+            id="time-block-create-form"
             key={createFormKey}
             action={createTimeBlock}
             className="grid gap-4 sm:grid-cols-2"
@@ -164,24 +167,12 @@ export default async function TimeBlocksPage({
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium">{t.timeBlocks.startTime}</span>
-              <input
-                name="startTime"
-                type="datetime-local"
-                required
-                className="rounded border border-zinc-300 px-3 py-2"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium">{t.timeBlocks.endTime}</span>
-              <input
-                name="endTime"
-                type="datetime-local"
-                required
-                className="rounded border border-zinc-300 px-3 py-2"
-              />
-            </label>
+            <TimeBlockDatetimeFields
+              formId="time-block-create-form"
+              startLabel={t.timeBlocks.startTime}
+              endLabel={t.timeBlocks.endTime}
+              timeZone={userTimeZone}
+            />
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-medium">{t.timeBlocks.completionRange}</span>
               <input
@@ -273,8 +264,7 @@ export default async function TimeBlocksPage({
                   }))}
                   statusOptions={statusOptions}
                   efficiencyOptions={efficiencyOptions}
-                  startTimeLocal={toDateTimeLocalValue(block.startTime)}
-                  endTimeLocal={toDateTimeLocalValue(block.endTime)}
+                  userTimeZone={userTimeZone}
                   labels={{
                     titleLabel: t.timeBlocks.titleLabel,
                     category: t.timeBlocks.category,
@@ -288,8 +278,16 @@ export default async function TimeBlocksPage({
                     reviewNoteOptional: t.timeBlocks.reviewNoteOptional,
                     durationFormatted: `${minutes} ${t.timeBlocks.minutesUnit}`,
                     statusCompletionFormatted: `${getStatusLabel(block.status, locale)} · ${block.completionLevel}%`,
-                    startFormatted: formatDateTime(block.startTime, locale),
-                    endFormatted: formatDateTime(block.endTime, locale),
+                    startFormatted: formatDateTimeInTimeZone(
+                      block.startTime,
+                      userTimeZone,
+                      locale,
+                    ),
+                    endFormatted: formatDateTimeInTimeZone(
+                      block.endTime,
+                      userTimeZone,
+                      locale,
+                    ),
                     confirmDelete: formatMessage(t.timeBlocks.confirmDelete, {
                       title: block.title,
                     }),

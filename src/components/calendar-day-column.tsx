@@ -5,7 +5,7 @@ import { CalendarBlock } from "@/components/calendar-block";
 import { CalendarDraggableBlock } from "@/components/calendar-draggable-block";
 import {
   CALENDAR_GRID_HEIGHT_PX,
-  formatTimeOfDay,
+  formatCalendarBlockTimeLabel,
   getHourLabels,
   HOUR_ROW_PX,
   type DayBlockLayout,
@@ -25,12 +25,17 @@ export type CalendarColumnBlock = {
 
 type Props = {
   locale: Locale;
+  userTimeZone: string;
   blocks: CalendarColumnBlock[];
   selectedBlockId?: string;
   compact?: boolean;
+  continuedSegmentLabel: string;
   onBlockSelect: (blockId: string) => void;
-  /** Day view: vertical drag to reschedule. */
+  /** Enables drag for blocks that pass canDragBlock (default: all). */
   enableDrag?: boolean;
+  canDragBlock?: (block: CalendarColumnBlock) => boolean;
+  /** Shown on non-draggable blocks when enableDrag is on (e.g. week cross-midnight). */
+  dragDisabledHint?: string;
   calendarDate?: string;
   onScheduleSaveEnd?: (ok: boolean) => void;
 };
@@ -40,18 +45,30 @@ export { HOUR_ROW_PX };
 
 export function CalendarDayColumn({
   locale,
+  userTimeZone,
   blocks,
   selectedBlockId,
   compact = false,
+  continuedSegmentLabel,
   onBlockSelect,
   enableDrag = false,
+  canDragBlock,
+  dragDisabledHint,
   calendarDate,
   onScheduleSaveEnd,
 }: Props) {
   const hours = getHourLabels();
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const timeLabel = (block: CalendarColumnBlock) =>
-    `${formatTimeOfDay(block.layout.visibleStart, locale)} – ${formatTimeOfDay(block.layout.visibleEnd, locale)}`;
+    formatCalendarBlockTimeLabel(
+      new Date(block.startTimeIso),
+      new Date(block.endTimeIso),
+      block.layout.visibleStart,
+      block.layout.visibleEnd,
+      locale,
+      continuedSegmentLabel,
+      userTimeZone,
+    );
 
   return (
     <div
@@ -67,42 +84,55 @@ export function CalendarDayColumn({
       ))}
 
       <div ref={gridContainerRef} className="relative h-full">
-        {blocks.map((block) =>
-          enableDrag && calendarDate && onScheduleSaveEnd ? (
-            <CalendarDraggableBlock
-              key={block.id}
-              blockId={block.blockId}
-              visibleStartIso={block.layout.visibleStart.toISOString()}
-              visibleEndIso={block.layout.visibleEnd.toISOString()}
-              calendarDate={calendarDate}
-              gridContainerRef={gridContainerRef}
-              title={block.title}
-              categoryName={block.categoryName}
-              color={block.color}
-              timeLabel={timeLabel(block)}
-              topPercent={block.layout.topPercent}
-              heightPercent={block.layout.heightPercent}
-              isSelected={selectedBlockId === block.blockId}
-              compact={compact}
-              onSelect={onBlockSelect}
-              onSaveEnd={onScheduleSaveEnd}
-            />
-          ) : (
+        {blocks.map((block) => {
+          const dragAllowed =
+            Boolean(enableDrag && calendarDate && onScheduleSaveEnd) &&
+            (canDragBlock?.(block) ?? true);
+
+          if (dragAllowed && calendarDate && onScheduleSaveEnd) {
+            return (
+              <CalendarDraggableBlock
+                key={block.id}
+                blockId={block.blockId}
+                visibleStartIso={block.layout.visibleStart.toISOString()}
+                visibleEndIso={block.layout.visibleEnd.toISOString()}
+                calendarDate={calendarDate}
+                userTimeZone={userTimeZone}
+                gridContainerRef={gridContainerRef}
+                title={block.title}
+                categoryName={block.categoryName}
+                color={block.color}
+                timeLabel={timeLabel(block)}
+                layout={block.layout}
+                isSelected={selectedBlockId === block.blockId}
+                compact={compact}
+                enableResize={!compact}
+                onSelect={onBlockSelect}
+                onSaveEnd={onScheduleSaveEnd}
+              />
+            );
+          }
+
+          return (
             <CalendarBlock
               key={block.id}
               title={block.title}
               categoryName={block.categoryName}
               color={block.color}
               timeLabel={timeLabel(block)}
-              topPercent={block.layout.topPercent}
-              heightPercent={block.layout.heightPercent}
+              layout={block.layout}
               blockId={block.blockId}
               isSelected={selectedBlockId === block.blockId}
               compact={compact}
+              dragDisabledHint={
+                enableDrag && dragDisabledHint && canDragBlock && !canDragBlock(block)
+                  ? dragDisabledHint
+                  : undefined
+              }
               onSelect={onBlockSelect}
             />
-          ),
-        )}
+          );
+        })}
       </div>
     </div>
   );

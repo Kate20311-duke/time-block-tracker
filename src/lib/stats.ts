@@ -1,4 +1,12 @@
-import { addCalendarDays, endOfDay, startOfDay } from "@/lib/calendar";
+import {
+  addCalendarDays,
+  endOfDay,
+  getCalendarTimeZone,
+  startOfDay,
+} from "@/lib/calendar";
+import { formatCalendarDateParamInTimeZone } from "@/lib/calendar-timezone";
+import type { Locale } from "@/lib/i18n/types";
+import { formatDurationMinutes } from "@/lib/time";
 
 export type TimeBlockLike = {
   startTime: Date;
@@ -255,14 +263,18 @@ export function dailyCompletionQualityForSelectedWeek(
   blocks: readonly TimeBlockLike[],
   weekStart: Date,
   categories: readonly CategoryLike[] = [],
+  timeZone: string = getCalendarTimeZone(),
 ): DailyCompletionQuality[] {
-  const days = Array.from({ length: 7 }, (_, i) => addCalendarDays(weekStart, i));
+  const start = startOfDay(weekStart, timeZone);
+  const days = Array.from({ length: 7 }, (_, i) =>
+    addCalendarDays(start, i, timeZone),
+  );
 
   return days.map((dayStart) => {
-    const dayKey = startOfDay(dayStart).getTime();
-    const dayBlocks = blocks.filter(
-      (b) => startOfDay(b.startTime).getTime() === dayKey,
-    );
+    const dayEnd = endOfDay(dayStart, timeZone);
+    const dayBlocks = blocks
+      .map((b) => clipTimeBlockToWindow(b, dayStart, dayEnd))
+      .filter((b): b is TimeBlockLike => b !== null);
     return { dayStart, summary: summarizeCompletionQuality(dayBlocks, categories) };
   });
 }
@@ -298,6 +310,95 @@ export function totalRecordedMinutes(blocks: readonly TimeBlockLike[]): number {
     (sum, b) => sum + durationMinutesSafe(b.startTime, b.endTime),
     0,
   );
+}
+
+/** Minutes of a block that overlap [rangeStart, rangeEnd) — same basis as totals/charts. */
+export function clippedDurationMinutesInRange(
+  startTime: Date,
+  endTime: Date,
+  rangeStart: Date,
+  rangeEnd: Date,
+): number {
+  return overlapMinutes(startTime, endTime, rangeStart, rangeEnd);
+}
+
+/**
+ * Human-readable duration for list rows in a day/week context.
+ * Shows clipped contribution; adds full block total when different (e.g. cross-midnight).
+ */
+export function formatBlockDurationInRange(
+  startTime: Date,
+  endTime: Date,
+  rangeStart: Date,
+  rangeEnd: Date,
+  locale: Locale,
+  scope: "day" | "week" = "day",
+): string {
+  const clipped = clippedDurationMinutesInRange(
+    startTime,
+    endTime,
+    rangeStart,
+    rangeEnd,
+  );
+  const total = durationMinutesSafe(startTime, endTime);
+
+  if (clipped === total) {
+    return formatDurationMinutes(clipped, locale);
+  }
+
+  const clippedStr = formatDurationMinutes(clipped, locale);
+  const totalStr = formatDurationMinutes(total, locale);
+  if (locale === "zh") {
+    const scopeLabel = scope === "day" ? "本日" : "本周";
+    return `${clippedStr}（${scopeLabel}）· 共 ${totalStr}`;
+  }
+  const scopeLabel = scope === "day" ? "this day" : "this week";
+  return `${clippedStr} (${scopeLabel}) · ${totalStr} total`;
+}
+
+/** Clip each block to a range; drops non-overlapping blocks. */
+export function clipBlocksToRange<T extends TimeBlockLike>(
+  blocks: readonly T[],
+  rangeStart: Date,
+  rangeEnd: Date,
+): T[] {
+  return blocks
+    .map((block) => {
+      const clipped = clipTimeBlockToWindow(block, rangeStart, rangeEnd);
+      if (!clipped) return null;
+      return { ...block, startTime: clipped.startTime, endTime: clipped.endTime };
+    })
+    .filter((block): block is T => block !== null);
+}
+
+/** Sum overlap minutes of each block with [rangeStart, rangeEnd). */
+export function totalRecordedMinutesInRange(
+  blocks: readonly TimeBlockLike[],
+  rangeStart: Date,
+  rangeEnd: Date,
+): number {
+  if (!blocks.length) return 0;
+  return blocks.reduce(
+    (sum, b) =>
+      sum + overlapMinutes(b.startTime, b.endTime, rangeStart, rangeEnd),
+    0,
+  );
+}
+
+/** Clip block to [windowStart, windowEnd); null if no overlap. */
+export function clipTimeBlockToWindow(
+  block: TimeBlockLike,
+  windowStart: Date,
+  windowEnd: Date,
+): TimeBlockLike | null {
+  const startMs = Math.max(block.startTime.getTime(), windowStart.getTime());
+  const endMs = Math.min(block.endTime.getTime(), windowEnd.getTime());
+  if (endMs <= startMs) return null;
+  return {
+    ...block,
+    startTime: new Date(startMs),
+    endTime: new Date(endMs),
+  };
 }
 
 /**
@@ -420,10 +521,11 @@ export function completionStatusTotalMinutes(
 export function dailyTotalsForSelectedWeek(
   blocks: readonly TimeBlockLike[],
   weekStart: Date,
+  timeZone: string = getCalendarTimeZone(),
 ): DailyTotal[] {
-  const start = startOfDay(weekStart);
+  const start = startOfDay(weekStart, timeZone);
   const days: DailyTotal[] = Array.from({ length: 7 }, (_, i) => ({
-    dayStart: addCalendarDays(start, i),
+    dayStart: addCalendarDays(start, i, timeZone),
     totalMinutes: 0,
   }));
 
@@ -431,7 +533,7 @@ export function dailyTotalsForSelectedWeek(
 
   for (let i = 0; i < days.length; i++) {
     const dayStart = days[i].dayStart;
-    const dayEnd = endOfDay(dayStart);
+    const dayEnd = endOfDay(dayStart, timeZone);
 
     let minutes = 0;
     for (const b of blocks) {
@@ -450,26 +552,34 @@ export function dailyTotalsForSelectedWeek(
  * This is a simpler convention than overlap-based clipping and is useful
  * when you want "belongs to start day" semantics.
  */
+/**
+ * Daily totals attributing full block duration to local start day in `timeZone`.
+ * Prefer {@link dailyTotalsForSelectedWeek} for cross-midnight overlap clipping.
+ */
 export function dailyStartTotalsForSelectedWeek(
   blocks: readonly TimeBlockLike[],
   weekStart: Date,
+  timeZone: string = getCalendarTimeZone(),
 ): DailyTotal[] {
-  const start = startOfDay(weekStart);
+  const start = startOfDay(weekStart, timeZone);
   const days: DailyTotal[] = Array.from({ length: 7 }, (_, i) => ({
-    dayStart: addCalendarDays(start, i),
+    dayStart: addCalendarDays(start, i, timeZone),
     totalMinutes: 0,
   }));
 
   if (!blocks.length) return days;
 
-  const indexByDayStartMs = new Map<number, number>();
+  const indexByDayParam = new Map<string, number>();
   for (let i = 0; i < days.length; i++) {
-    indexByDayStartMs.set(days[i].dayStart.getTime(), i);
+    indexByDayParam.set(
+      formatCalendarDateParamInTimeZone(days[i].dayStart, timeZone),
+      i,
+    );
   }
 
   for (const b of blocks) {
-    const startDay = startOfDay(b.startTime).getTime();
-    const idx = indexByDayStartMs.get(startDay);
+    const startDayParam = formatCalendarDateParamInTimeZone(b.startTime, timeZone);
+    const idx = indexByDayParam.get(startDayParam);
     if (idx === undefined) continue;
     days[idx] = {
       dayStart: days[idx].dayStart,

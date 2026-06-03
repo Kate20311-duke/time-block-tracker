@@ -188,9 +188,11 @@ export const en: Dictionary = {
     },
     drag: {
       saveFailed: "Could not save the moved time block. The calendar was refreshed.",
-      dayViewOnly:
-        "Drag to reschedule is available in day view. Switch to day view for precise adjustments.",
+      weekViewHint:
+        "Drag same-day blocks within a column. Use day view to resize or adjust cross-midnight blocks.",
+      dragDisabledInWeek: "Open in day view to drag this block",
     },
+    continuedSegment: "continued",
     detail: {
       panelAria: "Time block details",
       close: "Close",
@@ -324,7 +326,7 @@ export const en: Dictionary = {
       "Recorded time comes from time blocks, including converted focus sessions. Unconverted focus is not included here.",
     focusSection: "Focus statistics (FocusSession)",
     focusSectionNote:
-      "Focus time comes from focus sessions. Sessions already written to time blocks appear in both recorded time above and total focus time here. Do not add recorded time and total focus time together.",
+      "Focus time comes from focus sessions, attributed by session start time in your timezone (unlike time blocks above, which use clipped overlap minutes). Converted sessions appear in both recorded time and focus totals—do not add those numbers together.",
     focusTodayTime: "Total focus time today",
     focusWeekTime: "Total focus time this week",
     focusWeekTimeHint: "All completed and converted sessions",

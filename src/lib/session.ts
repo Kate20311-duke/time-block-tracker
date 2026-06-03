@@ -1,11 +1,8 @@
 import { auth } from "@/auth";
+import { ensureDbUser } from "@/lib/ensure-db-user";
+import type { SessionUser } from "@/lib/session-types";
 
-export type SessionUser = {
-  id: string;
-  name?: string | null;
-  email?: string | null;
-  image?: string | null;
-};
+export type { SessionUser } from "@/lib/session-types";
 
 /** Returns the signed-in user, or null when unauthenticated. */
 export async function getSessionUser(): Promise<SessionUser | null> {
@@ -23,13 +20,16 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   };
 }
 
+export { ensureDbUser } from "@/lib/ensure-db-user";
+
 /**
  * Returns the signed-in user or throws. For Server Actions / RSC (Step B+).
+ * Ensures a `User` row exists for foreign keys (JWT + Prisma adapter).
  */
 export async function requireUser(): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) {
     throw new Error("Unauthorized");
   }
-  return user;
+  return ensureDbUser(user);
 }

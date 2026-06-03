@@ -34,48 +34,75 @@ export type CalendarView = "day" | "week";
 
 const DATE_PARAM_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Midnight at the start of the calendar day containing `date` (app timezone). */
-export function startOfDay(date: Date): Date {
-  const tz = getCalendarTimeZone();
-  return zonedStartOfCalendarDay(formatCalendarDateParamInTimeZone(date, tz), tz);
+/** Midnight at the start of the calendar day containing `date` in `timeZone`. */
+export function startOfDay(
+  date: Date,
+  timeZone: string = getCalendarTimeZone(),
+): Date {
+  return zonedStartOfCalendarDay(
+    formatCalendarDateParamInTimeZone(date, timeZone),
+    timeZone,
+  );
 }
 
-/** Exclusive end of that calendar day (app timezone). */
-export function endOfDay(date: Date): Date {
-  const tz = getCalendarTimeZone();
-  return zonedEndOfCalendarDay(formatCalendarDateParamInTimeZone(date, tz), tz);
+/** Exclusive end of that calendar day in `timeZone`. */
+export function endOfDay(
+  date: Date,
+  timeZone: string = getCalendarTimeZone(),
+): Date {
+  return zonedEndOfCalendarDay(
+    formatCalendarDateParamInTimeZone(date, timeZone),
+    timeZone,
+  );
 }
 
-/** Parse `YYYY-MM-DD` from URL; invalid or missing values fall back to today. */
-export function parseCalendarDateParam(param: string | undefined): Date {
-  const tz = getCalendarTimeZone();
+/**
+ * Parse `YYYY-MM-DD` from URL as that civil date in `timeZone`.
+ * Invalid or missing values fall back to today in `timeZone`.
+ * Does not use `new Date("YYYY-MM-DD")` (UTC interpretation).
+ */
+export function parseCalendarDateParam(
+  param: string | undefined,
+  timeZone: string = getCalendarTimeZone(),
+): Date {
   if (!param || !DATE_PARAM_PATTERN.test(param)) {
     return zonedStartOfCalendarDay(
-      formatCalendarDateParamInTimeZone(new Date(), tz),
-      tz,
+      formatCalendarDateParamInTimeZone(new Date(), timeZone),
+      timeZone,
     );
   }
 
-  if (formatCalendarDateParamInTimeZone(zonedStartOfCalendarDay(param, tz), tz) !== param) {
+  if (
+    formatCalendarDateParamInTimeZone(
+      zonedStartOfCalendarDay(param, timeZone),
+      timeZone,
+    ) !== param
+  ) {
     return zonedStartOfCalendarDay(
-      formatCalendarDateParamInTimeZone(new Date(), tz),
-      tz,
+      formatCalendarDateParamInTimeZone(new Date(), timeZone),
+      timeZone,
     );
   }
 
-  return zonedStartOfCalendarDay(param, tz);
+  return zonedStartOfCalendarDay(param, timeZone);
 }
 
-/** Format a date as `YYYY-MM-DD` for calendar navigation links (app timezone). */
-export function formatCalendarDateParam(date: Date): string {
-  return formatCalendarDateParamInTimeZone(date, getCalendarTimeZone());
+/** Format a UTC instant as `YYYY-MM-DD` in `timeZone`. */
+export function formatCalendarDateParam(
+  date: Date,
+  timeZone: string = getCalendarTimeZone(),
+): string {
+  return formatCalendarDateParamInTimeZone(date, timeZone);
 }
 
-/** Add days to a calendar day (result is start-of-day in app timezone). */
-export function addCalendarDays(date: Date, days: number): Date {
-  const tz = getCalendarTimeZone();
-  const param = formatCalendarDateParamInTimeZone(date, tz);
-  return zonedStartOfCalendarDay(addCalendarDateParam(param, days), tz);
+/** Add days to a calendar day (result is start-of-day in `timeZone`). */
+export function addCalendarDays(
+  date: Date,
+  days: number,
+  timeZone: string = getCalendarTimeZone(),
+): Date {
+  const param = formatCalendarDateParamInTimeZone(date, timeZone);
+  return zonedStartOfCalendarDay(addCalendarDateParam(param, days), timeZone);
 }
 
 /** Parse `?view=`; missing or invalid values default to `week`. */
@@ -84,44 +111,67 @@ export function parseCalendarViewParam(param: string | undefined): CalendarView 
   return "week";
 }
 
-/** Monday 00:00 (app timezone) for the week containing `date`. */
-export function startOfWeekMonday(date: Date): Date {
-  const tz = getCalendarTimeZone();
-  const anchorParam = formatCalendarDateParamInTimeZone(date, tz);
-  const daysFromMonday = (getCalendarWeekday(anchorParam, tz) + 6) % 7;
+/** Monday 00:00 in `timeZone` for the week containing `date`. */
+export function startOfWeekMonday(
+  date: Date,
+  timeZone: string = getCalendarTimeZone(),
+): Date {
+  const anchorParam = formatCalendarDateParamInTimeZone(date, timeZone);
+  const daysFromMonday = (getCalendarWeekday(anchorParam, timeZone) + 6) % 7;
   return zonedStartOfCalendarDay(
     addCalendarDateParam(anchorParam, -daysFromMonday),
-    tz,
+    timeZone,
   );
 }
 
-/** Exclusive end of the Monday-based week (next Monday 00:00). */
-export function endOfWeekMonday(date: Date): Date {
-  return addCalendarDays(startOfWeekMonday(date), DAYS_PER_WEEK);
+/** Exclusive end of the Monday-based week (next Monday 00:00) in `timeZone`. */
+export function endOfWeekMonday(
+  date: Date,
+  timeZone: string = getCalendarTimeZone(),
+): Date {
+  return addCalendarDays(
+    startOfWeekMonday(date, timeZone),
+    DAYS_PER_WEEK,
+    timeZone,
+  );
 }
 
-/** Monday through Sunday (7 days) for the week starting at `weekStart`. */
-export function getWeekDays(weekStart: Date): Date[] {
-  const start = startOfWeekMonday(weekStart);
+/** Monday through Sunday (7 days) for the week containing `weekStart`. */
+export function getWeekDays(
+  weekStart: Date,
+  timeZone: string = getCalendarTimeZone(),
+): Date[] {
+  const start = startOfWeekMonday(weekStart, timeZone);
   return Array.from({ length: DAYS_PER_WEEK }, (_, i) =>
-    addCalendarDays(start, i),
+    addCalendarDays(start, i, timeZone),
   );
 }
 
-/** Move anchor date by whole weeks (Monday-based). */
-export function addCalendarWeeks(date: Date, weeks: number): Date {
-  return addCalendarDays(startOfWeekMonday(date), weeks * DAYS_PER_WEEK);
+/** Move anchor date by whole weeks (Monday-based) in `timeZone`. */
+export function addCalendarWeeks(
+  date: Date,
+  weeks: number,
+  timeZone: string = getCalendarTimeZone(),
+): Date {
+  return addCalendarDays(
+    startOfWeekMonday(date, timeZone),
+    weeks * DAYS_PER_WEEK,
+    timeZone,
+  );
 }
 
-/** Prisma query bounds: blocks overlapping the Monday week of `anchorDay`. */
-export function getWeekQueryRange(anchorDay: Date): {
+/** Prisma query bounds: blocks overlapping the Monday week of `anchorDay` in `timeZone`. */
+export function getWeekQueryRange(
+  anchorDay: Date,
+  timeZone: string = getCalendarTimeZone(),
+): {
   weekStart: Date;
   weekEnd: Date;
 } {
-  const weekStart = startOfWeekMonday(anchorDay);
+  const weekStart = startOfWeekMonday(anchorDay, timeZone);
   return {
     weekStart,
-    weekEnd: endOfWeekMonday(anchorDay),
+    weekEnd: endOfWeekMonday(anchorDay, timeZone),
   };
 }
 
@@ -179,6 +229,7 @@ export function calculateSnappedDragTopPx(
   segmentEnd: Date,
   selectedDay: Date,
   containerHeightPx: number = CALENDAR_GRID_HEIGHT_PX,
+  timeZone: string = getCalendarTimeZone(),
 ): number | null {
   const targetStartMinutes = snapMinutes(
     pixelYToMinutes(blockTopPxInGrid, containerHeightPx),
@@ -188,11 +239,17 @@ export function calculateSnappedDragTopPx(
     segmentEnd,
     targetStartMinutes,
     selectedDay,
+    undefined,
+    timeZone,
   );
   if (!moved.ok) {
     return null;
   }
-  const startMinutes = dateToMinutesFromDayStart(moved.startTime, selectedDay);
+  const startMinutes = dateToMinutesFromDayStart(
+    moved.startTime,
+    selectedDay,
+    timeZone,
+  );
   return minutesToPixelY(startMinutes, containerHeightPx);
 }
 
@@ -206,18 +263,23 @@ export function minutesToHeightPercent(durationMinutes: number): number {
   return (Math.max(0, durationMinutes) / MINUTES_PER_DAY) * 100;
 }
 
-/** Local minutes since midnight on `selectedDay`. */
-export function dateToMinutesFromDayStart(date: Date, selectedDay: Date): number {
-  const dayStart = startOfDay(selectedDay);
+/** Minutes since local midnight on `selectedDay` in `timeZone`. */
+export function dateToMinutesFromDayStart(
+  date: Date,
+  selectedDay: Date,
+  timeZone: string = getCalendarTimeZone(),
+): number {
+  const dayStart = startOfDay(selectedDay, timeZone);
   return (date.getTime() - dayStart.getTime()) / 60_000;
 }
 
-/** Local Date on `selectedDay` at minutes from midnight. */
+/** UTC instant at minutes from local midnight on `selectedDay` in `timeZone`. */
 export function minutesFromDayStartToDate(
   minutes: number,
   selectedDay: Date,
+  timeZone: string = getCalendarTimeZone(),
 ): Date {
-  const dayStart = startOfDay(selectedDay);
+  const dayStart = startOfDay(selectedDay, timeZone);
   return new Date(dayStart.getTime() + clampMinutesToDay(minutes) * 60_000);
 }
 
@@ -234,6 +296,7 @@ export function calculateMovedRange(
     snap?: number;
     minDurationMinutes?: number;
   },
+  timeZone: string = getCalendarTimeZone(),
 ): TimeRangeResult {
   const durationMs = originalEnd.getTime() - originalStart.getTime();
   if (durationMs <= 0) {
@@ -249,8 +312,8 @@ export function calculateMovedRange(
     return { ok: false };
   }
 
-  const dayStart = startOfDay(selectedDay);
-  const dayEnd = endOfDay(selectedDay);
+  const dayStart = startOfDay(selectedDay, timeZone);
+  const dayEnd = endOfDay(selectedDay, timeZone);
 
   let startMinutes = snapMinutes(targetStartMinutes, snap);
   const maxStartMinutes = MINUTES_PER_DAY - durationMinutes;
@@ -258,7 +321,7 @@ export function calculateMovedRange(
     startMinutes = snapMinutes(maxStartMinutes, snap);
   }
 
-  let startTime = minutesFromDayStartToDate(startMinutes, selectedDay);
+  let startTime = minutesFromDayStartToDate(startMinutes, selectedDay, timeZone);
   let endTime = new Date(startTime.getTime() + durationMs);
 
   if (endTime > dayEnd) {
@@ -294,17 +357,18 @@ export function calculateResizedRange(
     snap?: number;
     minDurationMinutes?: number;
   },
+  timeZone: string = getCalendarTimeZone(),
 ): TimeRangeResult {
   const snap = options?.snap ?? CALENDAR_SNAP_MINUTES;
   const minDuration =
     options?.minDurationMinutes ?? MIN_TIME_BLOCK_DURATION_MINUTES;
 
   const startTime = originalStart;
-  const dayEnd = endOfDay(selectedDay);
+  const dayEnd = endOfDay(selectedDay, timeZone);
   let endMinutes = snapMinutes(targetEndMinutes, snap);
   endMinutes = clampMinutesToDay(endMinutes);
 
-  let endTime = minutesFromDayStartToDate(endMinutes, selectedDay);
+  let endTime = minutesFromDayStartToDate(endMinutes, selectedDay, timeZone);
 
   if (endTime <= startTime) {
     return { ok: false };
@@ -328,24 +392,40 @@ export function calculateResizedRange(
   return { ok: true, startTime, endTime };
 }
 
-export type DayBlockLayout = {
-  topPercent: number;
-  heightPercent: number;
+export type VisibleSegment = {
   visibleStart: Date;
   visibleEnd: Date;
 };
 
-/**
- * Position a time block within a single day column.
- * Cross-day blocks are clipped to the visible segment on `day`.
- */
-export function layoutBlockInDay(
+export type DayBlockLayout = VisibleSegment & {
+  topPercent: number;
+  heightPercent: number;
+  durationMinutes: number;
+  columnIndex: number;
+  columnsInGroup: number;
+  leftPercent: number;
+  widthPercent: number;
+};
+
+/** True when visible intervals overlap (touching endpoints do not overlap). */
+export function visibleIntervalsOverlap(
+  a: VisibleSegment,
+  b: VisibleSegment,
+): boolean {
+  return (
+    a.visibleStart.getTime() < b.visibleEnd.getTime() &&
+    b.visibleStart.getTime() < a.visibleEnd.getTime()
+  );
+}
+
+/** Visible segment of `block` on calendar day `day`, or null if no overlap. */
+export function getVisibleSegmentInDay(
   block: TimeRange,
   day: Date,
-): DayBlockLayout | null {
-  const tz = getCalendarTimeZone();
-  const dateParam = formatCalendarDateParamInTimeZone(day, tz);
-  const { dayStart, dayEnd } = getDayBoundsForDateParam(dateParam, tz);
+  timeZone: string = getCalendarTimeZone(),
+): VisibleSegment | null {
+  const dateParam = formatCalendarDateParamInTimeZone(day, timeZone);
+  const { dayStart, dayEnd } = getDayBoundsForDateParam(dateParam, timeZone);
 
   if (block.endTime <= dayStart || block.startTime >= dayEnd) {
     return null;
@@ -359,32 +439,161 @@ export function layoutBlockInDay(
     return null;
   }
 
-  const startMinutes = (visibleStart.getTime() - dayStart.getTime()) / 60_000;
+  return { visibleStart, visibleEnd };
+}
+
+/**
+ * Position a time block within a single day column (no overlap columns).
+ * Prefer {@link layoutBlocksInDay} when rendering multiple blocks.
+ */
+export function layoutBlockInDay(
+  block: TimeRange,
+  day: Date,
+  timeZone: string = getCalendarTimeZone(),
+): DayBlockLayout | null {
+  const layouts = layoutBlocksInDay([block], day, timeZone);
+  return layouts[0] ?? null;
+}
+
+function layoutBaseFromSegment(
+  segment: VisibleSegment,
+  day: Date,
+  timeZone: string,
+): Pick<
+  DayBlockLayout,
+  "topPercent" | "heightPercent" | "durationMinutes" | "visibleStart" | "visibleEnd"
+> {
+  const dateParam = formatCalendarDateParamInTimeZone(day, timeZone);
+  const { dayStart } = getDayBoundsForDateParam(dateParam, timeZone);
+  const startMinutes =
+    (segment.visibleStart.getTime() - dayStart.getTime()) / 60_000;
   const durationMinutes =
-    (visibleEnd.getTime() - visibleStart.getTime()) / 60_000;
+    (segment.visibleEnd.getTime() - segment.visibleStart.getTime()) / 60_000;
 
   return {
+    visibleStart: segment.visibleStart,
+    visibleEnd: segment.visibleEnd,
+    durationMinutes,
     topPercent: (startMinutes / MINUTES_PER_DAY) * 100,
     heightPercent: (durationMinutes / MINUTES_PER_DAY) * 100,
-    visibleStart,
-    visibleEnd,
   };
 }
 
-/** Prisma query bounds: blocks that overlap the given calendar day. */
-export function getDayQueryRange(day: Date): {
+/** Assign side-by-side columns for overlapping visible segments. */
+export function assignOverlapColumns(
+  layouts: Omit<
+    DayBlockLayout,
+    "columnIndex" | "columnsInGroup" | "leftPercent" | "widthPercent"
+  >[],
+): DayBlockLayout[] {
+  if (layouts.length === 0) {
+    return [];
+  }
+
+  const sorted = [...layouts].sort(
+    (a, b) =>
+      a.visibleStart.getTime() - b.visibleStart.getTime() ||
+      a.visibleEnd.getTime() - b.visibleEnd.getTime(),
+  );
+
+  const columnEnds: number[] = [];
+  const withIndex = sorted.map((layout) => {
+    let columnIndex = columnEnds.findIndex(
+      (endMs) => endMs <= layout.visibleStart.getTime(),
+    );
+    if (columnIndex === -1) {
+      columnIndex = columnEnds.length;
+      columnEnds.push(0);
+    }
+    columnEnds[columnIndex] = layout.visibleEnd.getTime();
+    return { layout, columnIndex };
+  });
+
+  return withIndex.map(({ layout, columnIndex }) => {
+    const overlapping = withIndex.filter(({ layout: otherLayout }) =>
+      visibleIntervalsOverlap(layout, otherLayout),
+    );
+    const columnsInGroup =
+      Math.max(...overlapping.map(({ columnIndex: i }) => i + 1), 1);
+    const widthPercent = 100 / columnsInGroup;
+    const leftPercent = columnIndex * widthPercent;
+
+    return {
+      ...layout,
+      columnIndex,
+      columnsInGroup,
+      leftPercent,
+      widthPercent,
+    };
+  });
+}
+
+/**
+ * Layout multiple blocks for one calendar day using visible segments and overlap columns.
+ */
+export function layoutBlocksInDay(
+  blocks: TimeRange[],
+  day: Date,
+  timeZone: string = getCalendarTimeZone(),
+): DayBlockLayout[] {
+  const baseLayouts = blocks
+    .map((block) => {
+      const segment = getVisibleSegmentInDay(block, day, timeZone);
+      if (!segment) return null;
+      return layoutBaseFromSegment(segment, day, timeZone);
+    })
+    .filter((layout): layout is NonNullable<typeof layout> => layout !== null);
+
+  return assignOverlapColumns(baseLayouts);
+}
+
+/** Time label: full original range; clipped segments add a continued marker. */
+export function formatCalendarBlockTimeLabel(
+  originalStart: Date,
+  originalEnd: Date,
+  visibleStart: Date,
+  visibleEnd: Date,
+  locale: Locale,
+  continuedLabel: string,
+  timeZone: string = getCalendarTimeZone(),
+): string {
+  const full = `${formatTimeOfDay(originalStart, locale, timeZone)} – ${formatTimeOfDay(originalEnd, locale, timeZone)}`;
+  const sameAsVisible =
+    visibleStart.getTime() === originalStart.getTime() &&
+    visibleEnd.getTime() === originalEnd.getTime();
+  if (sameAsVisible) {
+    return full;
+  }
+  const visibleOnly = `${formatTimeOfDay(visibleStart, locale, timeZone)} – ${formatTimeOfDay(visibleEnd, locale, timeZone)}`;
+  return `${visibleOnly} · ${continuedLabel}`;
+}
+
+/**
+ * Prisma query bounds: blocks overlapping the calendar day in `timeZone`.
+ * `day` may be a `Date` anchor or `YYYY-MM-DD` civil date string.
+ */
+export function getDayQueryRange(
+  day: Date | string,
+  timeZone: string = getCalendarTimeZone(),
+): {
   dayStart: Date;
   dayEnd: Date;
 } {
+  const anchor =
+    typeof day === "string" ? zonedStartOfCalendarDay(day, timeZone) : day;
   return {
-    dayStart: startOfDay(day),
-    dayEnd: endOfDay(day),
+    dayStart: startOfDay(anchor, timeZone),
+    dayEnd: endOfDay(anchor, timeZone),
   };
 }
 
-export function formatCalendarDayHeading(date: Date, locale: Locale): string {
+export function formatCalendarDayHeading(
+  date: Date,
+  locale: Locale,
+  timeZone: string = getCalendarTimeZone(),
+): string {
   return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
-    timeZone: getCalendarTimeZone(),
+    timeZone,
     weekday: "long",
     year: "numeric",
     month: "long",
@@ -393,9 +602,13 @@ export function formatCalendarDayHeading(date: Date, locale: Locale): string {
 }
 
 /** Short label for a week column header (e.g. Mon 5/19). */
-export function formatCalendarColumnHeading(date: Date, locale: Locale): string {
+export function formatCalendarColumnHeading(
+  date: Date,
+  locale: Locale,
+  timeZone: string = getCalendarTimeZone(),
+): string {
   return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
-    timeZone: getCalendarTimeZone(),
+    timeZone,
     weekday: "short",
     month: "numeric",
     day: "numeric",
@@ -403,23 +616,26 @@ export function formatCalendarColumnHeading(date: Date, locale: Locale): string 
 }
 
 /** Range label for the week containing `weekStart` (Mon–Sun). */
-export function formatWeekRangeHeading(weekStart: Date, locale: Locale): string {
+export function formatWeekRangeHeading(
+  weekStart: Date,
+  locale: Locale,
+  timeZone: string = getCalendarTimeZone(),
+): string {
   const loc = locale === "zh" ? "zh-CN" : "en-US";
-  const tz = getCalendarTimeZone();
-  const sunday = addCalendarDays(startOfWeekMonday(weekStart), 6);
-  const start = startOfWeekMonday(weekStart);
+  const sunday = addCalendarDays(startOfWeekMonday(weekStart, timeZone), 6, timeZone);
+  const start = startOfWeekMonday(weekStart, timeZone);
   const sameYear =
-    formatCalendarDateParamInTimeZone(start, tz).slice(0, 4) ===
-    formatCalendarDateParamInTimeZone(sunday, tz).slice(0, 4);
+    formatCalendarDateParamInTimeZone(start, timeZone).slice(0, 4) ===
+    formatCalendarDateParamInTimeZone(sunday, timeZone).slice(0, 4);
 
   const startFmt = new Intl.DateTimeFormat(loc, {
-    timeZone: tz,
+    timeZone,
     month: "short",
     day: "numeric",
     ...(sameYear ? {} : { year: "numeric" }),
   });
   const endFmt = new Intl.DateTimeFormat(loc, {
-    timeZone: tz,
+    timeZone,
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -428,10 +644,15 @@ export function formatWeekRangeHeading(weekStart: Date, locale: Locale): string 
   return `${startFmt.format(start)} – ${endFmt.format(sunday)}`;
 }
 
-export function formatTimeOfDay(date: Date, locale: Locale): string {
+export function formatTimeOfDay(
+  date: Date,
+  locale: Locale,
+  timeZone: string = getCalendarTimeZone(),
+): string {
   return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
     hour: "numeric",
     minute: "2-digit",
+    timeZone,
   }).format(date);
 }
 

@@ -10,7 +10,9 @@ import {
   parseCalendarDateParam,
   pixelYToMinutes,
   snapMinutes,
+  type DayBlockLayout,
 } from "@/lib/calendar";
+import { calendarBlockPositionStyle } from "@/lib/calendar-block-style";
 
 const DRAG_THRESHOLD_PX = 5;
 const RESIZE_HANDLE_HEIGHT_PX = 10;
@@ -20,15 +22,17 @@ type Props = {
   visibleStartIso: string;
   visibleEndIso: string;
   calendarDate: string;
+  userTimeZone: string;
   gridContainerRef: React.RefObject<HTMLDivElement | null>;
   title: string;
   categoryName: string;
   color: string;
   timeLabel: string;
-  topPercent: number;
-  heightPercent: number;
+  layout: DayBlockLayout;
   isSelected?: boolean;
   compact?: boolean;
+  /** Day view: bottom resize handle. Week view must pass false. */
+  enableResize?: boolean;
   onSelect: (blockId: string) => void;
   onSaveEnd: (ok: boolean) => void;
 };
@@ -38,15 +42,16 @@ export function CalendarDraggableBlock({
   visibleStartIso,
   visibleEndIso,
   calendarDate,
+  userTimeZone,
   gridContainerRef,
   title,
   categoryName,
   color,
   timeLabel,
-  topPercent,
-  heightPercent,
+  layout,
   isSelected = false,
   compact = false,
+  enableResize = true,
   onSelect,
   onSaveEnd,
 }: Props) {
@@ -67,7 +72,8 @@ export function CalendarDraggableBlock({
 
   const segmentStart = new Date(visibleStartIso);
   const segmentEnd = new Date(visibleEndIso);
-  const selectedDay = parseCalendarDateParam(calendarDate);
+  const selectedDay = parseCalendarDateParam(calendarDate, userTimeZone);
+  const position = calendarBlockPositionStyle(layout);
 
   const blockTopPxInGrid = (clientY: number, container: HTMLElement) => {
     const containerRect = container.getBoundingClientRect();
@@ -88,6 +94,8 @@ export function CalendarDraggableBlock({
       segmentEnd,
       targetStartMinutes,
       selectedDay,
+      undefined,
+      userTimeZone,
     );
   };
 
@@ -102,6 +110,7 @@ export function CalendarDraggableBlock({
       segmentEnd,
       selectedDay,
       CALENDAR_GRID_HEIGHT_PX,
+      userTimeZone,
     );
     if (snappedTopPx === null) {
       return;
@@ -200,6 +209,8 @@ export function CalendarDraggableBlock({
       segmentStart,
       targetEndMinutes,
       selectedDay,
+      undefined,
+      userTimeZone,
     );
 
     setResizeOffsetPx(0);
@@ -227,7 +238,7 @@ export function CalendarDraggableBlock({
         grabOffsetYRef.current = e.clientY - blockRect.top;
         startClientYRef.current = e.clientY;
         startClientXRef.current = e.clientX;
-        initialTopPxRef.current = (topPercent / 100) * CALENDAR_GRID_HEIGHT_PX;
+        initialTopPxRef.current = (layout.topPercent / 100) * CALENDAR_GRID_HEIGHT_PX;
         dragStartedRef.current = false;
         setDragOffsetPx(0);
         e.currentTarget.setPointerCapture(e.pointerId);
@@ -272,8 +283,8 @@ export function CalendarDraggableBlock({
         clearBodyDragStyles();
       }}
       className={`absolute overflow-hidden rounded border text-left text-white shadow-sm hover:brightness-95 ${
-        isDragging || isResizing || isSaving ? "z-20" : ""
-      } ${isSelected ? "z-10" : ""} touch-none ${
+        isDragging || isResizing || isSaving ? "z-20" : isSelected ? "z-10" : "z-[1]"
+      } touch-none ${
         isDragging
           ? "cursor-grabbing opacity-90 ring-2 ring-white/40"
           : isResizing
@@ -281,17 +292,16 @@ export function CalendarDraggableBlock({
             : isSaving
             ? "cursor-wait opacity-80"
             : "cursor-grab"
-      } ${compact ? "right-0.5 left-0.5 px-1 py-0.5" : "right-1 left-1 px-2 py-1"} ${
+      } ${compact ? "px-1 py-0.5" : "px-2 py-1"} ${
         isSelected
           ? "border-zinc-900 ring-2 ring-zinc-900 ring-offset-1"
           : "border-white/25"
       }`}
       style={{
-        top: `${topPercent}%`,
+        ...position,
         height: resizeOffsetPx
-          ? `calc(${heightPercent}% + ${resizeOffsetPx}px)`
-          : `${heightPercent}%`,
-        minHeight: "1.25rem",
+          ? `calc(${layout.heightPercent}% + ${resizeOffsetPx}px)`
+          : position.height,
         backgroundColor: color,
         transform: dragOffsetPx ? `translateY(${dragOffsetPx}px)` : undefined,
       }}
@@ -313,6 +323,7 @@ export function CalendarDraggableBlock({
         </p>
       ) : null}
 
+      {enableResize ? (
       <span
         role="presentation"
         className="absolute right-0 bottom-0 left-0 cursor-ns-resize bg-white/20 hover:bg-white/30"
@@ -331,8 +342,9 @@ export function CalendarDraggableBlock({
           setResizeOffsetPx(0);
 
           startClientYRef.current = e.clientY;
-          initialTopPxRef.current = (topPercent / 100) * CALENDAR_GRID_HEIGHT_PX;
-          initialHeightPxRef.current = (heightPercent / 100) * CALENDAR_GRID_HEIGHT_PX;
+          initialTopPxRef.current = (layout.topPercent / 100) * CALENDAR_GRID_HEIGHT_PX;
+          initialHeightPxRef.current =
+            (layout.heightPercent / 100) * CALENDAR_GRID_HEIGHT_PX;
 
           e.currentTarget.setPointerCapture(e.pointerId);
         }}
@@ -377,6 +389,7 @@ export function CalendarDraggableBlock({
         }}
         aria-hidden
       />
+      ) : null}
     </button>
   );
 }

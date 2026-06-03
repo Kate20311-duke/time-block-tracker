@@ -6,6 +6,17 @@
 
 ## 2. 当前阶段
 
+**TZ-1：用户本地时区** — 浏览器 cookie + `getUserCalendarTimeZone()`，详见 §28  
+**TZ-2：表单 UTC ISO** — `datetime-local` 在浏览器转 ISO 提交，详见 §29  
+**TZ-3：日历用户时区** — 日/周查询、布局、标签，详见 §30  
+**TZ-4：仪表盘/复盘用户时区** — 今日/本周与日历一致，详见 §31  
+**TZ-4.5：列表时长与跳转清理** — 裁剪时长与汇总一致，详见 §32  
+**TZ-5：时区收尾** — 审计、测试、文档、部署清单，详见 §33
+
+**Phase 9.6：周视图安全拖拽（已完成）** — 详见 §27
+
+**Phase 9.3–9.5：日历布局与周视图体验（已完成）** — 详见 §24–§26
+
 **Phase 9.2：日历拖拽稳定性（已完成）** — 详见 §23
 
 **Phase 9：正计时秒表（已完成）** — 详见 §21
@@ -1157,7 +1168,7 @@ docker compose up -d
 | 视图 | 拖拽 | Resize | 点击编辑 |
 |------|------|--------|----------|
 | **日视图** | ✅ 纵向移动（可见段时长） | ✅ 底部手柄 | ✅ |
-| **周视图** | ❌ 已禁用 | ❌ | ✅ |
+| **周视图** | ✅ 仅同日块、列内（9.6） | ❌ | ✅ |
 
 - **吸附**：`CALENDAR_SNAP_MINUTES` = 5（预览与保存一致）
 - **边界**：结果夹在当日 `00:00–24:00`；`endTime > startTime`；最小时长 `MIN_TIME_BLOCK_DURATION_MINUTES`
@@ -1190,7 +1201,346 @@ docker compose up -d
 
 ### 23.6 建议后续
 
-- 周视图可靠的目标列检测 + 列内拖拽
+- 周视图可靠的目标列检测 + 列内拖拽（见 §26 未来规则）
 - 真正的跨日 / 跨午夜块编辑（不强制合并为单日）
 - 可选：resize 预览也做 5 分钟吸附
+
+## 24. Phase 9.3 — 日视图布局与时间显示（已完成）
+
+### 24.1 修复内容
+
+- **可见段**：`getVisibleSegmentInDay` + `layoutBlocksInDay` 统一裁剪与定位。
+- **重叠分列**：`visibleIntervalsOverlap` + `assignOverlapColumns`；真重叠并排显示，相邻（如 05:00 结束 / 05:00 开始）不重叠。
+- **垂直位置**：`topPercent` / `heightPercent` 仅由可见段计算；移除 `minHeight` 撑高导致的视觉压盖。
+- **时间文案**：`formatCalendarBlockTimeLabel` — 未裁剪显示原时段；裁剪段显示可见时段 + `continued` / `续`。
+- **周/日共用**：`mapBlocksForDay` 经 `layoutBlocksInDay` 一次布局整列。
+
+### 24.2 主要文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/lib/calendar.ts` | 可见段、重叠列、时间标签 |
+| `src/lib/calendar-block-style.ts` | 列宽/left 样式 |
+| `src/app/calendar/page.tsx` | `mapBlocksForDay` |
+| `src/components/calendar-block.tsx` | 按 layout 定位 |
+| `src/components/calendar-draggable-block.tsx` | 同上，保留 9.2 拖拽 |
+| `src/lib/calendar.test.ts` | 可见段 / 重叠 / 跨午夜用例 |
+
+### 24.3 已知限制
+
+- 跨午夜块在日视图拖动保存仍可能变为单日块（9.2 规则不变）。
+- 极短块可能文字被 `overflow: hidden` 裁切（不再用 minHeight 撑开）。
+
+## 25. Phase 9.4 — 周视图概览与点击编辑（已完成）
+
+### 25.1 行为
+
+| 能力 | 周视图 |
+|------|--------|
+| 按可见段显示 | ✅ 与日视图同一套 `layoutBlocksInDay` |
+| 点击块编辑 | ✅ `onBlockSelect` → `blockId` 面板 |
+| 列头进日视图 | ✅ `dayHref` → `?view=day&date=` |
+| 拖拽 / resize | ❌ 仍关闭 |
+| 提示文案 | ✅ `calendar.drag.weekViewHint` |
+
+### 25.2 文件
+
+- `calendar-week-grid.tsx` — 传入 `continuedSegmentLabel`；注释说明不启用拖拽。
+- `calendar-interactive-view.tsx` — 周视图 `role="note"` 提示。
+
+## 26. Phase 9.5 — 周视图拖拽预案（已完成，已由 9.6 启用）
+
+### 26.1 历史
+
+9.5 引入 `canDragTimeBlockInWeekView`；9.6 已接入周视图 UI。
+
+## 27. Phase 9.6 — 周视图安全拖拽（已完成）
+
+### 27.1 行为
+
+| 能力 | 周视图 |
+|------|--------|
+| 同日块列内纵向拖 | ✅ `canDragCalendarColumnBlockInWeekView` |
+| 5 分钟吸附 + 日界夹取 | ✅ 复用 `CalendarDraggableBlock` |
+| 保存 | ✅ `updateTimeBlockSchedule` + `router.refresh` |
+| 跨午夜 / 多日块 | ❌ 不可拖，可点击编辑；`title` 提示进日视图 |
+| resize | ❌ `enableResize={false}`（compact 周列） |
+| 跨列 / 改日期 | ❌ 未实现 |
+
+### 27.2 文件
+
+| 文件 | 说明 |
+|------|------|
+| `calendar-week-grid.tsx` | `enableDrag` + `canDragBlock` + 列 `calendarDate` |
+| `calendar-day-column.tsx` | 按块 `canDragBlock` 选择 Draggable vs Block |
+| `calendar-draggable-block.tsx` | `enableResize` 可选 |
+| `week-view-drag.ts` | `canDragCalendarColumnBlockInWeekView` |
+| i18n `calendar.drag.weekViewHint` / `dragDisabledInWeek` | 提示文案 |
+
+### 27.3 手动测试清单（9.6）
+
+- [ ] 周视图周一 07:00–09:00 列内下拖，仍在周一，时长 2h
+- [ ] 5 分钟吸附；刷新后时间正确
+- [ ] 横向移动不改变日期
+- [ ] 22:00–04:00 不可拖，可点击编辑
+- [ ] 日视图拖/resize 仍正常
+
+### 27.4 已知限制 / 后续
+
+- 跨列、跨日拖：未做
+- 周视图跨午夜仍建议在日视图编辑
+- 跨午夜块在日视图拖动保存仍为单日（9.2）
+
+## 28. TZ-1 — 用户本地时区基础设施（已完成本阶段）
+
+### 28.1 行为
+
+| 项 | 说明 |
+|----|------|
+| 浏览器检测 | `Intl.DateTimeFormat().resolvedOptions().timeZone` |
+| Cookie | `calendar_time_zone=<IANA>`，`path=/`，`SameSite=Lax`，1 年 |
+| 客户端 | `TimezoneInitializer` 挂在根 `layout` |
+| 同步 | Cookie 缺失或与浏览器不一致时写入，并 **最多 refresh 一次**（`sessionStorage` `calendar_tz_refresh_for` 防循环） |
+| 服务端 | `getUserCalendarTimeZone()` 读 cookie → `NEXT_PUBLIC_CALENDAR_TIMEZONE` → **UTC** |
+| 校验 | `isValidIanaTimeZone()`（Intl 探测） |
+
+### 28.2 尚未迁移（TZ-4+）
+
+- 仪表盘、复盘仍用 legacy `getCalendarTimeZone()` 默认（env / Asia/Shanghai）
+
+## 29. TZ-2 — 表单 datetime-local → UTC ISO（已完成本阶段）
+
+### 29.1 行为
+
+| 项 | 说明 |
+|----|------|
+| 客户端 | `TimeBlockDatetimeFields` 同步隐藏字段 `startTimeIso` / `endTimeIso` |
+| 转换 | `datetimeLocalValueToUtcIso`（浏览器本地墙钟 → `toISOString()`） |
+| 编辑默认值 | `instantToDatetimeLocalValue(utc, getUserCalendarTimeZone())` |
+| 服务端 | `parseTimeBlockScheduleFromForm` **仅**接受有效 `startTimeIso` / `endTimeIso` |
+| 加固 | 已移除生产环境 `parseDateTimeLocal` 回退；缺/无效 ISO → `missing_fields` |
+| 提交前 | `formId` + capture-phase `submit` 同步隐藏 ISO（转换失败则 `preventDefault`） |
+| 未改 | 日历查询/布局、Prisma schema |
+
+### 29.2 文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/lib/datetime-local-iso.ts` | 纯函数 + 测试（纽约/上海 09:00） |
+| `src/components/time-block-datetime-fields.tsx` | 共用 datetime 字段 |
+| `src/lib/actions/time-block-shared.ts` | `parseTimeBlockScheduleFromForm` |
+| `src/app/time-blocks/page.tsx` | 创建/编辑 |
+| `src/components/time-block-row.tsx` | 列表编辑 |
+| `src/components/calendar-block-edit-panel.tsx` | 日历编辑 |
+
+### 29.3 TZ-2 加固（已完成）
+
+- Server Action **不再**解析无时区 `startTime`/`endTime` 字符串
+- 仅 `startTimeIso`/`endTimeIso`；缺失或无效 → `missing_fields`（不会静默写成错误 UTC）
+- 客户端提交前强制同步隐藏 ISO 字段
+
+### 29.4 手动验证 TZ-2
+
+- [ ] 创建 09:00–10:00：payload 含 `startTimeIso`/`endTimeIso`（`Z` 结尾），保存后时间正确
+- [ ] 编辑不改时间：时间不漂移
+- [ ] 编辑改时间：显示与保存一致
+- [ ] **Vercel** 上重复上述三项
+- [ ] 仅 `startTime`/`endTime`、无 ISO 的请求不会成功创建错误时间（应 `missing_fields`）
+- [ ] 日历编辑：同上
+
+## 30. TZ-3 — 日历用户时区（已完成本阶段）
+
+### 30.1 行为
+
+| 项 | 说明 |
+|----|------|
+| 时区来源 | `/calendar` 服务端 `getUserCalendarTimeZone()`（cookie → env → UTC） |
+| `?date=YYYY-MM-DD` | 用户时区下的**民用日期**（非 `new Date("YYYY-MM-DD")` UTC 解析） |
+| 查询 | `getDayQueryRange` / `getWeekQueryRange` 在用户 TZ 算日界，转 UTC 查 Prisma |
+| 布局 | `getVisibleSegmentInDay` / `layoutBlocksInDay` 按用户 TZ 日界裁剪与定位 |
+| 标签 | `formatTimeOfDay` / `formatCalendarBlockTimeLabel` 显式 `timeZone` |
+| 拖拽 | 客户端传入 `userTimeZone`；仍保存 UTC ISO |
+| 未改 | Prisma schema；仪表盘/复盘（TZ-4） |
+
+### 30.2 文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/lib/calendar.ts` | 各函数增加 `timeZone` 参数 |
+| `src/app/calendar/page.tsx` | 全链路传入 `userTimeZone` |
+| `src/components/calendar-*` | 标签与拖拽使用 `userTimeZone` |
+| `src/lib/calendar-user-timezone.test.ts` | 纽约/上海日界、09:00 布局、跨午夜 |
+
+### 30.3 已知限制
+
+- 周视图跨午夜块仍不可拖（Phase 9.6）；日视图拖可见段可能保存为单日块（9.2）
+- （TZ-4.5 已修复 `buildCalendarRedirectPath` 与 Review 列表时长显示）
+- Cookie 与浏览器时区不一致时，表单提交（TZ-2）与日历显示可能短暂不一致，直到 refresh
+
+### 30.4 手动验证 TZ-3
+
+- [ ] Chrome Sensors → `America/New_York`：创建 09:00–10:00，日历显示在 09:00 行
+- [ ] 切换 `Asia/Shanghai` 并 refresh：本地 09:00 块位置正确
+- [ ] 22:00–04:00 跨午夜：起始日 22:00–24:00、次日 00:00–04:00
+- [ ] 日/周视图块落在正确日期列
+- [ ] 日视图拖/resize 仍正常
+- [ ] **Vercel** 与本地一致
+
+## 31. TZ-4 — 仪表盘与复盘用户时区（已完成本阶段）
+
+### 31.1 行为
+
+| 项 | 说明 |
+|----|------|
+| 时区 | `getUserCalendarTimeZone()` 于 `/dashboard`、`/review/day`、`/review/week` |
+| 今日/本周 | `getDashboardDateRanges(now, userTimeZone)` 与日历 `getDayQueryRange` / `getWeekQueryRange` 一致 |
+| 查询 | TimeBlock：`startTime < rangeEnd` 且 `endTime > rangeStart`（重叠） |
+| 今日/本周总时长 | `totalRecordedMinutesInRange`（按区间裁剪） |
+| 周柱状图 | `dailyTotalsForSelectedWeek`（跨午夜按本地日裁剪，不重复计入两日） |
+| 周汇总饼图/质量 | 块先 `clipTimeBlockToWindow` 到本周再聚合 |
+| Focus | 仍按 `startTime` 落在区间内；与 TimeBlock 统计分离（不重复计入分类时长） |
+
+### 31.2 文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/lib/dashboard-ranges.ts` | 需显式 `timeZone` |
+| `src/lib/stats.ts` | `totalRecordedMinutesInRange`、`clipTimeBlockToWindow`、按 TZ 分组 |
+| `src/app/dashboard/page.tsx` | 重叠查询 + 裁剪统计 |
+| `src/app/review/day/page.tsx` | 用户 TZ 日界 |
+| `src/app/review/week/page.tsx` | 用户 TZ 周界 |
+| `src/lib/dashboard-ranges.test.ts` | 与日历范围一致 |
+| `src/lib/stats-timezone.test.ts` | 跨午夜裁剪 |
+
+### 31.3 手动验证 TZ-4
+
+- [ ] 纽约：今日 09:00–10:00 → Dashboard 今日约 1 小时
+- [ ] 纽约：22:00–04:00 → 两日各显示裁剪后时长（2h + 4h）
+- [ ] 上海：重复上述
+- [ ] Review/day 与 Calendar/day 同一块列表一致
+- [ ] Review/week 与 Calendar/week 一致
+- [ ] **Vercel** 与本地一致
+
+## 32. TZ-4.5 — 列表时长与日历跳转清理（已完成）
+
+### 32.1 行为
+
+| 项 | 说明 |
+|----|------|
+| Review 列表 | `formatBlockDurationInRange` — 显示区间内裁剪时长；跨午夜显示「本日/本周 X · 共 Y」 |
+| Review/Dashboard 汇总 | `clipBlocksToRange` + `summarizeCompletionQuality` 与列表/图表同一裁剪语义 |
+| 日历跳转 | `buildCalendarRedirectPath(..., userTimeZone)`；`YYYY-MM-DD` 原样保留 |
+| Focus | **不变**：仍按会话 `startTime` 归入今日/本周；文案已说明 |
+
+### 32.2 手动验证
+
+- [ ] 22:00–04:00：起始日复盘列表约 2h（非 6h）；次日约 4h
+- [ ] 汇总「计划时长」与列表裁剪一致
+- [ ] 日历编辑保存后 `?date=` 仍为正确本地日
+- [ ] 纽约/上海切换后行为一致
+
+## 33. TZ-5 — 时区收尾（已完成本阶段）
+
+### Timezone model
+
+| 规则 | 说明 |
+|------|------|
+| 数据库 | `DateTime` 存 **UTC 瞬时**（`startTime` / `endTime`） |
+| 用户时区 | 浏览器 `Intl` 检测，写入 cookie **`calendar_time_zone`** |
+| 服务端读取 | `getUserCalendarTimeZone()`：cookie → `NEXT_PUBLIC_CALENDAR_TIMEZONE` → `UTC` |
+| URL `?date=YYYY-MM-DD` | 用户时区下的**本地日历日**（`parseCalendarDateParam`，非 `new Date("YYYY-MM-DD")`） |
+| 日/周查询 | `getDayQueryRange` / `getWeekQueryRange` 在用户 TZ 算边界，转 UTC 查 Prisma |
+| 表单 | `datetime-local` 在浏览器转 **`startTimeIso` / `endTimeIso`**；Server Action **仅**接受 UTC ISO |
+| 仪表盘/复盘 | 与日历同一模型：`getDashboardDateRanges`、重叠查询、按日/周裁剪时长 |
+| 环境变量 | `NEXT_PUBLIC_CALENDAR_TIMEZONE` **仅作 cookie 未设置时的 fallback** |
+| Focus | `FocusSession` 按会话 **`startTime`** 归入日/周（非重叠裁剪）；与 TimeBlock 统计分离 |
+
+**已知限制**
+
+- 尚无「固定家乡时区」用户设置；旅行时依赖浏览器/cookie 刷新。
+- 用户改系统/浏览器时区后需 refresh，cookie 会更新。
+- 周视图跨午夜块不可拖（Phase 9.6）；日视图拖可见段可能保存为单日块。
+- `getCalendarTimeZone()` / `Asia/Shanghai` 仍为部分 helper **默认参数**（用户页均传显式 `userTimeZone`）。
+
+### 33.1 审计结论（TZ-5.1）
+
+| 模式 | 结论 |
+|------|------|
+| `new Date("YYYY-MM-DD")` | 生产路径已避免；仅测试或遗留默认 TZ 的 `calendar.test.ts` |
+| `new Date("YYYY-MM-DDTHH:mm")` | 生产 Server Action 已禁止；`datetime-local-iso` 客户端转换 |
+| `toISOString().slice(0, 10)` | 无用于用户本地分组 |
+| `getFullYear/getMonth/...` | `time.ts` 中 `toDateTimeLocalValue` **已弃用**（host TZ）；用户页用 `instantToDatetimeLocalValue(..., userTimeZone)` |
+| 无 `timeZone` 的 `Intl`（用户页） | **已修** `review/week` 日分解标题 |
+| `durationMinutesSafe` 在日/周列表 | Review 列表已用 `formatBlockDurationInRange` |
+| `buildCalendarRedirectPath` | 传 `userTimeZone`；`YYYY-MM-DD` 原样保留 |
+
+### 33.2 测试（TZ-5.3）
+
+| 文件 | 覆盖 |
+|------|------|
+| `src/lib/timezone-integration.test.ts` | NY/SH 09:00 UTC、日/周界、跨午夜裁剪、复盘日界、redirect、TZ-2 严格解析 |
+| `src/lib/calendar-user-timezone.test.ts` | 日历布局与可见段 |
+| `src/lib/dashboard-ranges.test.ts` | 仪表盘与日历范围一致 |
+| `src/lib/stats-timezone.test.ts` | 周柱状图跨午夜 |
+| `src/lib/datetime-local-iso.test.ts` | `wallTimeInTimeZoneToUtcIso` |
+| `src/lib/calendar-redirect-timezone.test.ts` | 跳转路径 |
+
+说明：`datetimeLocalValueToUtcIso` 依赖浏览器本地时区，集成测试以 `wallTimeInTimeZoneToUtcIso` 为确定性对照；手动清单验证真实浏览器。
+
+### 33.3 文件变更（本阶段）
+
+| 文件 | 说明 |
+|------|------|
+| `src/app/review/week/page.tsx` | 日分解 `Intl` 增加 `timeZone: userTimeZone` |
+| `src/lib/timezone-integration.test.ts` | TZ-5 集成测试 |
+| `.env.example` | 时区 fallback 说明更新 |
+| `docs/PROJECT_STATUS.md` / `docs/AI_CONTEXT.md` | Timezone model + 清单 |
+
+### Manual timezone test checklist
+
+1. Chrome DevTools → Sensors → **America/New_York**。
+2. 刷新应用，确认 cookie **`calendar_time_zone`** = `America/New_York`。
+3. 创建 **2026-06-01 09:00–10:00**。
+4. 确认 Calendar 日视图显示 **09:00–10:00**。
+5. 确认周视图落在 **2026-06-01** 列。
+6. 确认 Dashboard 今日统计计入本地 **2026-06-01**。
+7. 确认 Review/day 与 Calendar/day 一致。
+8. 创建 **22:00–04:00**，确认跨本地两日正确拆分（2h + 4h）。
+9. Sensors → **Asia/Shanghai**，刷新，确认 cookie 为 `Asia/Shanghai`。
+10. 重复步骤 3–8。
+11. Neon 中确认存 **UTC 瞬时**（非本地字符串）。
+12. 部署 **Vercel** 后重复关键步骤。
+13. 确认行为不依赖本地 dev 服务器 `TZ`（与 Vercel 一致）。
+
+### 33.4 部署就绪
+
+- 无 Prisma schema 变更；无需新 migration。
+- 时区逻辑为代码层；Vercel 上应使用 Neon pooled `DATABASE_URL` + `AUTH_*` + 可选 `NEXT_PUBLIC_CALENDAR_TIMEZONE`。
+- **建议**：合并前本地 `pnpm test` + `pnpm build`；上线后按上方 Manual checklist 在 NY/SH 各测一轮。
+
+### 28.3 文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/components/timezone-initializer.tsx` | 写 cookie + 条件 refresh |
+| `src/lib/user-calendar-timezone.ts` | 纯函数 + 常量 |
+| `src/lib/user-calendar-timezone.server.ts` | `getUserCalendarTimeZone()` |
+| `src/app/layout.tsx` | 挂载 initializer |
+
+### 28.4 手动验证 TZ-1
+
+- [ ] DevTools → Application → Cookies 出现 `calendar_time_zone`
+- [ ] 与系统时区一致（如 `America/New_York` / `Asia/Shanghai`）
+- [ ] 改系统时区后刷新页面，cookie 更新且不会无限刷新
+- [ ] 服务端临时日志 `getUserCalendarTimeZone()` 与 cookie 一致
+
+### 26.3 手动测试清单（9.3–9.5）
+
+- [ ] 日视图 07:00–09:00 位置准确
+- [ ] 相邻 04:00–05:00 与 05:00–06:00 不叠压
+- [ ] 重叠 06:00–08:00 与 07:00–09:00 并排可读
+- [ ] 跨午夜在起始日 22:00–24:00、次日 00:00–04:00 显示正确
+- [ ] 日视图拖/resize 仍正常
+- [ ] 周视图显示正确、可点击编辑、列头进日视图、不可拖
+- [ ] 刷新后位置正确
 

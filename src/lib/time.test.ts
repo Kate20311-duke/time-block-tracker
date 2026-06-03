@@ -21,6 +21,7 @@ describe("durationMinutes", () => {
   });
 });
 
+/** Deprecated utility — not used by Server Actions after TZ-2 hardening. */
 describe("parseDateTimeLocal", () => {
   it("parses a valid datetime-local value", () => {
     const date = parseDateTimeLocal("2026-05-21T14:30");

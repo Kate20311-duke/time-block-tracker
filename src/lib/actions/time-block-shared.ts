@@ -3,7 +3,8 @@ import {
   parseCalendarDateParam,
   parseCalendarViewParam,
 } from "@/lib/calendar";
-import { parseDateTimeLocal } from "@/lib/time";
+import { getCalendarTimeZone } from "@/lib/calendar-timezone";
+import { parseUtcIsoString } from "@/lib/datetime-local-iso";
 import {
   clampCompletionLevel,
   getValidTimeBlockRange,
@@ -40,9 +41,36 @@ function parseOptionalNote(value: FormDataEntryValue | null): string | null {
   return text || null;
 }
 
+/**
+ * Parse schedule times from form data.
+ * Requires `startTimeIso` / `endTimeIso` (UTC from the browser). Ignores bare
+ * `startTime` / `endTime` datetime-local fields (UI only).
+ */
+export function parseTimeBlockScheduleFromForm(formData: FormData): {
+  startTime: Date | null;
+  endTime: Date | null;
+} {
+  const startIso = String(formData.get("startTimeIso") ?? "").trim();
+  const endIso = String(formData.get("endTimeIso") ?? "").trim();
+
+  if (!startIso || !endIso) {
+    return { startTime: null, endTime: null };
+  }
+
+  const start = parseUtcIsoString(startIso);
+  const end = parseUtcIsoString(endIso);
+  if (!start || !end) {
+    return { startTime: null, endTime: null };
+  }
+
+  return { startTime: start, endTime: end };
+}
+
 /** Parse TimeBlock fields from a form submission. */
 export function parseTimeBlockFormData(formData: FormData): TimeBlockFormFields {
   const completionLevelRaw = formData.get("completionLevel");
+  const { startTime, endTime } = parseTimeBlockScheduleFromForm(formData);
+
   return {
     id: String(formData.get("id") ?? "").trim(),
     title: String(formData.get("title") ?? "").trim(),
@@ -55,8 +83,8 @@ export function parseTimeBlockFormData(formData: FormData): TimeBlockFormFields 
         ? 0
         : Number(completionLevelRaw),
     efficiencyLevel: parseOptionalNote(formData.get("efficiencyLevel")),
-    startTime: parseDateTimeLocal(String(formData.get("startTime") ?? "")),
-    endTime: parseDateTimeLocal(String(formData.get("endTime") ?? "")),
+    startTime,
+    endTime,
   };
 }
 
@@ -141,9 +169,12 @@ export function validateScheduleTimes(
  * Build /calendar redirect URL from optional hidden form fields:
  * calendarDate, calendarView, calendarBlockId.
  */
+const CALENDAR_DATE_PARAM = /^\d{4}-\d{2}-\d{2}$/;
+
 export function buildCalendarRedirectPath(
   formData: FormData,
   options?: { success?: string; error?: string },
+  timeZone: string = getCalendarTimeZone(),
 ): string {
   const dateRaw = String(formData.get("calendarDate") ?? "").trim();
   const viewRaw = String(formData.get("calendarView") ?? "").trim();
@@ -152,7 +183,14 @@ export function buildCalendarRedirectPath(
   const params = new URLSearchParams();
 
   if (dateRaw) {
-    params.set("date", formatCalendarDateParam(parseCalendarDateParam(dateRaw)));
+    if (CALENDAR_DATE_PARAM.test(dateRaw)) {
+      params.set("date", dateRaw);
+    } else {
+      params.set(
+        "date",
+        formatCalendarDateParam(parseCalendarDateParam(dateRaw, timeZone), timeZone),
+      );
+    }
   }
 
   if (parseCalendarViewParam(viewRaw || undefined) === "day") {

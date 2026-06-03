@@ -19,6 +19,7 @@ import {
 import { isScopedAccessError } from "@/lib/db/scoped-errors";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import { getUserCalendarTimeZone } from "@/lib/user-calendar-timezone.server";
 import { getValidTimeBlockRange } from "@/lib/validation";
 
 export type ScheduleUpdateResult =
@@ -30,19 +31,24 @@ export async function updateTimeBlockFromCalendar(
   formData: FormData,
 ): Promise<void> {
   const user = await requireUser();
+  const userTimeZone = await getUserCalendarTimeZone();
   const data = parseTimeBlockFormData(formData);
 
   if (!data.id) {
-    redirect(buildCalendarRedirectPath(formData, { error: "missing_fields" }));
+    redirect(
+      buildCalendarRedirectPath(formData, { error: "missing_fields" }, userTimeZone),
+    );
   }
 
   const { error, range } = validateFullTimeBlockForm(data);
 
   if (error || !range) {
     redirect(
-      buildCalendarRedirectPath(formData, {
-        error: error ?? "invalid_range",
-      }),
+      buildCalendarRedirectPath(
+        formData,
+        { error: error ?? "invalid_range" },
+        userTimeZone,
+      ),
     );
   }
 
@@ -51,7 +57,9 @@ export async function updateTimeBlockFromCalendar(
     await assertCategoryOwned(user.id, data.categoryId);
   } catch (scopedError) {
     if (isScopedAccessError(scopedError)) {
-      redirect(buildCalendarRedirectPath(formData, { error: "update_failed" }));
+      redirect(
+        buildCalendarRedirectPath(formData, { error: "update_failed" }, userTimeZone),
+      );
     }
     throw scopedError;
   }
@@ -62,12 +70,16 @@ export async function updateTimeBlockFromCalendar(
   });
 
   if (updated.count === 0) {
-    redirect(buildCalendarRedirectPath(formData, { error: "update_failed" }));
+    redirect(
+      buildCalendarRedirectPath(formData, { error: "update_failed" }, userTimeZone),
+    );
   }
 
   revalidatePath("/calendar");
   revalidatePath("/time-blocks");
-  redirect(buildCalendarRedirectPath(formData, { success: "updated" }));
+  redirect(
+    buildCalendarRedirectPath(formData, { success: "updated" }, userTimeZone),
+  );
 }
 
 /**

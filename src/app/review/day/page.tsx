@@ -7,8 +7,13 @@ import {
   parseCalendarDateParam,
 } from "@/lib/calendar";
 import { categoriesForUser, timeBlocksForUser } from "@/lib/db/scoped";
-import { durationMinutesSafe, summarizeCompletionQuality } from "@/lib/stats";
+import {
+  clipBlocksToRange,
+  formatBlockDurationInRange,
+  summarizeCompletionQuality,
+} from "@/lib/stats";
 import { requireUser } from "@/lib/session";
+import { getUserCalendarTimeZone } from "@/lib/user-calendar-timezone.server";
 
 export const dynamic = "force-dynamic";
 
@@ -40,15 +45,20 @@ export default async function ReviewDayPage({
   const t = getDictionary(locale);
   const { date } = await searchParams;
 
-  const selectedDay = parseCalendarDateParam(date);
-  const dateParam = formatCalendarDateParam(selectedDay);
-  const { dayStart, dayEnd } = getDayQueryRange(selectedDay);
   const user = await requireUser();
+  const userTimeZone = await getUserCalendarTimeZone();
+
+  const selectedDay = parseCalendarDateParam(date, userTimeZone);
+  const dateParam = formatCalendarDateParam(selectedDay, userTimeZone);
+  const { dayStart, dayEnd } = getDayQueryRange(selectedDay, userTimeZone);
 
   const [categories, timeBlocks] = await Promise.all([
     categoriesForUser(user.id, { orderBy: { name: "asc" } }),
     timeBlocksForUser(user.id, {
-      where: { startTime: { gte: dayStart, lt: dayEnd } },
+      where: {
+        startTime: { lt: dayEnd },
+        endTime: { gt: dayStart },
+      },
       include: { category: true },
       orderBy: { startTime: "asc" },
     }),
@@ -63,7 +73,8 @@ export default async function ReviewDayPage({
     efficiencyLevel: b.efficiencyLevel,
   }));
 
-  const summary = summarizeCompletionQuality(blocksLite, categories);
+  const blocksInDay = clipBlocksToRange(blocksLite, dayStart, dayEnd);
+  const summary = summarizeCompletionQuality(blocksInDay, categories);
 
   const calendarHref = `/calendar?date=${encodeURIComponent(dateParam)}&view=day`;
 
@@ -197,7 +208,14 @@ export default async function ReviewDayPage({
             ) : (
               <ul className="space-y-3">
                 {incompleteOrSkipped.map((b) => {
-                  const minutes = durationMinutesSafe(b.startTime, b.endTime);
+                  const durationLabel = formatBlockDurationInRange(
+                    b.startTime,
+                    b.endTime,
+                    dayStart,
+                    dayEnd,
+                    locale,
+                    "day",
+                  );
                   return (
                     <li
                       key={b.id}
@@ -215,7 +233,7 @@ export default async function ReviewDayPage({
                               {b.title}
                             </span>
                             <span className="text-xs text-zinc-500">
-                              · {minutes} {t.timeBlocks.minutesUnit}
+                              · {durationLabel}
                             </span>
                           </div>
                           <p className="mt-1 text-sm text-zinc-600">
@@ -241,7 +259,14 @@ export default async function ReviewDayPage({
             <h2 className="mb-4 text-lg font-semibold">{t.review.allBlocks}</h2>
             <ul className="space-y-3">
               {timeBlocks.map((b) => {
-                const minutes = durationMinutesSafe(b.startTime, b.endTime);
+                const durationLabel = formatBlockDurationInRange(
+                  b.startTime,
+                  b.endTime,
+                  dayStart,
+                  dayEnd,
+                  locale,
+                  "day",
+                );
                 return (
                   <li
                     key={b.id}
@@ -259,7 +284,7 @@ export default async function ReviewDayPage({
                         </span>
                       </div>
                       <div className="text-sm text-zinc-600">
-                        {minutes} {t.timeBlocks.minutesUnit}
+                        {durationLabel}
                         <span className="mx-2 text-zinc-300">·</span>
                         {b.completionLevel}%
                       </div>

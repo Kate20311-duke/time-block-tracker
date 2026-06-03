@@ -41,15 +41,18 @@ type Props = {
   categories: CategoryOption[];
   statusOptions: { value: string; label: string }[];
   efficiencyOptions: { value: string; label: string }[];
-  startTimeLocal: string;
-  endTimeLocal: string;
+  userTimeZone: string;
+  startTimeIso: string;
+  endTimeIso: string;
   formLabels: FormLabels;
   dayBlocks?: CalendarGridBlock[];
   weekColumns?: WeekGridColumn[];
   notFoundMessage?: string;
   noCategoriesMessage?: string;
   dragSaveFailedMessage?: string;
-  dragDayViewOnlyMessage?: string;
+  weekViewDragHintMessage?: string;
+  continuedSegmentLabel: string;
+  dragDisabledInWeekHint: string;
 };
 
 function buildCalendarPath(
@@ -83,15 +86,18 @@ export function CalendarInteractiveView({
   categories,
   statusOptions,
   efficiencyOptions,
-  startTimeLocal,
-  endTimeLocal,
+  userTimeZone,
+  startTimeIso,
+  endTimeIso,
   formLabels,
   dayBlocks,
   weekColumns,
   notFoundMessage,
   noCategoriesMessage,
   dragSaveFailedMessage,
-  dragDayViewOnlyMessage,
+  weekViewDragHintMessage,
+  continuedSegmentLabel,
+  dragDisabledInWeekHint,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -139,14 +145,20 @@ export function CalendarInteractiveView({
       {view === "week" && weekColumns ? (
         <CalendarWeekGrid
           locale={locale}
+          userTimeZone={userTimeZone}
           columns={weekColumns}
           selectedBlockId={selectedBlockId}
+          continuedSegmentLabel={continuedSegmentLabel}
+          dragDisabledHint={dragDisabledInWeekHint}
           onBlockSelect={handleBlockSelect}
+          onScheduleSaveEnd={handleScheduleSaveEnd}
         />
       ) : null}
 
-      {view === "week" && dragDayViewOnlyMessage ? (
-        <p className="text-sm text-zinc-500">{dragDayViewOnlyMessage}</p>
+      {view === "week" && weekViewDragHintMessage ? (
+        <p className="text-sm text-zinc-500" role="note">
+          {weekViewDragHintMessage}
+        </p>
       ) : null}
 
       {dragError ? (
@@ -158,9 +170,11 @@ export function CalendarInteractiveView({
       {view === "day" && dayBlocks ? (
         <CalendarDayGrid
           locale={locale}
+          userTimeZone={userTimeZone}
           blocks={dayBlocks}
           selectedBlockId={selectedBlockId}
           calendarDate={calendarDate}
+          continuedSegmentLabel={continuedSegmentLabel}
           onBlockSelect={handleBlockSelect}
           onScheduleSaveEnd={handleScheduleSaveEnd}
         />
@@ -179,8 +193,9 @@ export function CalendarInteractiveView({
           categories={categories}
           statusOptions={statusOptions}
           efficiencyOptions={efficiencyOptions}
-          startTimeLocal={startTimeLocal}
-          endTimeLocal={endTimeLocal}
+          userTimeZone={userTimeZone}
+          startTimeIso={startTimeIso}
+          endTimeIso={endTimeIso}
           calendarDate={calendarDate}
           calendarView={view}
           labels={formLabels}

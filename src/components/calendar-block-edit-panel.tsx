@@ -2,6 +2,7 @@
 
 import { updateTimeBlockFromCalendar } from "@/lib/actions/calendar-time-blocks";
 import { SubmitButton } from "@/components/submit-button";
+import { TimeBlockDatetimeFields } from "@/components/time-block-datetime-fields";
 import type { CalendarEditBlockData } from "@/lib/calendar-edit";
 
 export type { CalendarEditBlockData };
@@ -30,8 +31,9 @@ type Props = {
   categories: CategoryOption[];
   statusOptions: { value: string; label: string }[];
   efficiencyOptions: { value: string; label: string }[];
-  startTimeLocal: string;
-  endTimeLocal: string;
+  userTimeZone: string;
+  startTimeIso: string;
+  endTimeIso: string;
   calendarDate: string;
   calendarView: "day" | "week";
   labels: FormLabels;
@@ -43,8 +45,9 @@ export function CalendarBlockEditPanel({
   categories,
   statusOptions,
   efficiencyOptions,
-  startTimeLocal,
-  endTimeLocal,
+  userTimeZone,
+  startTimeIso,
+  endTimeIso,
   calendarDate,
   calendarView,
   labels,
@@ -76,6 +79,7 @@ export function CalendarBlockEditPanel({
       </div>
 
       <form
+        id={`calendar-block-edit-${block.id}`}
         action={updateTimeBlockFromCalendar}
         className="grid gap-4 sm:grid-cols-2"
       >
@@ -123,26 +127,14 @@ export function CalendarBlockEditPanel({
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">{labels.startTime}</span>
-          <input
-            name="startTime"
-            type="datetime-local"
-            required
-            defaultValue={startTimeLocal}
-            className="rounded border border-zinc-300 px-3 py-2"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="font-medium">{labels.endTime}</span>
-          <input
-            name="endTime"
-            type="datetime-local"
-            required
-            defaultValue={endTimeLocal}
-            className="rounded border border-zinc-300 px-3 py-2"
-          />
-        </label>
+        <TimeBlockDatetimeFields
+          formId={`calendar-block-edit-${block.id}`}
+          startLabel={labels.startTime}
+          endLabel={labels.endTime}
+          timeZone={userTimeZone}
+          startTimeIso={startTimeIso}
+          endTimeIso={endTimeIso}
+        />
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium">{labels.completionRange}</span>
           <input

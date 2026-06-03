@@ -14,8 +14,11 @@ import {
   getCalendarTimeZone,
   getWeekDays,
   getWeekQueryRange,
+  getVisibleSegmentInDay,
   layoutBlockInDay,
+  layoutBlocksInDay,
   MIN_TIME_BLOCK_DURATION_MINUTES,
+  visibleIntervalsOverlap,
   minutesToHeightPercent,
   minutesToTopPercent,
   parseCalendarDateParam,
@@ -419,6 +422,129 @@ describe("calculateSnappedDragTopPx", () => {
       );
       expect(moved.endTime.getTime()).toBeLessThanOrEqual(endOfDay(day).getTime());
     }
+  });
+});
+
+describe("visibleIntervalsOverlap", () => {
+  const seg = (startH: number, endH: number, date = "2026-05-21") => {
+    const start = atCalendarTime(date, startH);
+    const end = atCalendarTime(date, endH);
+    return { visibleStart: start, visibleEnd: end };
+  };
+
+  it("does not overlap adjacent 04:00–05:00 and 05:00–06:00", () => {
+    expect(visibleIntervalsOverlap(seg(4, 5), seg(5, 6))).toBe(false);
+  });
+
+  it("does not overlap 06:00–06:45 and 07:00–09:00", () => {
+    const a = seg(6, 6);
+    a.visibleEnd = atCalendarTime("2026-05-21", 6, 45);
+    expect(visibleIntervalsOverlap(a, seg(7, 9))).toBe(false);
+  });
+
+  it("overlaps 06:00–08:00 and 07:00–09:00", () => {
+    expect(visibleIntervalsOverlap(seg(6, 8), seg(7, 9))).toBe(true);
+  });
+});
+
+describe("getVisibleSegmentInDay", () => {
+  const day = parseCalendarDateParam("2026-06-01");
+
+  it("same-day 07:00–09:00 keeps full visible range", () => {
+    const block = {
+      startTime: atCalendarTime("2026-06-01", 7),
+      endTime: atCalendarTime("2026-06-01", 9),
+    };
+    const seg = getVisibleSegmentInDay(block, day);
+    expect(seg).not.toBeNull();
+    expect(seg!.visibleStart).toEqual(block.startTime);
+    expect(seg!.visibleEnd).toEqual(block.endTime);
+    expect(
+      (seg!.visibleEnd.getTime() - seg!.visibleStart.getTime()) / 60_000,
+    ).toBe(120);
+  });
+
+  it("previous-day cross-midnight shows 00:00–04:00 on selected day", () => {
+    const block = {
+      startTime: atCalendarTime("2026-05-31", 22),
+      endTime: atCalendarTime("2026-06-01", 4),
+    };
+    const seg = getVisibleSegmentInDay(block, day);
+    expect(seg).not.toBeNull();
+    expect(seg!.visibleStart).toEqual(zonedStartOfCalendarDay("2026-06-01"));
+    expect(seg!.visibleEnd).toEqual(atCalendarTime("2026-06-01", 4));
+    expect(
+      (seg!.visibleEnd.getTime() - seg!.visibleStart.getTime()) / 60_000,
+    ).toBe(240);
+  });
+
+  it("selected-day cross-midnight shows 22:00–24:00 on start day", () => {
+    const block = {
+      startTime: atCalendarTime("2026-06-01", 22),
+      endTime: atCalendarTime("2026-06-02", 4),
+    };
+    const seg = getVisibleSegmentInDay(block, day);
+    expect(seg).not.toBeNull();
+    expect(seg!.visibleStart).toEqual(atCalendarTime("2026-06-01", 22));
+    expect(seg!.visibleEnd).toEqual(endOfDay(day));
+    expect(
+      (seg!.visibleEnd.getTime() - seg!.visibleStart.getTime()) / 60_000,
+    ).toBe(120);
+  });
+
+  it("returns null when block is outside selected day", () => {
+    expect(
+      getVisibleSegmentInDay(
+        {
+          startTime: atCalendarTime("2026-05-20", 9),
+          endTime: atCalendarTime("2026-05-20", 10),
+        },
+        day,
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("layoutBlocksInDay overlap columns", () => {
+  const day = parseCalendarDateParam("2026-05-21");
+
+  it("assigns side-by-side columns for overlapping blocks", () => {
+    const layouts = layoutBlocksInDay(
+      [
+        {
+          startTime: atCalendarTime("2026-05-21", 6),
+          endTime: atCalendarTime("2026-05-21", 8),
+        },
+        {
+          startTime: atCalendarTime("2026-05-21", 7),
+          endTime: atCalendarTime("2026-05-21", 9),
+        },
+      ],
+      day,
+    );
+    expect(layouts).toHaveLength(2);
+    expect(layouts[0].columnsInGroup).toBe(2);
+    expect(layouts[1].columnsInGroup).toBe(2);
+    expect(layouts[0].columnIndex).not.toBe(layouts[1].columnIndex);
+  });
+
+  it("keeps full width for non-overlapping blocks", () => {
+    const layouts = layoutBlocksInDay(
+      [
+        {
+          startTime: atCalendarTime("2026-05-21", 4),
+          endTime: atCalendarTime("2026-05-21", 5),
+        },
+        {
+          startTime: atCalendarTime("2026-05-21", 5),
+          endTime: atCalendarTime("2026-05-21", 6),
+        },
+      ],
+      day,
+    );
+    expect(layouts.every((l) => l.columnsInGroup === 1 && l.widthPercent === 100)).toBe(
+      true,
+    );
   });
 });
 

@@ -9,9 +9,11 @@ import {
 } from "@/components/calendar-day-column";
 import {
   formatCalendarColumnHeading,
+  formatCalendarDateParam,
   formatHourLabel,
   getHourLabels,
 } from "@/lib/calendar";
+import { canDragCalendarColumnBlockInWeekView } from "@/lib/week-view-drag";
 import type { Locale } from "@/lib/i18n/types";
 
 export type WeekGridColumn = {
@@ -23,16 +25,24 @@ export type WeekGridColumn = {
 
 type Props = {
   locale: Locale;
+  userTimeZone: string;
   columns: WeekGridColumn[];
   selectedBlockId?: string;
+  continuedSegmentLabel: string;
+  dragDisabledHint: string;
   onBlockSelect: (blockId: string) => void;
+  onScheduleSaveEnd: (ok: boolean) => void;
 };
 
 export function CalendarWeekGrid({
   locale,
+  userTimeZone,
   columns,
   selectedBlockId,
+  continuedSegmentLabel,
+  dragDisabledHint,
   onBlockSelect,
+  onScheduleSaveEnd,
 }: Props) {
   const hours = getHourLabels();
 
@@ -53,9 +63,9 @@ export function CalendarWeekGrid({
               <Link
                 href={column.dayHref}
                 className="block hover:underline"
-                title={formatCalendarColumnHeading(column.day, locale)}
+                title={formatCalendarColumnHeading(column.day, locale, userTimeZone)}
               >
-                {formatCalendarColumnHeading(column.day, locale)}
+                {formatCalendarColumnHeading(column.day, locale, userTimeZone)}
               </Link>
             </div>
           ))}
@@ -85,9 +95,18 @@ export function CalendarWeekGrid({
               <CalendarDayColumn
                 key={column.dayHref}
                 locale={locale}
+                userTimeZone={userTimeZone}
                 blocks={column.blocks}
                 selectedBlockId={selectedBlockId}
+                continuedSegmentLabel={continuedSegmentLabel}
                 compact
+                enableDrag
+                canDragBlock={(block) =>
+                  canDragCalendarColumnBlockInWeekView(block, userTimeZone)
+                }
+                dragDisabledHint={dragDisabledHint}
+                calendarDate={formatCalendarDateParam(column.day, userTimeZone)}
+                onScheduleSaveEnd={onScheduleSaveEnd}
                 onBlockSelect={onBlockSelect}
               />
             ))}

@@ -13,18 +13,22 @@ export type CalendarGridBlock = CalendarColumnBlock;
 
 type Props = {
   locale: Locale;
+  userTimeZone: string;
   blocks: CalendarGridBlock[];
   selectedBlockId?: string;
   calendarDate: string;
+  continuedSegmentLabel: string;
   onBlockSelect: (blockId: string) => void;
   onScheduleSaveEnd: (ok: boolean) => void;
 };
 
 export function CalendarDayGrid({
   locale,
+  userTimeZone,
   blocks,
   selectedBlockId,
   calendarDate,
+  continuedSegmentLabel,
   onBlockSelect,
   onScheduleSaveEnd,
 }: Props) {
@@ -52,8 +56,10 @@ export function CalendarDayGrid({
 
       <CalendarDayColumn
         locale={locale}
+        userTimeZone={userTimeZone}
         blocks={blocks}
         selectedBlockId={selectedBlockId}
+        continuedSegmentLabel={continuedSegmentLabel}
         onBlockSelect={onBlockSelect}
         enableDrag
         calendarDate={calendarDate}

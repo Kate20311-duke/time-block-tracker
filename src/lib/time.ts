@@ -1,10 +1,26 @@
 import type { Locale } from "@/lib/i18n/types";
 
-/** Format a Date for display in the local timezone. */
+/**
+ * Format a Date using the **server host** timezone (no explicit IANA).
+ * User-facing pages should use `formatDateTimeInTimeZone(date, userTimeZone, locale)`.
+ */
 export function formatDateTime(date: Date, locale: Locale = "zh"): string {
   return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
     dateStyle: "medium",
     timeStyle: "short",
+  }).format(date);
+}
+
+/** Format a UTC instant for display in a specific IANA timezone. */
+export function formatDateTimeInTimeZone(
+  date: Date,
+  timeZone: string,
+  locale: Locale = "zh",
+): string {
+  return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone,
   }).format(date);
 }
 
@@ -38,14 +54,20 @@ export function formatDurationMinutes(
   return `${m}min`;
 }
 
-/** Parse datetime-local input value to Date (local time). */
+/**
+ * Parse datetime-local input value to Date (host local time).
+ * @deprecated Prefer `startTimeIso` / `endTimeIso` from the client (TZ-2). Server fallback only.
+ */
 export function parseDateTimeLocal(value: string): Date | null {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-/** Format Date for datetime-local input value. */
+/**
+ * Format Date for datetime-local using the server host timezone.
+ * @deprecated Prefer `instantToDatetimeLocalValue(date, timeZone)` for edit defaults (TZ-2).
+ */
 export function toDateTimeLocalValue(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   const y = date.getFullYear();

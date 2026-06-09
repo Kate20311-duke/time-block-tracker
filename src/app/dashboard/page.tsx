@@ -209,28 +209,8 @@ export default async function DashboardPage() {
             </p>
           </li>
           <li className="rounded-lg border border-zinc-200 bg-white p-5">
-            <p className="text-sm text-zinc-500">{t.review.totalPlannedTime}</p>
+            <p className="text-sm text-zinc-500">{t.review.skippedTime}</p>
             <p className="mt-1 text-2xl font-semibold text-zinc-900">
-              {formatHoursMinutes(weekCompletionQuality.totalPlannedMinutes, locale)}
-            </p>
-          </li>
-          <li className="rounded-lg border border-zinc-200 bg-white p-5">
-            <p className="text-sm text-zinc-500">{t.review.estimatedCompletedTime}</p>
-            <p className="mt-1 text-2xl font-semibold text-zinc-900">
-              {formatHoursMinutes(weekCompletionQuality.totalCompletedMinutes, locale)}
-            </p>
-            <p className="mt-1 text-sm text-zinc-600">
-              {t.review.completionRate}：{" "}
-              {`${Math.round(weekCompletionQuality.completionRate * 100)}%`}
-            </p>
-          </li>
-          <li className="rounded-lg border border-zinc-200 bg-white p-5">
-            <p className="text-sm text-zinc-500">{t.review.averageCompletionLevel}</p>
-            <p className="mt-1 text-2xl font-semibold text-zinc-900">
-              {weekCompletionQuality.averageCompletionLevel}%
-            </p>
-            <p className="mt-1 text-sm text-zinc-600">
-              {t.review.skippedTime}：{" "}
               {formatHoursMinutes(weekCompletionQuality.totalSkippedMinutes, locale)}
             </p>
           </li>

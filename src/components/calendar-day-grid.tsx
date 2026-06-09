@@ -20,6 +20,7 @@ type Props = {
   continuedSegmentLabel: string;
   onBlockSelect: (blockId: string) => void;
   onScheduleSaveEnd: (ok: boolean) => void;
+  onEmptySlotClick?: (startTimeIso: string, endTimeIso: string) => void;
 };
 
 export function CalendarDayGrid({
@@ -31,6 +32,7 @@ export function CalendarDayGrid({
   continuedSegmentLabel,
   onBlockSelect,
   onScheduleSaveEnd,
+  onEmptySlotClick,
 }: Props) {
   const hours = getHourLabels();
 
@@ -64,6 +66,7 @@ export function CalendarDayGrid({
         enableDrag
         calendarDate={calendarDate}
         onScheduleSaveEnd={onScheduleSaveEnd}
+        onEmptySlotClick={onEmptySlotClick}
       />
     </div>
   );

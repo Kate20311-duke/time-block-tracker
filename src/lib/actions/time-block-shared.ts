@@ -6,8 +6,8 @@ import {
 import { getCalendarTimeZone } from "@/lib/calendar-timezone";
 import { parseUtcIsoString } from "@/lib/datetime-local-iso";
 import {
-  clampCompletionLevel,
   getValidTimeBlockRange,
+  resolveCompletionLevelForWrite,
   validateTimeBlockCreate,
   type TimeBlockCreateError,
 } from "@/lib/validation";
@@ -19,7 +19,8 @@ export type TimeBlockFormFields = {
   reviewNote: string | null;
   categoryId: string;
   status: string;
-  completionLevel: number;
+  /** null when omitted from form (preserve DB value on update). */
+  completionLevel: number | null;
   efficiencyLevel: string | null;
   startTime: Date | null;
   endTime: Date | null;
@@ -80,7 +81,7 @@ export function parseTimeBlockFormData(formData: FormData): TimeBlockFormFields 
     status: String(formData.get("status") ?? "planned"),
     completionLevel:
       completionLevelRaw === null || completionLevelRaw === ""
-        ? 0
+        ? null
         : Number(completionLevelRaw),
     efficiencyLevel: parseOptionalNote(formData.get("efficiencyLevel")),
     startTime,
@@ -99,7 +100,10 @@ export function validateFullTimeBlockForm(data: TimeBlockFormFields): {
     startTime: data.startTime,
     endTime: data.endTime,
     status: data.status,
-    completionLevel: data.completionLevel,
+    completionLevel: resolveCompletionLevelForWrite(
+      data.status,
+      data.completionLevel,
+    ),
     efficiencyLevel: data.efficiencyLevel,
   });
 
@@ -120,17 +124,28 @@ export function buildFullTimeBlockUpdateData(
   data: TimeBlockFormFields,
   range: { start: Date; end: Date },
 ) {
-  return {
+  const payload = {
     title: data.title,
     note: data.note,
     reviewNote: data.reviewNote,
     categoryId: data.categoryId,
     status: data.status,
-    completionLevel: clampCompletionLevel(data.completionLevel),
     efficiencyLevel: data.efficiencyLevel,
     startTime: range.start,
     endTime: range.end,
   };
+
+  if (data.completionLevel !== null) {
+    return {
+      ...payload,
+      completionLevel: resolveCompletionLevelForWrite(
+        data.status,
+        data.completionLevel,
+      ),
+    };
+  }
+
+  return payload;
 }
 
 /** Parse schedule-only input (drag/resize from calendar client). */

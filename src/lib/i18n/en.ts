@@ -180,11 +180,18 @@ export const en: Dictionary = {
     today: "Today",
     empty: "No time blocks on this day",
     emptyWeek: "No time blocks this week",
-    editHintPrefix: "Click a block on the calendar to edit. To create time blocks, go to",
+    editHintPrefix:
+      "Click empty space on the calendar to create a block; click an existing block to edit. You can also manage blocks on",
     editHintLink: "Time Blocks",
     editHintSuffix: ".",
     edit: {
       panelAria: "Edit time block",
+    },
+    create: {
+      panelAria: "Create time block",
+      heading: "New time block",
+      emptySlotHint:
+        "Click empty space on the calendar to create a time block (default 30 minutes).",
     },
     drag: {
       saveFailed: "Could not save the moved time block. The calendar was refreshed.",

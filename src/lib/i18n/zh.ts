@@ -174,11 +174,16 @@ export const zh: Dictionary = {
     today: "今天",
     empty: "这一天没有时间记录",
     emptyWeek: "这一周没有时间记录",
-    editHintPrefix: "点击日历中的时间块可编辑。要新建时间块，请前往",
+    editHintPrefix: "点击空白时段可新建时间块；点击已有时间块可编辑。也可在",
     editHintLink: "时间记录",
-    editHintSuffix: "页面。",
+    editHintSuffix: "页面管理。",
     edit: {
       panelAria: "编辑时间块",
+    },
+    create: {
+      panelAria: "新建时间块",
+      heading: "新建时间块",
+      emptySlotHint: "点击日历中的空白时段即可新建时间块（默认 30 分钟）。",
     },
     drag: {
       saveFailed: "拖动保存失败，已恢复为最新数据。",

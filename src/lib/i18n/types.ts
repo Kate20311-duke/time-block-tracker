@@ -167,6 +167,11 @@ export type Dictionary = {
     edit: {
       panelAria: string;
     };
+    create: {
+      panelAria: string;
+      heading: string;
+      emptySlotHint: string;
+    };
     drag: {
       saveFailed: string;
       weekViewHint: string;

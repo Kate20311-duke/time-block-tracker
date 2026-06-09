@@ -32,11 +32,6 @@ function formatHoursMinutes(totalMinutes: number, locale: "zh" | "en"): string {
   return `${m}min`;
 }
 
-function formatPercent(value: number): string {
-  const v = Number.isFinite(value) ? value : 0;
-  return `${Math.round(v * 100)}%`;
-}
-
 export default async function ReviewWeekPage({
   searchParams,
 }: {
@@ -88,7 +83,7 @@ export default async function ReviewWeekPage({
   const reviewItems = weekBlocks.filter((b) => {
     if (b.status === "skipped") return true;
     if (b.status === "planned") return true;
-    if (b.status === "partial" && b.completionLevel < 60) return true;
+    if (b.status === "partial") return true;
     return false;
   });
 
@@ -147,31 +142,9 @@ export default async function ReviewWeekPage({
                 </p>
               </li>
               <li className="rounded-lg border border-zinc-200 bg-white p-5">
-                <p className="text-sm text-zinc-500">
-                  {t.review.estimatedCompletedTime}
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-900">
-                  {formatHoursMinutes(summary.totalCompletedMinutes, locale)}
-                </p>
-              </li>
-              <li className="rounded-lg border border-zinc-200 bg-white p-5">
                 <p className="text-sm text-zinc-500">{t.review.skippedTime}</p>
                 <p className="mt-1 text-2xl font-semibold text-zinc-900">
                   {formatHoursMinutes(summary.totalSkippedMinutes, locale)}
-                </p>
-              </li>
-              <li className="rounded-lg border border-zinc-200 bg-white p-5">
-                <p className="text-sm text-zinc-500">{t.review.completionRate}</p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-900">
-                  {formatPercent(summary.completionRate)}
-                </p>
-              </li>
-              <li className="rounded-lg border border-zinc-200 bg-white p-5">
-                <p className="text-sm text-zinc-500">
-                  {t.review.averageCompletionLevel}
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-900">
-                  {summary.averageCompletionLevel}%
                 </p>
               </li>
             </ul>
@@ -194,14 +167,9 @@ export default async function ReviewWeekPage({
                       }).format(d.dayStart)}
                     </span>
                     <span className="text-sm text-zinc-600">
-                      {t.review.totalPlannedTime}{" "}
+                      {t.dashboard.totalRecordedTime}{" "}
                       <span className="font-medium text-zinc-800">
                         {formatHoursMinutes(d.summary.totalPlannedMinutes, locale)}
-                      </span>
-                      <span className="mx-2 text-zinc-300">·</span>
-                      {t.review.completionRate}{" "}
-                      <span className="font-medium text-zinc-800">
-                        {formatPercent(d.summary.completionRate)}
                       </span>
                     </span>
                   </div>
@@ -236,40 +204,6 @@ export default async function ReviewWeekPage({
                     </span>
                     <span className="mx-2 text-zinc-300">·</span>
                     <span>{row.blockCount}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="mb-4 text-lg font-semibold">
-              {t.review.completionByCategory}
-            </h2>
-            {categories.length === 0 ? (
-              <p className="text-sm text-zinc-500">{t.dashboard.emptyCategories}</p>
-            ) : null}
-            <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 bg-white">
-              {summary.completionByCategory.map((row) => (
-                <li key={row.categoryId} className="px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span className="font-medium text-zinc-900">
-                      {row.categoryId === "__uncategorized__"
-                        ? t.dashboard.uncategorized
-                        : categories.find((c) => c.id === row.categoryId)?.name ??
-                          row.categoryId}
-                    </span>
-                    <span className="text-sm text-zinc-600">
-                      {t.review.totalPlannedTime}{" "}
-                      <span className="font-medium text-zinc-800">
-                        {formatHoursMinutes(row.plannedMinutes, locale)}
-                      </span>
-                      <span className="mx-2 text-zinc-300">·</span>
-                      {t.review.completionRate}{" "}
-                      <span className="font-medium text-zinc-800">
-                        {formatPercent(row.completionRate)}
-                      </span>
-                    </span>
                   </div>
                 </li>
               ))}
@@ -315,8 +249,6 @@ export default async function ReviewWeekPage({
                           </div>
                           <p className="mt-1 text-sm text-zinc-600">
                             {t.timeBlocks.status}：{getStatusLabel(b.status, locale)}
-                            <span className="mx-2 text-zinc-300">·</span>
-                            {t.timeBlocks.completion}：{b.completionLevel}%
                           </p>
                           {b.reviewNote ? (
                             <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">

@@ -154,6 +154,7 @@ describe("parseTimeBlockFormData", () => {
     const data = parseTimeBlockFormData(formData);
     expect(data.startTime?.toISOString()).toBe("2026-06-01T01:00:00.000Z");
     expect(data.endTime?.toISOString()).toBe("2026-06-01T02:00:00.000Z");
+    expect(data.completionLevel).toBeNull();
   });
 });
 
@@ -166,7 +167,7 @@ describe("validateFullTimeBlockForm", () => {
       reviewNote: null,
       categoryId: "cat1",
       status: "planned",
-      completionLevel: 0,
+      completionLevel: null,
       efficiencyLevel: null,
       startTime: new Date("2026-05-21T10:00:00"),
       endTime: new Date("2026-05-21T11:00:00"),

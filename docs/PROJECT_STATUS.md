@@ -100,9 +100,11 @@
 - **Phase 2.5：已完成（交互能力）**
   - **calendar-specific server actions**：`src/lib/actions/calendar-time-blocks.ts`
   - **click-to-edit from calendar**：点击块打开 `/calendar?blockId=...` 的页内编辑面板
+  - **click-to-create from calendar**：点击空白时段打开页内创建面板（§5.14）
+  - **click-to-edit/delete from calendar**：点击块打开编辑面板，可保存或删除（§5.15）
   - **day view drag-to-move**：日视图列内纵向拖拽（可见段时长、5 分钟吸附、预览与保存一致、00:00–24:00 夹取）— Phase 9.2 加固
   - **day view bottom resize**：日视图底部手柄 resize（只改 `endTime`、5 分钟吸附、最小时长、00:00–24:00 夹取）
-  - **week view drag**：**已暂时关闭**（Phase 9.2）；周视图仍可点击块编辑；精确拖动请用日视图
+  - **week view drag**：同日块列内纵向拖（Phase 9.6）；跨午夜块不可拖；resize 仅日视图
   - **00:00–24:00 全日交互范围**：拖拽/resize 的计算与 clamp 都以单日网格为边界
   - **可配置吸附间隔**：`CALENDAR_SNAP_MINUTES`（当前 5 分钟）
   - **可配置最小时长**：`MIN_TIME_BLOCK_DURATION_MINUTES`
@@ -347,12 +349,12 @@ pnpm dev    # http://localhost:3000/calendar
 
 ### 5.11 日历已知限制
 
-- **无日历内点击创建**、无 FullCalendar 等第三方库
+- **无 FullCalendar 等第三方库**
 - **无冲突检测**：允许 overlaps；重叠块可能遮挡（未分列）
 - **无撤销/重做**
 - **无重复事件**
 - **无外部日历同步**
-- **无空白处创建（blank-space creation）**
+- **日历内删除**需确认对话框（与列表页一致）
 - **周视图不支持跨列拖拽/跨天改变日期**（仅列内交互）
 - **重叠块**：同列多条记录可能互相遮挡（未分列）
 - **浅色分类 + 白字**：对比度可能不足
@@ -360,6 +362,104 @@ pnpm dev    # http://localhost:3000/calendar
 - **无效 `?date=`**：不回写 URL
 - **极短块**：`minHeight` 可能略长于真实时长
 - **时间记录页副标题**：仍写「暂无日历」（陈旧文案）
+
+### 5.14 日历空白处点击创建（已完成）
+
+| 项 | 说明 |
+|----|------|
+| 交互 | 日/周视图列内**空白网格**点击 → 页内 `CalendarBlockCreatePanel` |
+| 选中槽位状态 | `CalendarInteractiveView` 客户端 `createDraft`（`startTimeIso` / `endTimeIso`） |
+| 时间预填 | `slotTimesFromGridClick`（`src/lib/calendar-slot-create.ts`）：5 分钟吸附 + 默认 **30 分钟**时长，夹取在当日 00:00–24:00 |
+| 表单 | 复用 `TimeBlockDatetimeFields`；字段：title、category、status、起止时间、note、completionLevel |
+| Server Action | `createTimeBlockFromCalendar`（`calendar-time-blocks.ts`）— 复用 `parseTimeBlockFormData` + `assertCategoryOwned` |
+| 保存后 | redirect 回 `/calendar?success=created`；`revalidatePath`：`/calendar`、`/time-blocks`、`/dashboard`、`/review/*` |
+| 测试 | `src/lib/calendar-slot-create.test.ts` |
+
+**已知限制**
+
+- 须点击列网格空白处（非已有块）；靠近日末不足 30 分钟时不打开面板
+- 创建面板为客户端状态，刷新页面会丢失未保存草稿
+- 无 `efficiencyLevel` / `reviewNote`（与列表页创建表单字段略少；可后续补齐）
+- 创建面板无 `efficiencyLevel` / `reviewNote`（可后续补齐）
+
+### 5.15 日历点击编辑与删除（已完成）
+
+| 项 | 说明 |
+|----|------|
+| 选中块 | URL `?blockId=` + 服务端 `selectedBlock`（`timeBlocksForUser` 归属校验） |
+| 面板模式 | `resolveCalendarPanelMode`（`src/lib/calendar-panel-mode.ts`）：`create` \| `edit` \| `null`；`CalendarInteractiveView` 管理 `createDraft` + URL `blockId` |
+| 编辑表单 | `CalendarBlockEditPanel` — 预填 title/category/起止时间/note/status/completionLevel/efficiency/reviewNote |
+| 更新 | `updateTimeBlockFromCalendar`（`updateMany` + `category.userId`；不修改 `source`） |
+| 删除 | `deleteTimeBlockFromCalendar` + `DeleteConfirmButton`（含 `calendarDate`/`calendarView` 重定向上下文） |
+| 保存/删除后 | redirect 回 `/calendar`（删除时无 `blockId`）；`revalidateTimeBlockPaths` |
+| 与创建共存 | 点块清 `createDraft`；点空白清 `blockId`；`panelMode` 互斥 |
+
+**已知限制**
+
+- 编辑/删除为页内面板（非 modal）；跨午夜块在周视图显示裁剪段，编辑的是完整记录
+- ~~创建/编辑/删除表单字段仍分散在三处组件~~ → 已抽取 `TimeBlockForm`（§5.16）
+
+### 5.16 可复用 TimeBlock 表单（已完成）
+
+| 项 | 说明 |
+|----|------|
+| 组件 | `src/components/time-block-form.tsx` — `mode: create \| edit`，共享字段 + `TimeBlockDatetimeFields` |
+| 使用处 | `/time-blocks` 创建；`TimeBlockRow` 编辑；`CalendarBlockCreatePanel`；`CalendarBlockEditPanel` |
+| 字段 | title、categoryId、status、start/end（ISO）、note；可选 efficiency + reviewNote（**无** completionLevel 输入） |
+| Server Actions | 仍由调用方传入 `action`（未内聚到组件内） |
+| 面板壳层 | 日历面板仍保留 section 标题/删除区；列表行保留查看/删除按钮 |
+
+**已知限制**
+
+- 日历创建面板仍不显示 efficiency/reviewNote（`showEfficiencyAndReview={false}`，行为与重构前一致）
+- 删除按钮仍在 `CalendarBlockEditPanel` / 列表查看模式，不在 `TimeBlockForm` 内
+
+**推荐下一步**：UI polish；或跨列/跨日拖拽（当前未支持）
+
+### 5.18 completionLevel UX 下线（已完成，DB 列保留）
+
+| 项 | 说明 |
+|----|------|
+| UX | 所有表单、列表、Dashboard、复盘页**不再显示或编辑** completionLevel |
+| DB | `TimeBlock.completionLevel` **未删除**；无 Prisma migration |
+| 创建 | `resolveCompletionLevelForWrite(status, null)` → completed/partial=100，planned/skipped=0 |
+| 更新 | 表单不提交该字段时 **omit** Prisma update，保留库中旧值 |
+| Focus 转换 | 仍写入 `completionLevel: 100`（`focus-shared.ts`，未改） |
+| 统计 | `summarizeCompletionQuality` 等 **内部函数保留**；用户可见的完成率/平均完成度卡片已移除 |
+| 后续 | 单独 Phase 可从 schema + 统计层彻底移除 completionLevel |
+
+**推荐下一步**：数据库与 `stats.ts` 清理 completionLevel（需 migration + 数据回填策略）
+
+### 5.17 日历拖拽与 Resize（已实现，与点击创建/编辑共存）
+
+| 能力 | 日视图 | 周视图 |
+|------|--------|--------|
+| **拖拽移动** | ✅ 列内纵向；保持可见段时长；5 分钟吸附 | ✅ 仅**同日**块、列内纵向 |
+| **Resize** | ✅ 底部手柄；只改 `endTime` | ❌ `compact` 列 `enableResize={false}` |
+| **跨列/改日期** | ❌ | ❌ |
+| **跨午夜块** | 可显示/点击编辑；拖动可见段可能保存为**单日**块 | 不可拖（`canDragCalendarColumnBlockInWeekView`） |
+
+**实现文件**
+
+- `CalendarDraggableBlock` — pointer 拖/resize 预览 + 保存
+- `CalendarDayColumn` — `enableDrag` / `canDragBlock` / `enableResize={!compact}`
+- `updateTimeBlockSchedule` — 仅更新 `startTime`/`endTime`；`assertTimeBlockOwned`；`revalidateTimeBlockPaths`
+- `src/lib/calendar.ts` — `calculateMovedRange`、`calculateResizedRange`、`calculateSnappedDragTopPx`
+- `src/lib/week-view-drag.ts` — 周视图同日块门控
+
+**失败回滚**
+
+- 无乐观持久化：松手后先清预览偏移，再调 Server Action
+- 失败：`onSaveEnd(false)` → `CalendarInteractiveView` 显示 `drag.saveFailed` + `router.refresh()` 拉回服务端数据
+- 无效 resize/移动：`calculateMovedRange` / `calculateResizedRange` 返回 `ok: false` → 不写入库
+
+**与点击创建/编辑**
+
+- 轻点块（未过 `DRAG_THRESHOLD_PX`）→ `onSelect` → 编辑面板
+- 拖块体不触发空白格 `onEmptySlotClick`（事件在子元素上）
+- 拖拽保存不调用 create/update 全量表单 action
+
+**手动测试**：见 §23.5、§27.3 及下方清单
 
 ### 5.12 Phase 2 仍未做
 
@@ -1240,7 +1340,8 @@ docker compose up -d
 | 按可见段显示 | ✅ 与日视图同一套 `layoutBlocksInDay` |
 | 点击块编辑 | ✅ `onBlockSelect` → `blockId` 面板 |
 | 列头进日视图 | ✅ `dayHref` → `?view=day&date=` |
-| 拖拽 / resize | ❌ 仍关闭 |
+| 拖拽 | ✅ 同日块列内（9.6） |
+| resize | ❌ compact 周列关闭 |
 | 提示文案 | ✅ `calendar.drag.weekViewHint` |
 
 ### 25.2 文件

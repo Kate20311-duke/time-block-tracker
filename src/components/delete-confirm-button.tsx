@@ -6,6 +6,8 @@ type Props = {
   confirmMessage: string;
   deleteLabel: string;
   disabled?: boolean;
+  /** Additional hidden fields (e.g. calendar redirect context). */
+  extraFields?: Record<string, string>;
 };
 
 export function DeleteConfirmButton({
@@ -14,10 +16,16 @@ export function DeleteConfirmButton({
   confirmMessage,
   deleteLabel,
   disabled = false,
+  extraFields,
 }: Props) {
   return (
     <form action={action}>
       <input type="hidden" name="id" value={id} />
+      {extraFields
+        ? Object.entries(extraFields).map(([name, value]) => (
+            <input key={name} type="hidden" name={name} value={value} />
+          ))
+        : null}
       <button
         type="submit"
         disabled={disabled}

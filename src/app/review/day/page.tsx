@@ -31,11 +31,6 @@ function formatHoursMinutes(totalMinutes: number, locale: "zh" | "en"): string {
   return `${m}min`;
 }
 
-function formatPercent(value: number): string {
-  const v = Number.isFinite(value) ? value : 0;
-  return `${Math.round(v * 100)}%`;
-}
-
 export default async function ReviewDayPage({
   searchParams,
 }: {
@@ -137,31 +132,9 @@ export default async function ReviewDayPage({
                 </p>
               </li>
               <li className="rounded-lg border border-zinc-200 bg-white p-5">
-                <p className="text-sm text-zinc-500">
-                  {t.review.estimatedCompletedTime}
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-900">
-                  {formatHoursMinutes(summary.totalCompletedMinutes, locale)}
-                </p>
-              </li>
-              <li className="rounded-lg border border-zinc-200 bg-white p-5">
                 <p className="text-sm text-zinc-500">{t.review.skippedTime}</p>
                 <p className="mt-1 text-2xl font-semibold text-zinc-900">
                   {formatHoursMinutes(summary.totalSkippedMinutes, locale)}
-                </p>
-              </li>
-              <li className="rounded-lg border border-zinc-200 bg-white p-5">
-                <p className="text-sm text-zinc-500">{t.review.completionRate}</p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-900">
-                  {formatPercent(summary.completionRate)}
-                </p>
-              </li>
-              <li className="rounded-lg border border-zinc-200 bg-white p-5">
-                <p className="text-sm text-zinc-500">
-                  {t.review.averageCompletionLevel}
-                </p>
-                <p className="mt-1 text-2xl font-semibold text-zinc-900">
-                  {summary.averageCompletionLevel}%
                 </p>
               </li>
             </ul>
@@ -238,8 +211,6 @@ export default async function ReviewDayPage({
                           </div>
                           <p className="mt-1 text-sm text-zinc-600">
                             {t.timeBlocks.status}：{getStatusLabel(b.status, locale)}
-                            <span className="mx-2 text-zinc-300">·</span>
-                            {t.timeBlocks.completion}：{b.completionLevel}%
                           </p>
                           {b.reviewNote ? (
                             <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700">
@@ -286,7 +257,7 @@ export default async function ReviewDayPage({
                       <div className="text-sm text-zinc-600">
                         {durationLabel}
                         <span className="mx-2 text-zinc-300">·</span>
-                        {b.completionLevel}%
+                        {getStatusLabel(b.status, locale)}
                       </div>
                     </div>
                     {b.reviewNote ? (

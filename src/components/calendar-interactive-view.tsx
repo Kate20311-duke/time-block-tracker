@@ -2,8 +2,13 @@
 
 import { useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { CalendarBlockCreatePanel } from "@/components/calendar-block-create-panel";
 import { CalendarBlockEditPanel } from "@/components/calendar-block-edit-panel";
 import type { CalendarEditBlockData } from "@/lib/calendar-edit";
+import {
+  resolveCalendarPanelMode,
+  type CreateDraft,
+} from "@/lib/calendar-panel-mode";
 import { CalendarDayGrid } from "@/components/calendar-day-grid";
 import { CalendarWeekGrid } from "@/components/calendar-week-grid";
 import type { WeekGridColumn } from "@/components/calendar-week-grid";
@@ -22,9 +27,26 @@ type FormLabels = {
   noteOptional: string;
   reviewNoteOptional: string;
   status: string;
-  completionRange: string;
   efficiencyOptional: string;
   selectEfficiency: string;
+  save: string;
+  cancel: string;
+  delete: string;
+  confirmDelete: string;
+  submitting: string;
+};
+
+type CreateFormLabels = {
+  panelAria: string;
+  heading: string;
+  titleLabel: string;
+  titlePlaceholder: string;
+  category: string;
+  selectCategory: string;
+  startTime: string;
+  endTime: string;
+  noteOptional: string;
+  status: string;
   save: string;
   cancel: string;
   submitting: string;
@@ -45,6 +67,8 @@ type Props = {
   startTimeIso: string;
   endTimeIso: string;
   formLabels: FormLabels;
+  createFormLabels: CreateFormLabels;
+  emptySlotHintMessage?: string;
   dayBlocks?: CalendarGridBlock[];
   weekColumns?: WeekGridColumn[];
   notFoundMessage?: string;
@@ -90,6 +114,8 @@ export function CalendarInteractiveView({
   startTimeIso,
   endTimeIso,
   formLabels,
+  createFormLabels,
+  emptySlotHintMessage,
   dayBlocks,
   weekColumns,
   notFoundMessage,
@@ -102,6 +128,7 @@ export function CalendarInteractiveView({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [dragError, setDragError] = useState<string | null>(null);
+  const [createDraft, setCreateDraft] = useState<CreateDraft | null>(null);
 
   const handleScheduleSaveEnd = useCallback(
     (ok: boolean) => {
@@ -118,6 +145,7 @@ export function CalendarInteractiveView({
   const handleBlockSelect = useCallback(
     (blockId: string) => {
       setDragError(null);
+      setCreateDraft(null);
       const params = new URLSearchParams(searchParams.toString());
       params.set("date", calendarDate);
       if (view === "day") {
@@ -134,8 +162,28 @@ export function CalendarInteractiveView({
   );
 
   const handleCancel = useCallback(() => {
+    setCreateDraft(null);
     router.push(buildCalendarPath(calendarDate, view));
   }, [router, calendarDate, view]);
+
+  const handleEmptySlotClick = useCallback(
+    (startTimeIso: string, endTimeIso: string) => {
+      setDragError(null);
+      setCreateDraft({ startTimeIso, endTimeIso });
+      router.push(buildCalendarPath(calendarDate, view));
+    },
+    [router, calendarDate, view],
+  );
+
+  const handleCancelCreate = useCallback(() => {
+    setCreateDraft(null);
+  }, []);
+
+  const panelMode = resolveCalendarPanelMode(
+    createDraft,
+    selectedBlockId,
+    selectedBlock,
+  );
 
   const showNotFound =
     Boolean(selectedBlockId) && !selectedBlock && notFoundMessage;
@@ -152,6 +200,7 @@ export function CalendarInteractiveView({
           dragDisabledHint={dragDisabledInWeekHint}
           onBlockSelect={handleBlockSelect}
           onScheduleSaveEnd={handleScheduleSaveEnd}
+          onEmptySlotClick={handleEmptySlotClick}
         />
       ) : null}
 
@@ -177,7 +226,14 @@ export function CalendarInteractiveView({
           continuedSegmentLabel={continuedSegmentLabel}
           onBlockSelect={handleBlockSelect}
           onScheduleSaveEnd={handleScheduleSaveEnd}
+          onEmptySlotClick={handleEmptySlotClick}
         />
+      ) : null}
+
+      {emptySlotHintMessage ? (
+        <p className="text-sm text-zinc-500" role="note">
+          {emptySlotHintMessage}
+        </p>
       ) : null}
 
       {showNotFound ? (
@@ -186,7 +242,7 @@ export function CalendarInteractiveView({
         </p>
       ) : null}
 
-      {selectedBlock && categories.length > 0 ? (
+      {panelMode === "edit" && selectedBlock && categories.length > 0 ? (
         <CalendarBlockEditPanel
           key={editPanelKey ?? selectedBlock.id}
           block={selectedBlock}
@@ -203,7 +259,31 @@ export function CalendarInteractiveView({
         />
       ) : null}
 
-      {selectedBlock && categories.length === 0 && noCategoriesMessage ? (
+      {panelMode === "edit" &&
+      selectedBlock &&
+      categories.length === 0 &&
+      noCategoriesMessage ? (
+        <p className="text-sm text-amber-700" role="alert">
+          {noCategoriesMessage}
+        </p>
+      ) : null}
+
+      {panelMode === "create" && createDraft && categories.length > 0 ? (
+        <CalendarBlockCreatePanel
+          key={`${createDraft.startTimeIso}-${createDraft.endTimeIso}`}
+          categories={categories}
+          statusOptions={statusOptions}
+          userTimeZone={userTimeZone}
+          startTimeIso={createDraft.startTimeIso}
+          endTimeIso={createDraft.endTimeIso}
+          calendarDate={calendarDate}
+          calendarView={view}
+          labels={createFormLabels}
+          onCancel={handleCancelCreate}
+        />
+      ) : null}
+
+      {panelMode === "create" && createDraft && categories.length === 0 && noCategoriesMessage ? (
         <p className="text-sm text-amber-700" role="alert">
           {noCategoriesMessage}
         </p>

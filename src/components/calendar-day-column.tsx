@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
+import { slotTimesFromGridClick } from "@/lib/calendar-slot-create";
 import { CalendarBlock } from "@/components/calendar-block";
 import { CalendarDraggableBlock } from "@/components/calendar-draggable-block";
 import {
@@ -38,6 +39,8 @@ type Props = {
   dragDisabledHint?: string;
   calendarDate?: string;
   onScheduleSaveEnd?: (ok: boolean) => void;
+  /** Fired when the user clicks empty space in the day column grid. */
+  onEmptySlotClick?: (startTimeIso: string, endTimeIso: string) => void;
 };
 
 export const GRID_HEIGHT_PX = CALENDAR_GRID_HEIGHT_PX;
@@ -56,9 +59,30 @@ export function CalendarDayColumn({
   dragDisabledHint,
   calendarDate,
   onScheduleSaveEnd,
+  onEmptySlotClick,
 }: Props) {
   const hours = getHourLabels();
   const gridContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleGridClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!onEmptySlotClick || !calendarDate) return;
+      if (event.target !== event.currentTarget) return;
+
+      const container = event.currentTarget;
+      const rect = container.getBoundingClientRect();
+      const slot = slotTimesFromGridClick(
+        calendarDate,
+        event.clientY - rect.top,
+        rect.height,
+        userTimeZone,
+      );
+      if (slot) {
+        onEmptySlotClick(slot.startTimeIso, slot.endTimeIso);
+      }
+    },
+    [calendarDate, onEmptySlotClick, userTimeZone],
+  );
   const timeLabel = (block: CalendarColumnBlock) =>
     formatCalendarBlockTimeLabel(
       new Date(block.startTimeIso),
@@ -83,7 +107,11 @@ export function CalendarDayColumn({
         />
       ))}
 
-      <div ref={gridContainerRef} className="relative h-full">
+      <div
+        ref={gridContainerRef}
+        className={`relative h-full ${onEmptySlotClick ? "cursor-cell" : ""}`}
+        onClick={onEmptySlotClick ? handleGridClick : undefined}
+      >
         {blocks.map((block) => {
           const dragAllowed =
             Boolean(enableDrag && calendarDate && onScheduleSaveEnd) &&

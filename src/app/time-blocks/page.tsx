@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { SubmitButton } from "@/components/submit-button";
-import { TimeBlockDatetimeFields } from "@/components/time-block-datetime-fields";
+import { TimeBlockForm } from "@/components/time-block-form";
 import { TimeBlockRow } from "@/components/time-block-row";
 import { createTimeBlock } from "@/lib/actions/time-blocks";
 import { TIME_BLOCK_STATUSES } from "@/lib/constants";
@@ -122,110 +121,36 @@ export default async function TimeBlocksPage({
             {t.timeBlocks.needCategorySuffix}
           </p>
         ) : (
-          <form
-            id="time-block-create-form"
+          <TimeBlockForm
             key={createFormKey}
+            formId="time-block-create-form"
             action={createTimeBlock}
-            className="grid gap-4 sm:grid-cols-2"
-          >
-            <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-              <span className="font-medium">{t.timeBlocks.titleLabel}</span>
-              <input
-                name="title"
-                required
-                className="rounded border border-zinc-300 px-3 py-2"
-                placeholder={t.timeBlocks.titlePlaceholder}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium">{t.timeBlocks.category}</span>
-              <select
-                name="categoryId"
-                required
-                className="rounded border border-zinc-300 px-3 py-2"
-              >
-                <option value="">{t.timeBlocks.selectCategory}</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium">{t.timeBlocks.status}</span>
-              <select
-                name="status"
-                defaultValue="planned"
-                required
-                className="rounded border border-zinc-300 px-3 py-2"
-              >
-                {statusOptions.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <TimeBlockDatetimeFields
-              formId="time-block-create-form"
-              startLabel={t.timeBlocks.startTime}
-              endLabel={t.timeBlocks.endTime}
-              timeZone={userTimeZone}
-            />
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium">{t.timeBlocks.completionRange}</span>
-              <input
-                name="completionLevel"
-                type="number"
-                min={0}
-                max={100}
-                step={1}
-                defaultValue={0}
-                required
-                className="rounded border border-zinc-300 px-3 py-2"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium">{t.timeBlocks.efficiencyOptional}</span>
-              <select
-                name="efficiencyLevel"
-                defaultValue=""
-                className="rounded border border-zinc-300 px-3 py-2"
-              >
-                <option value="">{t.timeBlocks.selectEfficiency}</option>
-                {efficiencyOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-              <span className="font-medium">{t.timeBlocks.noteOptional}</span>
-              <textarea
-                name="note"
-                rows={2}
-                className="rounded border border-zinc-300 px-3 py-2"
-                placeholder={t.timeBlocks.notePlaceholder}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-              <span className="font-medium">{t.timeBlocks.reviewNoteOptional}</span>
-              <textarea
-                name="reviewNote"
-                rows={2}
-                className="rounded border border-zinc-300 px-3 py-2"
-                placeholder={t.timeBlocks.reviewNotePlaceholder}
-              />
-            </label>
-            <div className="sm:col-span-2">
-              <SubmitButton
-                label={t.common.create}
-                pendingLabel={t.common.submitting}
-              />
-            </div>
-          </form>
+            mode="create"
+            categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+            statusOptions={statusOptions}
+            efficiencyOptions={efficiencyOptions}
+            userTimeZone={userTimeZone}
+            labels={{
+              titleLabel: t.timeBlocks.titleLabel,
+              titlePlaceholder: t.timeBlocks.titlePlaceholder,
+              category: t.timeBlocks.category,
+              selectCategory: t.timeBlocks.selectCategory,
+              startTime: t.timeBlocks.startTime,
+              endTime: t.timeBlocks.endTime,
+              noteOptional: t.timeBlocks.noteOptional,
+              notePlaceholder: t.timeBlocks.notePlaceholder,
+              status: t.timeBlocks.status,
+              efficiencyOptional: t.timeBlocks.efficiencyOptional,
+              selectEfficiency: t.timeBlocks.selectEfficiency,
+              reviewNoteOptional: t.timeBlocks.reviewNoteOptional,
+              reviewNotePlaceholder: t.timeBlocks.reviewNotePlaceholder,
+              save: t.common.save,
+              submitting: t.common.submitting,
+            }}
+            showEfficiencyAndReview
+            submitVariant="primary"
+            submitLabel={t.common.create}
+          />
         )}
       </section>
 
@@ -272,12 +197,11 @@ export default async function TimeBlocksPage({
                     endTime: t.timeBlocks.endTime,
                     noteOptional: t.timeBlocks.noteOptional,
                     status: t.timeBlocks.status,
-                    completionRange: t.timeBlocks.completionRange,
                     efficiencyOptional: t.timeBlocks.efficiencyOptional,
                     selectEfficiency: t.timeBlocks.selectEfficiency,
                     reviewNoteOptional: t.timeBlocks.reviewNoteOptional,
                     durationFormatted: `${minutes} ${t.timeBlocks.minutesUnit}`,
-                    statusCompletionFormatted: `${getStatusLabel(block.status, locale)} · ${block.completionLevel}%`,
+                    statusCompletionFormatted: getStatusLabel(block.status, locale),
                     startFormatted: formatDateTimeInTimeZone(
                       block.startTime,
                       userTimeZone,

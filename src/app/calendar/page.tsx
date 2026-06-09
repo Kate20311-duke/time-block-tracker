@@ -21,7 +21,12 @@ import {
   type CalendarView,
 } from "@/lib/calendar";
 import { TIME_BLOCK_STATUSES } from "@/lib/constants";
-import { getDictionary, getStatusLabel, type Dictionary } from "@/lib/i18n";
+import {
+  formatMessage,
+  getDictionary,
+  getStatusLabel,
+  type Dictionary,
+} from "@/lib/i18n";
 import { categoriesForUser, timeBlocksForUser } from "@/lib/db/scoped";
 import { getLocale } from "@/lib/i18n/server";
 import { requireUser } from "@/lib/session";
@@ -35,6 +40,7 @@ const CALENDAR_ERROR_MAP = {
   invalid_status: "invalidStatus",
   invalid_completion: "invalidCompletion",
   update_failed: "updateFailed",
+  delete_failed: "deleteFailed",
 } as const;
 
 type CalendarErrorParam = keyof typeof CALENDAR_ERROR_MAP;
@@ -71,6 +77,8 @@ function resolveCalendarSuccess(
   t: Dictionary,
 ): string | null {
   if (success === "updated") return t.timeBlocks.success.updated;
+  if (success === "created") return t.timeBlocks.success.created;
+  if (success === "deleted") return t.timeBlocks.success.deleted;
   return null;
 }
 
@@ -256,9 +264,30 @@ export default async function CalendarPage({
     noteOptional: t.timeBlocks.noteOptional,
     reviewNoteOptional: t.timeBlocks.reviewNoteOptional,
     status: t.timeBlocks.status,
-    completionRange: t.timeBlocks.completionRange,
     efficiencyOptional: t.timeBlocks.efficiencyOptional,
     selectEfficiency: t.timeBlocks.selectEfficiency,
+    save: t.common.save,
+    cancel: t.common.cancel,
+    delete: t.common.delete,
+    confirmDelete: selectedBlockRaw
+      ? formatMessage(t.timeBlocks.confirmDelete, {
+          title: selectedBlockRaw.title,
+        })
+      : "",
+    submitting: t.common.submitting,
+  };
+
+  const createFormLabels = {
+    panelAria: t.calendar.create.panelAria,
+    heading: t.calendar.create.heading,
+    titleLabel: t.timeBlocks.titleLabel,
+    titlePlaceholder: t.timeBlocks.titlePlaceholder,
+    category: t.timeBlocks.category,
+    selectCategory: t.timeBlocks.selectCategory,
+    startTime: t.timeBlocks.startTime,
+    endTime: t.timeBlocks.endTime,
+    noteOptional: t.timeBlocks.noteOptional,
+    status: t.timeBlocks.status,
     save: t.common.save,
     cancel: t.common.cancel,
     submitting: t.common.submitting,
@@ -404,6 +433,8 @@ export default async function CalendarPage({
             selectedBlockRaw ? selectedBlockRaw.endTime.toISOString() : ""
           }
           formLabels={formLabels}
+          createFormLabels={createFormLabels}
+          emptySlotHintMessage={t.calendar.create.emptySlotHint}
           notFoundMessage={t.calendar.detail.notFound}
           noCategoriesMessage={t.timeBlocks.cannotEditNoCategories}
           dragSaveFailedMessage={t.calendar.drag.saveFailed}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clampCompletionLevel,
+  completionLevelFromStatus,
   getValidTimeBlockRange,
   isNonEmptyTrimmed,
   isValidFocusSessionStatus,
@@ -52,6 +53,15 @@ describe("isValidTimeBlockStatus", () => {
 
   it("rejects unknown statuses", () => {
     expect(isValidTimeBlockStatus("cancelled")).toBe(false);
+  });
+});
+
+describe("completionLevelFromStatus", () => {
+  it("maps status to hidden UX defaults", () => {
+    expect(completionLevelFromStatus("completed")).toBe(100);
+    expect(completionLevelFromStatus("partial")).toBe(100);
+    expect(completionLevelFromStatus("planned")).toBe(0);
+    expect(completionLevelFromStatus("skipped")).toBe(0);
   });
 });
 

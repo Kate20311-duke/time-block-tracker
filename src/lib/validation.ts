@@ -17,6 +17,25 @@ export function clampCompletionLevel(level: number): number {
   return Math.min(100, Math.max(0, Math.round(level)));
 }
 
+/** Default completionLevel when the field is hidden from UX (DB column retained). */
+export function completionLevelFromStatus(status: string): number {
+  if (status === "completed" || status === "partial") {
+    return 100;
+  }
+  return 0;
+}
+
+/** Resolve level for validation/write: explicit form value or status default. */
+export function resolveCompletionLevelForWrite(
+  status: string,
+  provided: number | null,
+): number {
+  if (provided !== null && !Number.isNaN(provided)) {
+    return clampCompletionLevel(provided);
+  }
+  return completionLevelFromStatus(status);
+}
+
 export function getValidTimeBlockRange(
   start: Date | null,
   end: Date | null,

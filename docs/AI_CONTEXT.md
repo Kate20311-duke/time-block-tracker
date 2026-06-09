@@ -116,7 +116,33 @@ Dashboard: TimeBlock totals from `stats.ts` only; FocusSession totals from `focu
 - **Edit defaults:** `instantToDatetimeLocalValue(iso, userTimeZone)` where `userTimeZone` = `getUserCalendarTimeZone()` on the server.
 - **Server:** `parseTimeBlockScheduleFromForm` — **requires** valid `startTimeIso` / `endTimeIso`; ignores `startTime` / `endTime` (no server-side datetime-local parse). Missing/invalid ISO → `missing_fields`.
 - **Submit sync:** `TimeBlockDatetimeFields` syncs hidden ISO on capture-phase `submit` (via `formId`); blocks submit if conversion fails.
-- **Pages:** `/time-blocks` create + edit; calendar edit panel. Calendar drag/resize already sent ISO (unchanged).
+- **Pages:** `/time-blocks` create + edit; calendar create + edit panels. Calendar drag/resize already sent ISO (unchanged).
+
+### Calendar click-to-create / click-to-edit
+
+- **Panel mode:** `resolveCalendarPanelMode` — `create` | `edit` | `null` in `CalendarInteractiveView`.
+- **Create:** `createDraft` client state; `CalendarDayColumn` → `slotTimesFromGridClick`; `CalendarBlockCreatePanel`; `createTimeBlockFromCalendar`.
+- **Edit:** URL `?blockId=` + server `selectedBlock`; `CalendarBlockEditPanel`; `updateTimeBlockFromCalendar` (preserves `source`; `updateMany` + user scope).
+- **Delete:** `deleteTimeBlockFromCalendar` + `DeleteConfirmButton` with `calendarDate`/`calendarView` hidden fields; redirect without `blockId`, `success=deleted`.
+- **Revalidate:** `revalidateTimeBlockPaths` — `/calendar`, `/time-blocks`, `/dashboard`, `/review/day`, `/review/week`.
+- **Coexistence:** block click clears `createDraft`; empty slot click clears `blockId` from URL.
+### completionLevel (deprecated in UX)
+
+- **Hidden from UI** — no form field, list %, Dashboard completion-rate cards, or review average completion.
+- **DB column retained** — no migration this phase.
+- **Writes:** `resolveCompletionLevelForWrite` in `validation.ts`; create always sets from status; update omits field when absent (preserves existing row).
+- **Focus convert / stopwatch** still set `completionLevel: 100` in `focus-shared.ts`.
+- **Internal:** `stats.ts` `summarizeCompletionQuality` still reads DB values for skipped/low-efficiency helpers; not shown to users.
+- **Future:** schema + stats cleanup phase.
+
+### Reusable TimeBlock form
+
+- **Component:** `src/components/time-block-form.tsx` — `TimeBlockForm` with `mode: create | edit`, `values`, `labels`, `hiddenFields`, optional `showEfficiencyAndReview`.
+- **Used by:** `/time-blocks` create, `TimeBlockRow` edit, `CalendarBlockCreatePanel`, `CalendarBlockEditPanel`.
+- **Actions:** passed via `action` prop (`createTimeBlock`, `updateTimeBlock`, `createTimeBlockFromCalendar`, `updateTimeBlockFromCalendar`); delete stays in panel/row wrappers.
+- **Datetime:** still delegates to `TimeBlockDatetimeFields` (TZ-2 ISO sync unchanged).
+- **Calendar create:** `showEfficiencyAndReview={false}` — no efficiency/review fields (same as before refactor).
+- **Drag/resize:** implemented — see `Calendar drag & resize` above; cross-column/cross-day not supported.
 - **Do not** use `new Date("YYYY-MM-DDTHH:mm")` in Server Actions for user-entered schedule times.
 
 ### Calendar layout (Phase 9.3 + TZ-3)
@@ -126,13 +152,17 @@ Dashboard: TimeBlock totals from `stats.ts` only; FocusSession totals from `focu
 - **Labels:** `formatCalendarBlockTimeLabel` — clipped segments show visible time + `t.calendar.continuedSegment`.
 - **Position:** `calendarBlockPositionStyle` — `leftPercent` / `widthPercent` for overlap columns.
 
-### Calendar drag (Phase 9.2)
+### Calendar drag & resize (Phase 9.2–9.6, active)
 
-- **Day view:** drag uses `layout.visibleStart` / `visibleEnd` (not full block ISO) for duration + save via `updateTimeBlockSchedule`.
-- **Preview + save:** `calculateSnappedDragTopPx` → 5-min snap during move and on release (`CALENDAR_SNAP_MINUTES`).
-- **Week view:** same-day column drag only; hint `t.calendar.drag.weekViewHint`.
-- **Cross-midnight:** dragging a clipped segment may save as a **same-day** block (documented limitation). No cross-day drag this phase.
-- **Resize:** bottom handle only; `stopPropagation`; uses visible segment start for `calculateResizedRange`.
+- **Custom grid** — no third-party DnD library; `CalendarDraggableBlock` + pointer events.
+- **Day view:** drag (preserve visible-segment duration) + bottom resize (`enableResize={true}`).
+- **Week view:** same-day column drag only (`canDragCalendarColumnBlockInWeekView`); **no resize** (`compact` → `enableResize={false}`).
+- **Save:** `updateTimeBlockSchedule` — schedule-only `updateMany`; preserves title/category/status/source/etc.
+- **Preview:** 5-min snap (`CALENDAR_SNAP_MINUTES`); clamp 00:00–24:00 user TZ day.
+- **Failure:** no optimistic DB write; preview cleared; `onSaveEnd(false)` + `router.refresh()` + `calendar.drag.saveFailed`.
+- **Cross-day / cross-column:** not supported.
+- **Cross-midnight:** clipped segment drag may save as same-day block.
+- **Coexists with:** click-to-create (`onEmptySlotClick` on grid only) and click-to-edit (tap without drag threshold → `onSelect`).
 
 ### Week view (Phase 9.4–9.6)
 

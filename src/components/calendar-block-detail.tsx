@@ -79,10 +79,6 @@ export function CalendarBlockDetail({
             {minutes} {t.timeBlocks.minutesUnit}
           </dd>
         </div>
-        <div>
-          <dt className="font-medium text-zinc-500">{t.timeBlocks.completion}</dt>
-          <dd className="mt-1 text-zinc-900">{block.completionLevel}%</dd>
-        </div>
         {block.note ? (
           <div className="sm:col-span-2">
             <dt className="font-medium text-zinc-500">{t.timeBlocks.note}</dt>

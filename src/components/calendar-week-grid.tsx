@@ -32,6 +32,7 @@ type Props = {
   dragDisabledHint: string;
   onBlockSelect: (blockId: string) => void;
   onScheduleSaveEnd: (ok: boolean) => void;
+  onEmptySlotClick?: (startTimeIso: string, endTimeIso: string) => void;
 };
 
 export function CalendarWeekGrid({
@@ -43,6 +44,7 @@ export function CalendarWeekGrid({
   dragDisabledHint,
   onBlockSelect,
   onScheduleSaveEnd,
+  onEmptySlotClick,
 }: Props) {
   const hours = getHourLabels();
 
@@ -108,6 +110,7 @@ export function CalendarWeekGrid({
                 calendarDate={formatCalendarDateParam(column.day, userTimeZone)}
                 onScheduleSaveEnd={onScheduleSaveEnd}
                 onBlockSelect={onBlockSelect}
+                onEmptySlotClick={onEmptySlotClick}
               />
             ))}
           </div>

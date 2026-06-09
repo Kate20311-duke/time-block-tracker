@@ -14,7 +14,7 @@ import {
 import { isScopedAccessError } from "@/lib/db/scoped-errors";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
-import { clampCompletionLevel } from "@/lib/validation";
+import { resolveCompletionLevelForWrite } from "@/lib/validation";
 
 function redirectOnValidationError(error: string): void {
   redirect(`/time-blocks?error=${error}`);
@@ -50,7 +50,10 @@ export async function createTimeBlock(formData: FormData): Promise<void> {
       reviewNote: data.reviewNote,
       categoryId: data.categoryId,
       status: data.status,
-      completionLevel: clampCompletionLevel(data.completionLevel),
+      completionLevel: resolveCompletionLevelForWrite(
+        data.status,
+        data.completionLevel,
+      ),
       efficiencyLevel: data.efficiencyLevel,
       startTime: range.start,
       endTime: range.end,

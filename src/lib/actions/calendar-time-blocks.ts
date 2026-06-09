@@ -20,11 +20,76 @@ import { isScopedAccessError } from "@/lib/db/scoped-errors";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { getUserCalendarTimeZone } from "@/lib/user-calendar-timezone.server";
-import { getValidTimeBlockRange } from "@/lib/validation";
+import {
+  getValidTimeBlockRange,
+  resolveCompletionLevelForWrite,
+} from "@/lib/validation";
 
 export type ScheduleUpdateResult =
   | { ok: true }
   | { ok: false; error: ScheduleUpdateError };
+
+function revalidateTimeBlockPaths(): void {
+  revalidatePath("/calendar");
+  revalidatePath("/time-blocks");
+  revalidatePath("/dashboard");
+  revalidatePath("/review/day");
+  revalidatePath("/review/week");
+}
+
+/** Create a TimeBlock from the calendar page; redirects back to /calendar. */
+export async function createTimeBlockFromCalendar(
+  formData: FormData,
+): Promise<void> {
+  const user = await requireUser();
+  const userTimeZone = await getUserCalendarTimeZone();
+  const data = parseTimeBlockFormData(formData);
+
+  const { error, range } = validateFullTimeBlockForm(data);
+
+  if (error || !range) {
+    redirect(
+      buildCalendarRedirectPath(
+        formData,
+        { error: error ?? "invalid_range" },
+        userTimeZone,
+      ),
+    );
+  }
+
+  try {
+    await assertCategoryOwned(user.id, data.categoryId);
+  } catch (scopedError) {
+    if (isScopedAccessError(scopedError)) {
+      redirect(
+        buildCalendarRedirectPath(formData, { error: "missing_fields" }, userTimeZone),
+      );
+    }
+    throw scopedError;
+  }
+
+  await prisma.timeBlock.create({
+    data: {
+      title: data.title,
+      note: data.note,
+      reviewNote: data.reviewNote,
+      categoryId: data.categoryId,
+      status: data.status,
+      completionLevel: resolveCompletionLevelForWrite(
+        data.status,
+        data.completionLevel,
+      ),
+      efficiencyLevel: data.efficiencyLevel,
+      startTime: range!.start,
+      endTime: range!.end,
+    },
+  });
+
+  revalidateTimeBlockPaths();
+  redirect(
+    buildCalendarRedirectPath(formData, { success: "created" }, userTimeZone),
+  );
+}
 
 /** Full TimeBlock edit from the calendar page; redirects back to /calendar. */
 export async function updateTimeBlockFromCalendar(
@@ -75,10 +140,50 @@ export async function updateTimeBlockFromCalendar(
     );
   }
 
-  revalidatePath("/calendar");
-  revalidatePath("/time-blocks");
+  revalidateTimeBlockPaths();
   redirect(
     buildCalendarRedirectPath(formData, { success: "updated" }, userTimeZone),
+  );
+}
+
+/** Delete a TimeBlock from the calendar page; redirects back to /calendar. */
+export async function deleteTimeBlockFromCalendar(
+  formData: FormData,
+): Promise<void> {
+  const user = await requireUser();
+  const userTimeZone = await getUserCalendarTimeZone();
+  const id = String(formData.get("id") ?? "").trim();
+
+  if (!id) {
+    redirect(
+      buildCalendarRedirectPath(formData, { error: "missing_fields" }, userTimeZone),
+    );
+  }
+
+  try {
+    await assertTimeBlockOwned(user.id, id);
+  } catch (error) {
+    if (isScopedAccessError(error)) {
+      redirect(
+        buildCalendarRedirectPath(formData, { error: "delete_failed" }, userTimeZone),
+      );
+    }
+    throw error;
+  }
+
+  const deleted = await prisma.timeBlock.deleteMany({
+    where: { id, category: { userId: user.id } },
+  });
+
+  if (deleted.count === 0) {
+    redirect(
+      buildCalendarRedirectPath(formData, { error: "delete_failed" }, userTimeZone),
+    );
+  }
+
+  revalidateTimeBlockPaths();
+  redirect(
+    buildCalendarRedirectPath(formData, { success: "deleted" }, userTimeZone),
   );
 }
 
@@ -126,7 +231,6 @@ export async function updateTimeBlockSchedule(
     return { ok: false, error: "update_failed" };
   }
 
-  revalidatePath("/calendar");
-  revalidatePath("/time-blocks");
+  revalidateTimeBlockPaths();
   return { ok: true };
 }

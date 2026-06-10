@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarBlockCreatePanel } from "@/components/calendar-block-create-panel";
 import { CalendarBlockEditPanel } from "@/components/calendar-block-edit-panel";
+import { CalendarQuickCreateButton } from "@/components/calendar-quick-create-button";
 import type { CalendarEditBlockData } from "@/lib/calendar-edit";
 import {
   resolveCalendarPanelMode,
@@ -33,7 +34,10 @@ type FormLabels = {
   cancel: string;
   delete: string;
   confirmDelete: string;
+  confirmDeleteTitle: string;
   submitting: string;
+  completion: string;
+  minutesUnit: string;
 };
 
 type CreateFormLabels = {
@@ -77,6 +81,8 @@ type Props = {
   weekViewDragHintMessage?: string;
   continuedSegmentLabel: string;
   dragDisabledInWeekHint: string;
+  newTimeBlockLabel: string;
+  completionLabel: string;
 };
 
 function buildCalendarPath(
@@ -124,6 +130,8 @@ export function CalendarInteractiveView({
   weekViewDragHintMessage,
   continuedSegmentLabel,
   dragDisabledInWeekHint,
+  newTimeBlockLabel,
+  completionLabel,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -189,7 +197,17 @@ export function CalendarInteractiveView({
     Boolean(selectedBlockId) && !selectedBlock && notFoundMessage;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <CalendarQuickCreateButton
+          label={newTimeBlockLabel}
+          calendarDate={calendarDate}
+          userTimeZone={userTimeZone}
+          disabled={categories.length === 0}
+          onCreate={handleEmptySlotClick}
+        />
+      </div>
+
       {view === "week" && weekColumns ? (
         <CalendarWeekGrid
           locale={locale}
@@ -197,6 +215,7 @@ export function CalendarInteractiveView({
           columns={weekColumns}
           selectedBlockId={selectedBlockId}
           continuedSegmentLabel={continuedSegmentLabel}
+          completionLabel={completionLabel}
           dragDisabledHint={dragDisabledInWeekHint}
           onBlockSelect={handleBlockSelect}
           onScheduleSaveEnd={handleScheduleSaveEnd}
@@ -205,13 +224,13 @@ export function CalendarInteractiveView({
       ) : null}
 
       {view === "week" && weekViewDragHintMessage ? (
-        <p className="text-sm text-zinc-500" role="note">
+        <p className="text-sm text-muted-foreground" role="note">
           {weekViewDragHintMessage}
         </p>
       ) : null}
 
       {dragError ? (
-        <p className="text-sm text-amber-700" role="alert">
+        <p className="text-sm text-amber-700 dark:text-amber-300" role="alert">
           {dragError}
         </p>
       ) : null}
@@ -224,6 +243,7 @@ export function CalendarInteractiveView({
           selectedBlockId={selectedBlockId}
           calendarDate={calendarDate}
           continuedSegmentLabel={continuedSegmentLabel}
+          completionLabel={completionLabel}
           onBlockSelect={handleBlockSelect}
           onScheduleSaveEnd={handleScheduleSaveEnd}
           onEmptySlotClick={handleEmptySlotClick}
@@ -231,7 +251,7 @@ export function CalendarInteractiveView({
       ) : null}
 
       {emptySlotHintMessage ? (
-        <p className="text-sm text-zinc-500" role="note">
+        <p className="text-sm text-muted-foreground" role="note">
           {emptySlotHintMessage}
         </p>
       ) : null}
@@ -250,6 +270,7 @@ export function CalendarInteractiveView({
           statusOptions={statusOptions}
           efficiencyOptions={efficiencyOptions}
           userTimeZone={userTimeZone}
+          locale={locale}
           startTimeIso={startTimeIso}
           endTimeIso={endTimeIso}
           calendarDate={calendarDate}

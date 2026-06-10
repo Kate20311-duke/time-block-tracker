@@ -117,7 +117,8 @@ export type FocusSessionValidationError =
   | "invalid_category"
   | "invalid_planned_duration"
   | "invalid_range"
-  | "invalid_status";
+  | "invalid_status"
+  | "invalid_completion";
 
 export function validateFocusSessionPlannedDuration(
   plannedDurationMinutes: number,

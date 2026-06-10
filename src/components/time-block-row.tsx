@@ -7,6 +7,17 @@ import {
   TimeBlockForm,
   type TimeBlockFormLabels,
 } from "@/components/time-block-form";
+import { TimeBlockStatusBadge } from "@/components/time-blocks/time-block-status-badge";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import type { Locale } from "@/lib/i18n/types";
 
 export type TimeBlockRowData = {
   id: string;
@@ -26,11 +37,14 @@ type CategoryOption = { id: string; name: string };
 
 type Labels = TimeBlockFormLabels & {
   durationFormatted: string;
-  statusCompletionFormatted: string;
+  dateFormatted: string;
   startFormatted: string;
   endFormatted: string;
+  completion: string;
   confirmDelete: string;
+  confirmDeleteTitle: string;
   edit: string;
+  cancel: string;
   delete: string;
 };
 
@@ -40,6 +54,7 @@ type Props = {
   statusOptions: { value: string; label: string }[];
   efficiencyOptions: { value: string; label: string }[];
   userTimeZone: string;
+  locale: Locale;
   labels: Labels;
 };
 
@@ -49,87 +64,112 @@ export function TimeBlockRow({
   statusOptions,
   efficiencyOptions,
   userTimeZone,
+  locale,
   labels,
 }: Props) {
   const [editing, setEditing] = useState(false);
 
-  if (!editing) {
+  if (editing) {
     return (
-      <li className="rounded-lg border border-zinc-200 bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h3 className="text-lg font-semibold text-zinc-900">{block.title}</h3>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-zinc-600">
-              <span
-                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
-                style={{ backgroundColor: block.category.color }}
-              >
-                {block.category.name}
-              </span>
-              <span className="text-zinc-400">·</span>
-              <span>{labels.startFormatted}</span>
-              <span>→</span>
-              <span>{labels.endFormatted}</span>
-              <span className="text-zinc-400">（{labels.durationFormatted}）</span>
-            </div>
-            <p className="mt-1 text-sm text-zinc-500">
-              {labels.statusCompletionFormatted}
-            </p>
-            {block.note ? (
-              <p className="mt-1 text-sm text-zinc-600">{block.note}</p>
-            ) : null}
-            {block.reviewNote ? (
-              <p className="mt-1 text-sm text-zinc-600">
-                {block.reviewNote}
-              </p>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="rounded border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-            >
-              {labels.edit}
-            </button>
-            <DeleteConfirmButton
-              action={deleteTimeBlock}
-              id={block.id}
-              confirmMessage={labels.confirmDelete}
-              deleteLabel={labels.delete}
-            />
-          </div>
-        </div>
-      </li>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardDescription>{block.title}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TimeBlockForm
+            formId={`time-block-edit-${block.id}`}
+            action={updateTimeBlock}
+            mode="edit"
+            values={{
+              id: block.id,
+              title: block.title,
+              categoryId: block.categoryId,
+              status: block.status,
+              efficiencyLevel: block.efficiencyLevel,
+              note: block.note,
+              reviewNote: block.reviewNote,
+              startTimeIso: block.startTime.toISOString(),
+              endTimeIso: block.endTime.toISOString(),
+            }}
+            categories={categories}
+            statusOptions={statusOptions}
+            efficiencyOptions={efficiencyOptions}
+            userTimeZone={userTimeZone}
+            labels={labels}
+            gridClassName="grid gap-4 sm:grid-cols-2"
+            submitVariant="secondary"
+            onCancel={() => setEditing(false)}
+          />
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <li className="rounded-lg border border-zinc-200 bg-white p-4">
-      <TimeBlockForm
-        formId={`time-block-edit-${block.id}`}
-        action={updateTimeBlock}
-        mode="edit"
-        values={{
-          id: block.id,
-          title: block.title,
-          categoryId: block.categoryId,
-          status: block.status,
-          efficiencyLevel: block.efficiencyLevel,
-          note: block.note,
-          reviewNote: block.reviewNote,
-          startTimeIso: block.startTime.toISOString(),
-          endTimeIso: block.endTime.toISOString(),
-        }}
-        categories={categories}
-        statusOptions={statusOptions}
-        efficiencyOptions={efficiencyOptions}
-        userTimeZone={userTimeZone}
-        labels={labels}
-        gridClassName="grid gap-3 sm:grid-cols-2"
-        submitVariant="secondary"
-        onCancel={() => setEditing(false)}
-      />
-    </li>
+    <Card>
+      <CardContent className="pt-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className="h-10 w-1 shrink-0 rounded-full"
+                style={{ backgroundColor: block.category.color }}
+                aria-hidden
+              />
+              <span className="font-medium">{block.title}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5 pl-3">
+              <Badge variant="outline">{block.category.name}</Badge>
+              <TimeBlockStatusBadge
+                status={block.status}
+                completionLevel={block.completionLevel}
+                locale={locale}
+                completionLabel={labels.completion}
+              />
+              <Badge variant="outline" className="tabular-nums">
+                {labels.durationFormatted}
+              </Badge>
+            </div>
+            <p className="pl-3 text-sm text-muted-foreground">
+              {labels.dateFormatted}
+            </p>
+            <p className="pl-3 text-sm text-muted-foreground">
+              {labels.startFormatted} – {labels.endFormatted}
+            </p>
+            {block.note ? (
+              <p className="pl-3 text-sm text-muted-foreground whitespace-pre-wrap">
+                {block.note}
+              </p>
+            ) : null}
+            {block.reviewNote ? (
+              <>
+                <Separator className="ml-3" />
+                <p className="pl-3 text-sm text-muted-foreground whitespace-pre-wrap">
+                  {block.reviewNote}
+                </p>
+              </>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setEditing(true)}
+            >
+              {labels.edit}
+            </Button>
+            <DeleteConfirmButton
+              action={deleteTimeBlock}
+              id={block.id}
+              confirmMessage={labels.confirmDelete}
+              confirmTitle={labels.confirmDeleteTitle}
+              cancelLabel={labels.cancel}
+              deleteLabel={labels.delete}
+            />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

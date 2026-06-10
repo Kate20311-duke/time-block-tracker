@@ -15,6 +15,7 @@ export type TimeBlockEfficiencyLevel =
 export const FOCUS_SESSION_STATUSES = [
   "planned",
   "running",
+  "paused",
   "completed",
   "abandoned",
   "converted",

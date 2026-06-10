@@ -160,3 +160,16 @@ export async function runningFocusSessionForUser(
   });
   return sessions[0] ?? null;
 }
+
+/** Running or paused stopwatch/pomodoro session — at most one per user. */
+export async function activeFocusSessionForUser(
+  userId: string,
+  options?: Omit<FocusSessionFindManyArgs, "where" | "take">,
+): Promise<FocusSession | null> {
+  const sessions = await focusSessionsForUser(userId, {
+    ...options,
+    where: { status: { in: ["running", "paused"] } },
+    take: 1,
+  });
+  return sessions[0] ?? null;
+}

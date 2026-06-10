@@ -2,8 +2,9 @@ import type { Dictionary } from "./types";
 
 export const en: Dictionary = {
   app: {
-    brand: "Time Block Calendar",
+    brand: "TimeBlock",
     metaDescription: "Personal time-block calendar and time tracking",
+    tagline: "Time management workspace",
   },
   lang: {
     switcherAria: "Select language",
@@ -17,10 +18,13 @@ export const en: Dictionary = {
     cancel: "Cancel",
     delete: "Delete",
     submitting: "Saving…",
+    confirmDeleteTitle: "Confirm deletion",
+    errorTitle: "Something went wrong",
   },
   nav: {
     aria: "Main navigation",
     home: "Home",
+    overview: "Overview",
     categories: "Categories",
     timeBlocks: "Time Blocks",
     calendar: "Calendar",
@@ -30,6 +34,15 @@ export const en: Dictionary = {
     signIn: "Sign in",
     signOut: "Sign out",
   },
+  shell: {
+    navGroup: "Navigation",
+    searchPlaceholder: "Search time blocks…",
+    newTimeBlock: "New time block",
+    anonymousUser: "User",
+    userAvatarAlt: "User avatar",
+    activeTimerIndicator: "Active focus timer",
+    activeTimerPaused: "Paused",
+  },
   auth: {
     loginTitle: "Sign in",
     loginSubtitle: "Sign in with GitHub to manage your time blocks.",
@@ -37,6 +50,61 @@ export const en: Dictionary = {
     setupHint:
       "Set AUTH_SECRET, AUTH_GITHUB_ID, and AUTH_GITHUB_SECRET in .env, then restart the dev server. GitHub OAuth callback URL: http://localhost:3000/api/auth/callback/github",
     backHome: "Back to home",
+  },
+  landing: {
+    heroTitle: "Plan your day in time blocks",
+    heroSubtitle:
+      "A personal time-block calendar: categorize work, track with stopwatch or Pomodoro, and review your week.",
+    highlights: [
+      "Time-block calendar with day and week views",
+      "Categories for learning, work, rest, and more",
+      "Stopwatch and Pomodoro focus sessions",
+      "Daily and weekly stats on Dashboard and Review",
+    ],
+    ctaSignIn: "Sign in with GitHub",
+    ctaGetStarted: "Get started",
+    localDemoHint:
+      "The live demo requires GitHub sign-in. For a filled local preview, run pnpm db:seed:demo after your first login — see README § Demo seed (local only).",
+    featuresTitle: "What you can do",
+    features: {
+      plan: {
+        title: "Plan with time blocks",
+        description:
+          "Schedule blocks on the calendar, drag to adjust, and see your day at a glance.",
+      },
+      category: {
+        title: "Track by category",
+        description:
+          "Group records by category with colors — learning, work, rest, exercise, and more.",
+      },
+      stopwatch: {
+        title: "Start a stopwatch",
+        description:
+          "Count up from zero, pause when needed, and save as a time block when you finish.",
+      },
+      review: {
+        title: "Review your week",
+        description:
+          "Dashboard and Review pages show recorded time, completion status, and category breakdown.",
+      },
+    },
+    footerCtaTitle: "Ready to track your time?",
+    footerCtaDescription:
+      "Sign in with GitHub to create your own categories and time blocks. Your data stays in your account.",
+  },
+  onboarding: {
+    title: "Getting started",
+    description: "Complete these steps to get the most out of TimeBlock.",
+    stepLabel: "Step {n}:",
+    step1Title: "Create a category",
+    step1Description: "Categories color your calendar and organize stopwatch sessions.",
+    step1Action: "Go to categories",
+    step2Title: "Add a time block or start stopwatch",
+    step2Description: "Create a block on the calendar or start timing on the Focus page.",
+    step2Action: "Open calendar",
+    step3Title: "Check Dashboard and Review",
+    step3Description: "See totals, charts, and weekly breakdown once you have records.",
+    step3Action: "Open review",
   },
   home: {
     title: "Time Block Calendar",
@@ -70,6 +138,13 @@ export const en: Dictionary = {
   },
   focus: {
     title: "Focus mode",
+    pageTitle: "Focus / instant tracking",
+    pageDescription:
+      "Use the stopwatch to record what you are doing now—it saves as a time block when you finish. Or use Pomodoro for countdown focus.",
+    tabStopwatch: "Stopwatch",
+    tabPomodoro: "Pomodoro",
+    runningBannerStopwatch: "Stopwatch in progress",
+    runningBannerPomodoro: "Pomodoro in progress",
     subtitle: "Stopwatch (count up) or Pomodoro countdown to track focus time",
     setupTitle: "Session setup",
     pomodoroTitle: "Pomodoro (countdown)",
@@ -110,6 +185,19 @@ export const en: Dictionary = {
     stopwatchStart: "Start timer",
     stopwatchEndAndSave: "End and save as time block",
     stopwatchCancel: "Cancel timer",
+    stopwatchPause: "Pause",
+    stopwatchResume: "Resume",
+    stopwatchPaused: "Timer paused",
+    stopwatchResumed: "Timer resumed",
+    stopwatchPausedLabel: "Stopwatch paused",
+    stopwatchCompleteDialogTitle: "Save as time block",
+    stopwatchCompleteDialogDescription:
+      "Review the title, note, status, and completion before saving.",
+    instantRecordTitle: "Instant record",
+    confirmCancelStopwatch:
+      "Cancel the running stopwatch? This session will not be saved as a time block.",
+    confirmAbandonFocus: "Abandon this focus session?",
+    confirmAbandonRunningHistory: "End this running session?",
     stopwatchStartedAt: "Started at",
     stopwatchUntitled: "(No title)",
     stopwatchTitlePlaceholder: "e.g. Writing, reading",
@@ -145,6 +233,7 @@ export const en: Dictionary = {
     sessionStatus: {
       planned: "Planned",
       running: "Running",
+      paused: "Paused",
       completed: "Completed",
       abandoned: "Abandoned",
       converted: "Converted",
@@ -162,12 +251,15 @@ export const en: Dictionary = {
       alreadyConverted: "This session was already converted.",
       sessionAlreadyRunning:
         "A focus session is already running. Finish the current session first.",
+      invalidCompletion: "Completion must be between 0 and 100",
       generic: "Something went wrong. Please try again.",
     },
   },
   calendar: {
     title: "Calendar",
+    pageDescription: "View and schedule time blocks by day or week. Drag or click empty slots to create.",
     subtitle: "View your time blocks by day or week",
+    newTimeBlock: "New time block",
     viewSwitcherAria: "View switcher",
     weekView: "Week",
     dayView: "Day",
@@ -180,6 +272,7 @@ export const en: Dictionary = {
     today: "Today",
     empty: "No time blocks on this day",
     emptyWeek: "No time blocks this week",
+    emptyHint: "Click an empty slot or use “New time block” to create a record.",
     editHintPrefix:
       "Click empty space on the calendar to create a block; click an existing block to edit. You can also manage blocks on",
     editHintLink: "Time Blocks",
@@ -208,7 +301,9 @@ export const en: Dictionary = {
     },
   },
   categories: {
-    title: "Category Management",
+    title: "Categories",
+    pageDescription:
+      "Group time blocks, stopwatch sessions, and review stats.",
     subtitle: "Manage category name, color, and optional description",
     newCategory: "New Category",
     allCategories: "All Categories",
@@ -216,7 +311,9 @@ export const en: Dictionary = {
     color: "Category Color",
     description: "Category Description",
     descriptionOptional: "Category Description (optional)",
-    empty: "No categories yet. Please create a category first",
+    empty: "No categories yet",
+    emptyHint:
+      "Create your first category to use it on the calendar, stopwatch, and time block list.",
     namePlaceholder: "e.g. Work",
     descriptionPlaceholder: "e.g. Focus and meetings on weekdays",
     timeBlockCount: "{count} time blocks",
@@ -253,6 +350,7 @@ export const en: Dictionary = {
   },
   timeBlocks: {
     title: "Time Blocks",
+    pageDescription: "View and manually manage your records.",
     subtitle: "Create, edit, and delete time blocks (list view, no calendar yet)",
     newTimeBlock: "New Time Block",
     allTimeBlocks: "All Time Blocks",
@@ -272,6 +370,10 @@ export const en: Dictionary = {
     reviewNoteOptional: "Review note (optional)",
     duration: "Duration",
     empty: "No time blocks yet",
+    emptyHint:
+      "Create blocks on the calendar, or start a stopwatch on Focus to write one automatically.",
+    goToCalendar: "Go to calendar",
+    goToFocusStopwatch: "Start stopwatch",
     cannotEditNoCategories:
       "Cannot edit: please create at least one category first",
     needCategoryPrefix: "Please create at least one category on the",
@@ -347,8 +449,46 @@ export const en: Dictionary = {
     focusSessionCount: "{count} sessions",
     focusConvertedInCategory: "{count} converted to time blocks",
     focusNoData: "No focus sessions this week yet.",
+    activeTimer: "Timing in progress",
+    activeTimerEmpty: "No active focus or stopwatch session",
+    activeTimerStartedAt: "Started at {time}",
+    goToFocus: "Go to focus",
+    manageOnFocusPage: "Manage on focus page",
+    activeTimerPaused: "Paused",
+    quickStart: "Quick start",
+    quickStartHint: "Select a category to start timing",
+    customTimer: "Custom timer",
+    quickStartActiveSession:
+      "A focus or stopwatch session is already active. Go to Focus to pause, resume, or finish it.",
+    recentBlocks: "Recent time blocks",
+    recentBlocksHint: "Latest recorded and scheduled blocks",
+    recentEmptyHint:
+      "No recent blocks yet. Create one on the calendar or start a stopwatch on Focus.",
+    goToCalendar: "Go to calendar",
+    goToFocusStopwatch: "Start stopwatch",
+    focusSessionsStat: "Focus sessions",
+    completedBlocksStat: "Completed blocks",
+    categoryDistribution: "Category distribution",
+    categoryShareHint: "Share of this week's time",
+    weeklyDistribution: "Weekly time distribution",
+    weeklyDistributionHint: "Total recorded hours per day",
+    completionRateLabel: "Completion rate",
   },
   review: {
+    pageTitle: "Review",
+    pageDescription: "Review daily or weekly time blocks and completion.",
+    tabDay: "Daily review",
+    tabWeek: "Weekly review",
+    scopeNote:
+      "This page counts TimeBlocks only, not Focus sessions. Focus converted to time blocks is included here—do not add Focus page totals directly.",
+    emptyDayHint: "No records this day. Open the calendar or start a stopwatch session.",
+    emptyWeekHint: "No records this week. Open the calendar or start a stopwatch session.",
+    completedBlocksCount: "Completed blocks",
+    blockCount: "{count} blocks",
+    categoryShareHint: "Share of time by category",
+    weeklyTotalBadge: "{duration} this week",
+    goToCalendar: "Open calendar",
+    goToFocusStopwatch: "Start stopwatch",
     dayTitle: "Daily Review",
     daySubtitle: "Review one day of time blocks and completion",
     weekTitle: "Weekly Review",

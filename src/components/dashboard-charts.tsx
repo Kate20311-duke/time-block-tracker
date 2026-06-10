@@ -5,20 +5,24 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 
-export type CategoryPieDatum = {
-  name: string;
-  minutes: number;
-  color: string;
-};
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import { Progress } from "@/components/ui/progress";
 
 export type DailyBarDatum = {
   dayLabel: string;
@@ -31,105 +35,163 @@ export type StatusBarDatum = {
   color: string;
 };
 
+type CategoryProgressRow = {
+  name: string;
+  color: string;
+  totalMinutes: number;
+  percent: number;
+};
+
+const hoursChartConfig = {
+  hours: {
+    label: "Hours",
+    color: "var(--chart-1)",
+  },
+} satisfies ChartConfig;
+
 export function DashboardCharts(props: {
-  categoryPie: CategoryPieDatum[];
   dailyBars: DailyBarDatum[];
   statusBars: StatusBarDatum[];
   emptyLabel: string;
   categoryTitle: string;
+  categoryDescription: string;
   dailyTitle: string;
+  dailyDescription: string;
   statusTitle: string;
+  categoryRows: CategoryProgressRow[];
+  weekTotalMinutes: number;
 }) {
-  const { categoryPie, dailyBars, statusBars } = props;
-
-  const hasCategory = categoryPie.some((d) => d.minutes > 0);
+  const { dailyBars, statusBars, categoryRows } = props;
+  const hasCategory = categoryRows.some((row) => row.totalMinutes > 0);
   const hasDaily = dailyBars.some((d) => d.hours > 0);
   const hasStatus = statusBars.some((d) => d.count > 0);
+  const totalCategoryMinutes = categoryRows.reduce(
+    (sum, row) => sum + row.totalMinutes,
+    0,
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 lg:grid-cols-3">
-        <section className="rounded-lg border border-zinc-200 bg-white p-5 lg:col-span-1">
-          <h3 className="text-sm font-semibold text-zinc-900">
-            {props.categoryTitle}
-          </h3>
-          <div className="mt-3 h-64">
-            {hasCategory ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={categoryPie}
-                    dataKey="minutes"
-                    nameKey="name"
-                    innerRadius="55%"
-                    outerRadius="85%"
-                    paddingAngle={2}
-                  >
-                    {categoryPie.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value) => [`${value} min`, ""]}
-                    contentStyle={{ fontSize: 12 }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-sm text-zinc-500">{props.emptyLabel}</p>
-            )}
-          </div>
-        </section>
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <CardTitle>{props.dailyTitle}</CardTitle>
+          <CardDescription>{props.dailyDescription}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {hasDaily ? (
+            <ChartContainer config={hoursChartConfig} className="h-64 w-full">
+              <BarChart accessibilityLayer data={dailyBars}>
+                <CartesianGrid vertical={false} />
+                <XAxis
+                  dataKey="dayLabel"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  width={28}
+                />
+                <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                <Bar
+                  dataKey="hours"
+                  fill="var(--color-hours)"
+                  radius={[6, 6, 0, 0]}
+                />
+              </BarChart>
+            </ChartContainer>
+          ) : (
+            <p className="text-sm text-muted-foreground">{props.emptyLabel}</p>
+          )}
+        </CardContent>
+      </Card>
 
-        <section className="rounded-lg border border-zinc-200 bg-white p-5 lg:col-span-2">
-          <h3 className="text-sm font-semibold text-zinc-900">
-            {props.dailyTitle}
-          </h3>
-          <div className="mt-3 h-64">
-            {hasDaily ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dailyBars} margin={{ left: 8, right: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="dayLabel" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip
-                    formatter={(value) => [`${value} h`, ""]}
-                    contentStyle={{ fontSize: 12 }}
+      <Card>
+        <CardHeader>
+          <CardTitle>{props.categoryTitle}</CardTitle>
+          <CardDescription>{props.categoryDescription}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {hasCategory ? (
+            <>
+              <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
+                {categoryRows.map((row) => (
+                  <div
+                    key={row.name}
+                    style={{
+                      width: `${totalCategoryMinutes > 0 ? (row.totalMinutes / totalCategoryMinutes) * 100 : 0}%`,
+                      backgroundColor: row.color,
+                    }}
+                    title={`${row.name} ${row.percent}%`}
                   />
-                  <Bar dataKey="hours" fill="#3b82f6" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-sm text-zinc-500">{props.emptyLabel}</p>
-            )}
-          </div>
-        </section>
-      </div>
+                ))}
+              </div>
+              {categoryRows.map((row) => (
+                <div key={row.name} className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="size-2.5 rounded-full"
+                        style={{ backgroundColor: row.color }}
+                      />
+                      <span className="font-medium">{row.name}</span>
+                    </div>
+                    <span className="text-muted-foreground tabular-nums">
+                      {row.percent}%
+                    </span>
+                  </div>
+                  <Progress value={row.percent} />
+                </div>
+              ))}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">{props.emptyLabel}</p>
+          )}
+        </CardContent>
+      </Card>
 
-      <section className="rounded-lg border border-zinc-200 bg-white p-5">
-        <h3 className="text-sm font-semibold text-zinc-900">{props.statusTitle}</h3>
-        <div className="mt-3 h-56">
+      <Card className="lg:col-span-3">
+        <CardHeader>
+          <CardTitle>{props.statusTitle}</CardTitle>
+        </CardHeader>
+        <CardContent>
           {hasStatus ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={statusBars} margin={{ left: 8, right: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="statusLabel" tick={{ fontSize: 12 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                <Tooltip contentStyle={{ fontSize: 12 }} />
+            <ChartContainer
+              config={{
+                count: { label: "Count", color: "var(--chart-1)" },
+              }}
+              className="h-56 w-full"
+            >
+              <BarChart accessibilityLayer data={statusBars}>
+                <CartesianGrid vertical={false} />
+                <XAxis
+                  dataKey="statusLabel"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  width={28}
+                />
+                <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
                 <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                  {statusBars.map((s) => (
-                    <Cell key={s.statusLabel} fill={s.color} />
+                  {statusBars.map((entry) => (
+                    <Cell key={entry.statusLabel} fill={entry.color} />
                   ))}
                 </Bar>
               </BarChart>
-            </ResponsiveContainer>
+            </ChartContainer>
           ) : (
-            <p className="text-sm text-zinc-500">{props.emptyLabel}</p>
+            <p className="text-sm text-muted-foreground">{props.emptyLabel}</p>
           )}
-        </div>
-      </section>
+        </CardContent>
+      </Card>
     </div>
   );
 }
-

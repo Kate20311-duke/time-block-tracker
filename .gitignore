@@ -46,3 +46,7 @@ next-env.d.ts
 
 # prisma generated client
 /src/generated
+
+# Local v0 reference mockups (not part of the app)
+reference/v0/
+reference/.TheUnarchiverTemp0/

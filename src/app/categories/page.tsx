@@ -1,5 +1,8 @@
 import { CategoryRow } from "@/components/category-row";
-import { SubmitButton } from "@/components/submit-button";
+import { CategoryEmptyState } from "@/components/categories/category-empty-state";
+import { CategoryFormCard } from "@/components/categories/category-form-card";
+import { CategoryPageHeader } from "@/components/categories/category-page-header";
+import { PageFeedback } from "@/components/page-feedback";
 import { createCategory } from "@/lib/actions/categories";
 import { formatMessage, getDictionary } from "@/lib/i18n";
 import { categoriesForUser } from "@/lib/db/scoped";
@@ -76,79 +79,46 @@ export default async function CategoriesPage({
   const createFormKey = success === "created" ? "created" : "default";
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">{t.categories.title}</h1>
-        <p className="mt-1 text-sm text-zinc-600">{t.categories.subtitle}</p>
-      </div>
+    <div className="space-y-6">
+      <CategoryPageHeader
+        labels={{
+          title: t.categories.title,
+          pageDescription: t.categories.pageDescription,
+        }}
+      />
 
-      {successMessage ? (
-        <div
-          role="status"
-          className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900"
-        >
-          {successMessage}
-        </div>
-      ) : null}
+      <PageFeedback
+        successMessage={successMessage}
+        errorMessage={errorMessage}
+        errorTitle={t.common.errorTitle}
+      />
 
-      {errorMessage ? (
-        <div
-          role="alert"
-          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-        >
-          {errorMessage}
-        </div>
-      ) : null}
+      <CategoryFormCard
+        formKey={createFormKey}
+        action={createCategory}
+        labels={{
+          newCategory: t.categories.newCategory,
+          name: t.categories.name,
+          namePlaceholder: t.categories.namePlaceholder,
+          color: t.categories.color,
+          descriptionOptional: t.categories.descriptionOptional,
+          descriptionPlaceholder: t.categories.descriptionPlaceholder,
+          create: t.common.create,
+          submitting: t.common.submitting,
+        }}
+      />
 
-      <section className="rounded-lg border border-zinc-200 bg-white p-6">
-        <h2 className="mb-4 text-lg font-semibold">{t.categories.newCategory}</h2>
-        <form
-          key={createFormKey}
-          action={createCategory}
-          className="grid gap-4 sm:grid-cols-2"
-        >
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">{t.categories.name}</span>
-            <input
-              name="name"
-              required
-              className="rounded border border-zinc-300 px-3 py-2"
-              placeholder={t.categories.namePlaceholder}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">{t.categories.color}</span>
-            <input
-              name="color"
-              type="color"
-              defaultValue="#3b82f6"
-              className="h-10 w-14 cursor-pointer rounded border border-zinc-300"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-            <span className="font-medium">{t.categories.descriptionOptional}</span>
-            <textarea
-              name="description"
-              rows={2}
-              className="rounded border border-zinc-300 px-3 py-2"
-              placeholder={t.categories.descriptionPlaceholder}
-            />
-          </label>
-          <div className="sm:col-span-2">
-            <SubmitButton
-              label={t.common.create}
-              pendingLabel={t.common.submitting}
-            />
-          </div>
-        </form>
-      </section>
-
-      <section>
-        <h2 className="mb-4 text-lg font-semibold">{t.categories.allCategories}</h2>
+      <section className="space-y-4">
+        <h2 className="text-base font-semibold">{t.categories.allCategories}</h2>
         {categories.length === 0 ? (
-          <p className="text-sm text-zinc-500">{t.categories.empty}</p>
+          <CategoryEmptyState
+            labels={{
+              empty: t.categories.empty,
+              emptyHint: t.categories.emptyHint,
+            }}
+          />
         ) : (
-          <ul className="space-y-4">
+          <div className="space-y-3">
             {categories.map((category) => {
               const timeBlockCount = category._count.timeBlocks;
               const focusSessionCount = category._count.focusSessions;
@@ -206,6 +176,7 @@ export default async function CategoriesPage({
                     confirmDelete: formatMessage(t.categories.confirmDelete, {
                       name: category.name,
                     }),
+                    confirmDeleteTitle: t.common.confirmDeleteTitle,
                     edit: t.common.edit,
                     save: t.common.save,
                     cancel: t.common.cancel,
@@ -215,7 +186,7 @@ export default async function CategoriesPage({
                 />
               );
             })}
-          </ul>
+          </div>
         )}
       </section>
     </div>

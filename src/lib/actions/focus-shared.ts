@@ -2,9 +2,17 @@ import {
   STOPWATCH_PLANNED_DURATION_PLACEHOLDER_MINUTES,
   type FocusSessionMode,
 } from "@/lib/constants";
+import {
+  activeDurationMinutesFromSession,
+  computeStopwatchTimeBlockEndTime,
+  finalizePausedTotalSeconds,
+  type FocusSessionPauseFields,
+} from "@/lib/focus-session-elapsed";
 import { durationMinutes } from "@/lib/time";
 import {
+  completionLevelFromStatus,
   isValidFocusSessionStatus,
+  isValidTimeBlockStatus,
   validateFocusSessionCreate,
   validateFocusSessionTimeRange,
   type FocusSessionValidationError,
@@ -143,12 +151,84 @@ export function buildFocusSessionEndUpdate(
   };
 }
 
+/** Abandon/cancel stopwatch using active duration (excludes pauses). */
+export function buildStopwatchAbandonUpdate(
+  session: FocusSessionPauseFields,
+  wallClockEndTime: Date,
+):
+  | {
+      endTime: Date;
+      actualDurationMinutes: number;
+      pausedAt: null;
+      pausedTotalSeconds: number;
+    }
+  | FocusSessionValidationError {
+  const finalizedPausedTotal = finalizePausedTotalSeconds(session, wallClockEndTime);
+  const sessionForDuration: FocusSessionPauseFields = {
+    startTime: session.startTime,
+    status: "running",
+    pausedAt: null,
+    pausedTotalSeconds: finalizedPausedTotal,
+  };
+  const timeBlockEndTime = computeStopwatchTimeBlockEndTime(
+    sessionForDuration,
+    wallClockEndTime,
+  );
+  const rangeError = validateFocusSessionTimeRange(
+    session.startTime,
+    timeBlockEndTime,
+  );
+  if (rangeError) {
+    return rangeError;
+  }
+  return {
+    endTime: wallClockEndTime,
+    actualDurationMinutes: activeDurationMinutesFromSession(
+      sessionForDuration,
+      wallClockEndTime,
+    ),
+    pausedAt: null,
+    pausedTotalSeconds: finalizedPausedTotal,
+  };
+}
+
+export function computeResumeStopwatchUpdate(
+  session: FocusSessionPauseFields,
+  now: Date,
+): {
+  status: "running";
+  pausedAt: null;
+  pausedTotalSeconds: number;
+} {
+  const pausedAtMs = session.pausedAt?.getTime() ?? now.getTime();
+  const segmentSeconds = Math.max(
+    0,
+    Math.floor((now.getTime() - pausedAtMs) / 1000),
+  );
+  return {
+    status: "running",
+    pausedAt: null,
+    pausedTotalSeconds: Math.max(0, session.pausedTotalSeconds) + segmentSeconds,
+  };
+}
+
+/** Client and server guard before starting a new stopwatch. */
+export function rejectStopwatchStartWhenActive(
+  hasActiveSession: boolean,
+): "session_already_running" | null {
+  return hasActiveSession ? "session_already_running" : null;
+}
+
 export function canCompleteFocusSession(status: string): boolean {
   return status === "planned" || status === "running";
 }
 
 export function canAbandonFocusSession(status: string): boolean {
-  return status === "planned" || status === "running";
+  return status === "planned" || status === "running" || status === "paused";
+}
+
+export function canCompleteStopwatch(status: string): boolean {
+  return status === "running" || status === "paused";
 }
 
 export function canConvertFocusSession(session: {
@@ -165,16 +245,55 @@ export function canConvertFocusSession(session: {
 
 export const DEFAULT_FOCUS_TIME_BLOCK_TITLE = "Focus Session";
 
-export function defaultTimeBlockTitleFromFocus(
-  session: {
-    title: string | null;
-    plannedDurationMinutes: number;
-  },
-  fallbackTitle: string = DEFAULT_FOCUS_TIME_BLOCK_TITLE,
+export type StopwatchCompleteInput = {
+  title: string;
+  note: string | null;
+  status: string;
+  completionLevel: number;
+};
+
+export function parseStopwatchCompleteInput(input: {
+  title?: string | null;
+  note?: string | null;
+  status?: string | null;
+  completionLevel?: number | null;
+  defaultTitle: string;
+  defaultNote?: string | null;
+}): { fields: StopwatchCompleteInput; error: FocusSessionValidationError | null } {
+  const title = String(input.title ?? input.defaultTitle ?? "").trim() || input.defaultTitle;
+  const note = parseOptionalText(input.note ?? input.defaultNote);
+  const status = String(input.status ?? "completed").trim() || "completed";
+
+  if (!isValidTimeBlockStatus(status)) {
+    return { fields: { title, note, status, completionLevel: 0 }, error: "invalid_status" };
+  }
+
+  let completionLevel =
+    input.completionLevel === null || input.completionLevel === undefined
+      ? completionLevelFromStatus(status)
+      : Number(input.completionLevel);
+
+  if (Number.isNaN(completionLevel) || completionLevel < 0 || completionLevel > 100) {
+    return { fields: { title, note, status, completionLevel: 0 }, error: "invalid_completion" };
+  }
+
+  completionLevel = Math.round(completionLevel);
+
+  return { fields: { title, note, status, completionLevel }, error: null };
+}
+
+export function defaultStopwatchTitle(
+  session: { title: string | null },
+  categoryName: string,
+  fallbackTitle: string,
 ): string {
   const trimmed = session.title?.trim();
   if (trimmed) {
     return trimmed;
+  }
+  const categoryTrimmed = categoryName.trim();
+  if (categoryTrimmed) {
+    return categoryTrimmed;
   }
   return fallbackTitle;
 }
@@ -230,7 +349,7 @@ export type StopwatchCompleteTransactionClient = FocusConvertTransactionClient &
       where: {
         id: string;
         convertedToTimeBlock: boolean;
-        status: string;
+        status: { in: string[] };
         mode: string;
         category: { userId: string };
       };
@@ -239,6 +358,8 @@ export type StopwatchCompleteTransactionClient = FocusConvertTransactionClient &
         convertedToTimeBlock: boolean;
         endTime: Date;
         actualDurationMinutes: number;
+        pausedAt?: null;
+        pausedTotalSeconds?: number;
         timeBlockId?: string;
       };
     }): Promise<{ count: number }>;
@@ -302,42 +423,62 @@ export async function convertFocusSessionInTransaction(
 }
 
 /**
- * End a running stopwatch and create its TimeBlock in one transaction.
- * Claim runs before create to prevent duplicate blocks on double-submit.
+ * End a running/paused stopwatch and create its TimeBlock in one transaction.
+ * TimeBlock.endTime = startTime + active duration (excludes pauses).
+ * FocusSession.endTime = wall-clock completion time.
  */
 export async function completeStopwatchInTransaction(
-  session: {
+  session: FocusSessionPauseFields & {
     id: string;
-    title: string | null;
     note: string | null;
     categoryId: string;
-    startTime: Date;
   },
-  title: string,
-  endTime: Date,
+  completeInput: StopwatchCompleteInput,
+  wallClockEndTime: Date,
   userId: string,
   tx: StopwatchCompleteTransactionClient,
 ): Promise<{ timeBlockId: string; actualDurationMinutes: number }> {
-  const rangeError = validateFocusSessionTimeRange(session.startTime, endTime);
+  const finalizedPausedTotal = finalizePausedTotalSeconds(session, wallClockEndTime);
+  const sessionForDuration: FocusSessionPauseFields = {
+    startTime: session.startTime,
+    status: "running",
+    pausedAt: null,
+    pausedTotalSeconds: finalizedPausedTotal,
+  };
+
+  const timeBlockEndTime = computeStopwatchTimeBlockEndTime(
+    sessionForDuration,
+    wallClockEndTime,
+  );
+
+  const rangeError = validateFocusSessionTimeRange(
+    session.startTime,
+    timeBlockEndTime,
+  );
   if (rangeError) {
     throw new FocusConvertTransactionError("invalid_state");
   }
 
-  const actualDurationMinutes = durationMinutes(session.startTime, endTime);
+  const actualDurationMinutes = activeDurationMinutesFromSession(
+    sessionForDuration,
+    wallClockEndTime,
+  );
 
   const claimed = await tx.focusSession.updateMany({
     where: {
       id: session.id,
       convertedToTimeBlock: false,
-      status: "running",
+      status: { in: ["running", "paused"] },
       mode: "stopwatch",
       category: { userId },
     },
     data: {
       status: "completed",
       convertedToTimeBlock: true,
-      endTime,
+      endTime: wallClockEndTime,
       actualDurationMinutes,
+      pausedAt: null,
+      pausedTotalSeconds: finalizedPausedTotal,
     },
   });
 
@@ -347,13 +488,13 @@ export async function completeStopwatchInTransaction(
 
   const block = await tx.timeBlock.create({
     data: {
-      title,
-      note: session.note,
+      title: completeInput.title,
+      note: completeInput.note,
       categoryId: session.categoryId,
       startTime: session.startTime,
-      endTime,
-      status: "completed",
-      completionLevel: 100,
+      endTime: timeBlockEndTime,
+      status: completeInput.status,
+      completionLevel: completeInput.completionLevel,
       source: "stopwatch",
     },
   });
@@ -364,4 +505,18 @@ export async function completeStopwatchInTransaction(
   });
 
   return { timeBlockId: block.id, actualDurationMinutes };
+}
+
+export function defaultTimeBlockTitleFromFocus(
+  session: {
+    title: string | null;
+    plannedDurationMinutes: number;
+  },
+  fallbackTitle: string = DEFAULT_FOCUS_TIME_BLOCK_TITLE,
+): string {
+  const trimmed = session.title?.trim();
+  if (trimmed) {
+    return trimmed;
+  }
+  return fallbackTitle;
 }

@@ -1,9 +1,10 @@
-import { FocusHistory, type FocusHistoryItem } from "@/components/focus-history";
-import { FocusTimer } from "@/components/focus-timer";
-import {
-  StopwatchTimer,
-  type RunningStopwatchSession,
-} from "@/components/stopwatch-timer";
+import { Suspense } from "react";
+
+import { PageLoading } from "@/components/page-loading";
+import { FocusPageView } from "@/components/focus/focus-page-view";
+import type { FocusHistoryItem } from "@/components/focus-history";
+import type { OrphanRunningPomodoro } from "@/components/focus-timer";
+import type { RunningStopwatchSession } from "@/components/stopwatch-timer";
 import { getDictionary } from "@/lib/i18n";
 import { categoriesForUser, focusSessionsForUser } from "@/lib/db/scoped";
 import { getLocale } from "@/lib/i18n/server";
@@ -18,7 +19,7 @@ export default async function FocusPage() {
   const t = getDictionary(locale);
   const user = await requireUser();
 
-  const [categories, recentSessions, runningSessions] = await Promise.all([
+  const [categories, recentSessions, activeSessions] = await Promise.all([
     categoriesForUser(user.id, {
       orderBy: { name: "asc" },
       select: { id: true, name: true, color: true },
@@ -29,41 +30,45 @@ export default async function FocusPage() {
       take: RECENT_FOCUS_SESSION_LIMIT,
     }),
     focusSessionsForUser(user.id, {
-      where: { status: "running" },
+      where: { status: { in: ["running", "paused"] } },
       include: { category: true },
       orderBy: { startTime: "desc" },
       take: 1,
     }),
   ]);
 
-  const runningSession = runningSessions[0] ?? null;
+  const activeSession = activeSessions[0] ?? null;
 
   const runningStopwatch: RunningStopwatchSession | null =
-    runningSession?.mode === "stopwatch" && runningSession.status === "running"
+    activeSession?.mode === "stopwatch" &&
+    (activeSession.status === "running" || activeSession.status === "paused")
       ? {
-          id: runningSession.id,
-          title: runningSession.title,
-          note: runningSession.note,
-          startTime: runningSession.startTime.toISOString(),
+          id: activeSession.id,
+          title: activeSession.title,
+          note: activeSession.note,
+          status: activeSession.status as "running" | "paused",
+          startTime: activeSession.startTime.toISOString(),
+          pausedAt: activeSession.pausedAt?.toISOString() ?? null,
+          pausedTotalSeconds: activeSession.pausedTotalSeconds,
           category: {
-            id: runningSession.category.id,
-            name: runningSession.category.name,
-            color: runningSession.category.color,
+            id: activeSession.category.id,
+            name: activeSession.category.name,
+            color: activeSession.category.color,
           },
         }
       : null;
 
   const anotherSessionRunning =
-    runningSession !== null &&
-    (runningSession.mode !== "stopwatch" || runningStopwatch === null);
+    activeSession !== null && runningStopwatch === null;
 
-  const orphanRunningPomodoro =
-    runningSession?.mode === "pomodoro" && runningSession.status === "running"
+  const orphanRunningPomodoro: OrphanRunningPomodoro | null =
+    activeSession?.mode === "pomodoro" && activeSession.status === "running"
       ? {
-          id: runningSession.id,
-          title: runningSession.title,
-          categoryName: runningSession.category.name,
-          plannedDurationMinutes: runningSession.plannedDurationMinutes,
+          id: activeSession.id,
+          title: activeSession.title,
+          categoryName: activeSession.category.name,
+          categoryColor: activeSession.category.color,
+          plannedDurationMinutes: activeSession.plannedDurationMinutes,
         }
       : null;
 
@@ -85,32 +90,23 @@ export default async function FocusPage() {
   }));
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">{t.focus.title}</h1>
-        <p className="mt-1 text-sm text-zinc-600">{t.focus.subtitle}</p>
-      </div>
-
-      <StopwatchTimer
+    <Suspense fallback={<PageLoading variant="focus" />}>
+      <FocusPageView
         categories={categories}
         labels={t.focus}
         locale={locale}
-        initialRunningSession={runningStopwatch}
+        statusLabels={t.status}
+        timeBlockLabels={{
+          status: t.timeBlocks.status,
+          completionRange: t.timeBlocks.completionRange,
+        }}
+        runningStopwatch={runningStopwatch}
         anotherSessionRunning={anotherSessionRunning}
-      />
-
-      <FocusTimer
-        categories={categories}
-        labels={t.focus}
-        sessionBlocked={anotherSessionRunning || runningStopwatch !== null}
         orphanRunningPomodoro={orphanRunningPomodoro}
+        historyItems={historyItems}
+        cancelLabel={t.common.cancel}
+        confirmDeleteTitle={t.common.confirmDeleteTitle}
       />
-
-      <FocusHistory
-        sessions={historyItems}
-        labels={t.focus}
-        locale={locale}
-      />
-    </div>
+    </Suspense>
   );
 }

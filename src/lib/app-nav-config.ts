@@ -3,6 +3,7 @@ import {
   Blocks,
   Calendar,
   LayoutDashboard,
+  Sparkles,
   Tags,
   Timer,
   type LucideIcon,
@@ -11,7 +12,13 @@ import type { Dictionary } from "@/lib/i18n/types";
 
 export type AppNavLabelKey = keyof Pick<
   Dictionary["nav"],
-  "overview" | "calendar" | "focus" | "timeBlocks" | "categories" | "review"
+  | "overview"
+  | "calendar"
+  | "focus"
+  | "timeBlocks"
+  | "categories"
+  | "review"
+  | "assistant"
 >;
 
 export type AppNavItem = {
@@ -28,9 +35,11 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
   { href: "/time-blocks", labelKey: "timeBlocks", icon: Blocks },
   { href: "/categories", labelKey: "categories", icon: Tags },
   { href: "/review", labelKey: "review", icon: BarChart3, matchPrefix: true },
+  { href: "/assistant", labelKey: "assistant", icon: Sparkles },
 ];
 
 export const APP_ROUTE_PREFIXES = [
+  "/assistant",
   "/categories",
   "/time-blocks",
   "/calendar",

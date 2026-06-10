@@ -31,6 +31,7 @@ describe("AppLayoutController", () => {
         dict={dict}
         user={null}
         signOutAction={signOutAction}
+        activeFocusSession={null}
       >
         <div>content</div>
       </AppLayoutController>,

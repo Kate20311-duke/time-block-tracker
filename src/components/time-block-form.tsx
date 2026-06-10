@@ -2,6 +2,10 @@
 
 import { SubmitButton } from "@/components/submit-button";
 import { TimeBlockDatetimeFields } from "@/components/time-block-datetime-fields";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export type TimeBlockFormCategory = { id: string; name: string };
 
@@ -59,7 +63,8 @@ type Props = {
   onCancel?: () => void;
 };
 
-const INPUT_CLASS = "rounded border border-zinc-300 px-3 py-2";
+const SELECT_CLASS =
+  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30";
 
 export function TimeBlockForm({
   formId,
@@ -93,25 +98,24 @@ export function TimeBlockForm({
           ))
         : null}
 
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+      <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
         <span className="font-medium">{labels.titleLabel}</span>
-        <input
+        <Input
           name="title"
           required
           autoFocus={autoFocusTitle}
           defaultValue={values.title ?? ""}
           placeholder={labels.titlePlaceholder}
-          className={INPUT_CLASS}
         />
       </label>
 
-      <label className="flex flex-col gap-1 text-sm">
+      <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium">{labels.category}</span>
         <select
           name="categoryId"
           required
           defaultValue={values.categoryId ?? ""}
-          className={INPUT_CLASS}
+          className={SELECT_CLASS}
         >
           {mode === "create" && labels.selectCategory ? (
             <option value="">{labels.selectCategory}</option>
@@ -124,13 +128,13 @@ export function TimeBlockForm({
         </select>
       </label>
 
-      <label className="flex flex-col gap-1 text-sm">
+      <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium">{labels.status}</span>
         <select
           name="status"
           required
           defaultValue={values.status ?? "planned"}
-          className={INPUT_CLASS}
+          className={SELECT_CLASS}
         >
           {statusOptions.map((s) => (
             <option key={s.value} value={s.value}>
@@ -150,12 +154,12 @@ export function TimeBlockForm({
       />
 
       {showExtended ? (
-        <label className="flex flex-col gap-1 text-sm">
+        <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium">{labels.efficiencyOptional}</span>
           <select
             name="efficiencyLevel"
             defaultValue={values.efficiencyLevel ?? ""}
-            className={INPUT_CLASS}
+            className={SELECT_CLASS}
           >
             <option value="">{labels.selectEfficiency}</option>
             {efficiencyOptions!.map((o) => (
@@ -167,46 +171,38 @@ export function TimeBlockForm({
         </label>
       ) : null}
 
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+      <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
         <span className="font-medium">{labels.noteOptional}</span>
-        <textarea
+        <Textarea
           name="note"
           rows={2}
           defaultValue={values.note ?? ""}
           placeholder={labels.notePlaceholder}
-          className={INPUT_CLASS}
         />
       </label>
 
       {showReview ? (
-        <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+        <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
           <span className="font-medium">{labels.reviewNoteOptional}</span>
-          <textarea
+          <Textarea
             name="reviewNote"
             rows={2}
             defaultValue={values.reviewNote ?? ""}
             placeholder={labels.reviewNotePlaceholder}
-            className={INPUT_CLASS}
           />
         </label>
       ) : null}
 
-      <div
-        className={`flex flex-wrap gap-2 ${onCancel ? "sm:col-span-2" : "sm:col-span-2"}`}
-      >
+      <div className={cn("flex flex-wrap gap-2", "sm:col-span-2")}>
         <SubmitButton
           label={submitLabel ?? labels.save}
           pendingLabel={labels.submitting}
           variant={submitVariant}
         />
         {onCancel && labels.cancel ? (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-          >
+          <Button type="button" variant="outline" onClick={onCancel}>
             {labels.cancel}
-          </button>
+          </Button>
         ) : null}
       </div>
     </form>

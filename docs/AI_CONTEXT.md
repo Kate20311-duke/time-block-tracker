@@ -20,6 +20,14 @@ Personal time-block planner + Pomodoro + **stopwatch** focus tracker. **Phase 9:
 | **TZ-4** | **Done** (dashboard/review use user TZ) |
 | **TZ-4.5** | **Done** (list durations + redirect paths) |
 | **TZ-5** | **Done** (audit, tests, docs, deploy checklist) — see `PROJECT_STATUS.md` §33 |
+| **UI-1** | **Done** (Dashboard + App Shell from v0 reference) — see `PROJECT_STATUS.md` §34 |
+| **UI-2** | **Done** (Focus page UI + stopwatch-first layout) — see `PROJECT_STATUS.md` §35 |
+| **UI-3** | **Done** (Review pages v0-style UI) — see `PROJECT_STATUS.md` §36 |
+| **UI-4** | **Done** (Categories + Time Blocks list/form UI) — see `PROJECT_STATUS.md` §37 |
+| **UI-5** | **Done** (Calendar visual polish + detail panels) — see `PROJECT_STATUS.md` §38 |
+| **UI-6** | **Done** (Site-wide polish: loading, empty, toast, confirm) — see `PROJECT_STATUS.md` §39 |
+| **Feature-2** | **Done** (Stopwatch pause/resume, complete dialog, dashboard quick start, header timer) — see `PROJECT_STATUS.md` §40 |
+| **Product-1** | **Done** (Landing, local demo seed, onboarding, README/deploy docs) — see `PROJECT_STATUS.md` §41 |
 
 ## Stack
 
@@ -33,8 +41,9 @@ Browser → middleware (auth gate) → App Router pages (requireUser + *ForUser)
                               → src/lib/db/scoped.ts → prisma
 ```
 
-- **Public:** `/`, `/login`, `/api/auth/*`
+- **Public:** `/` (landing when logged out), `/login`, `/api/auth/*`
 - **Private:** `/categories`, `/time-blocks`, `/calendar`, `/dashboard`, `/focus`, `/review/*`
+- **Layout:** logged-in app routes use `AppShell` (sidebar + header); `/` (logged out) and `/login` use simplified public header (`AppLayoutController`); logged-in `/` → `/dashboard`
 - **No** REST API for business data; writes via Server Actions only
 
 ## Auth / session
@@ -69,6 +78,7 @@ Rule: never read/write private rows with `{ id }` alone.
 | `timeBlocksForUser(userId, opts?)` | Calendar, dashboard, lists |
 | `focusSessionsForUser(userId, opts?)` | Focus, dashboard |
 | `runningFocusSessionForUser(userId, opts?)` | At most one `status=running` session |
+| `activeFocusSessionForUser(userId, opts?)` | At most one `status in (running, paused)` session |
 | `assertCategoryOwned` | Before category-scoped creates |
 | `assertTimeBlockOwned` | Before block update/delete/schedule |
 | `assertFocusSessionOwned` | Before focus update/convert |
@@ -82,7 +92,7 @@ Errors: `ScopedAccessError` / `isScopedAccessError`.
 3. **Update/delete** → `assert*Owned` then `updateMany`/`deleteMany` with `category: { userId }`.
 4. **Category delete** → count user's TimeBlocks + FocusSessions; redirect `?error=has-records`.
 5. **Focus convert** → `assertFocusSessionOwned` + transaction claim `category: { userId }`.
-6. **One running focus session per user** — `startStopwatch` / `createFocusSession` call `runningFocusSessionForUser` first.
+6. **One active focus session per user** — `startStopwatch` / `createFocusSession` call `activeFocusSessionForUser` first (`running` or `paused`).
 
 Action files: `categories.ts`, `time-blocks.ts`, `calendar-time-blocks.ts`, `focus-sessions.ts`, `focus-shared.ts` (transaction).
 
@@ -91,9 +101,33 @@ Action files: `categories.ts`, `time-blocks.ts`, `calendar-time-blocks.ts`, `foc
 | Mode | Start | End | TimeBlock |
 |------|-------|-----|-----------|
 | **Pomodoro** | `createFocusSession` (`mode=pomodoro`, countdown client-only) | `completeFocusSession` → optional `convertFocusSessionToTimeBlock` (`source=pomodoro`) | Manual convert step |
-| **Stopwatch** | `startStopwatch` | `completeStopwatchAndCreateTimeBlock` (`source=stopwatch`) or `cancelStopwatch` | Auto on complete |
+| **Stopwatch** | `startStopwatch` | `pauseStopwatch` / `resumeStopwatch` / `completeStopwatchAndCreateTimeBlock` (`source=stopwatch`) or `cancelStopwatch` | Auto on complete |
 
 Duplicate TimeBlock prevention: `updateMany` claim (`convertedToTimeBlock: false`, correct `status`/`mode`) **before** `timeBlock.create` in `convertFocusSessionInTransaction` / `completeStopwatchInTransaction`.
+
+### Stopwatch TimeBlock time semantics (Feature-2)
+
+When a stopwatch completes:
+
+- `TimeBlock.startTime = FocusSession.startTime`
+- `TimeBlock.endTime = startTime + **activeDuration**` (excludes pauses — **not** wall-clock end)
+- `FocusSession.endTime = wall-clock completion instant`
+
+Dashboard / calendar **stats use TimeBlock only**. Stopwatch blocks represent **recorded active time**, not when the user physically stopped. Pomodoro-converted and manual blocks keep wall-clock `startTime`/`endTime`.
+
+Helpers: `src/lib/focus-session-elapsed.ts`, `completeStopwatchInTransaction` in `focus-shared.ts`.
+
+Complete dialog fields (defaults): title (session → category → `instantRecordTitle`), note (session), status=`completed`, completionLevel=`100`. Cancel dialog → no complete, no TimeBlock.
+
+Dashboard quick start: in-page `startStopwatch` with category name as title; blocked when `activeFocusSessionForUser` returns a session (toast). Header: `GlobalFocusTimerIndicator` from layout query.
+
+### Product-1 — demo experience
+
+- **Landing** (`/`): logged-out users see marketing page; logged-in → `/dashboard`. i18n `landing.*`.
+- **Demo seed**: `pnpm db:seed:demo` — **local only**; `DEMO_SEED_USER_EMAIL` after first GitHub login; categories 学习/工作/休息/运动/娱乐 marked `[Demo]` in description. Guard: `src/lib/demo-seed-guard.ts` (localhost unless `DEMO_SEED=1`). Never in Vercel build.
+- **Onboarding**: `DashboardOnboardingCard` checklist until user has categories + at least one TimeBlock or FocusSession.
+- **Docs**: `README.md`, `docs/DEPLOYMENT.md` (index), `docs/SCREENSHOTS.md`. Demo URL placeholder in README.
+- **No** shared production demo account.
 
 Dashboard: TimeBlock totals from `stats.ts` only; FocusSession totals from `focus-stats.ts` only — do not merge the two headline numbers.
 
@@ -173,7 +207,7 @@ Dashboard: TimeBlock totals from `stats.ts` only; FocusSession totals from `focu
 
 ### Phase 9.1 — zombie running + category delete
 
-- **Statuses:** `planned` | `running` | `completed` | `abandoned` | `converted` — stopwatch cancel uses `abandoned` (no `canceled`).
+- **Statuses:** `planned` | `running` | `paused` (stopwatch only) | `completed` | `abandoned` | `converted` — stopwatch cancel uses `abandoned` (no `canceled`).
 - **FocusHistory:** always lists recent sessions; banner if `running` vs only non-completed; running rows call `abandonFocusSession` or `cancelStopwatch`.
 - **Pomodoro after refresh:** `orphanRunningPomodoro` on `/focus` → abandon via server (`focus-timer.tsx`).
 - **Category delete:** block on TimeBlocks + non-`abandoned` FocusSessions; in transaction `deleteMany` `abandoned` then delete category. Helpers: `src/lib/focus-session-status.ts`.
@@ -254,12 +288,12 @@ Teams · sharing · invites · payments · password login · dev Credentials in 
 3. Do not query Category / TimeBlock / FocusSession without `userId` / `category.userId` filtering.
 4. Do not bypass `src/lib/db/scoped.ts`.
 5. Validate category ownership before creating TimeBlock or FocusSession.
-6. No Docker seed or shared demo data.
+6. No Docker seed or shared demo data in production. Local demo: `pnpm db:seed:demo` (see README § Demo seed).
 
 ## Next likely tasks
 
-1. **Focus page UI polish** — layout, mode badges, history `mode`/`source` labels
+1. **Settings page** — timezone, locale, profile (optional)
 2. Pomodoro refresh recovery (localStorage) — optional
 3. Cross-midnight stats; Review + Focus summary
 
-Full status: `docs/PROJECT_STATUS.md` §21
+Full status: `docs/PROJECT_STATUS.md` §21、§34–§39

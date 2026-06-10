@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   blocksCategoryDeletionFocusStatus,
   isFocusSessionAbandoned,
+  isFocusSessionActive,
+  isFocusSessionPaused,
   isFocusSessionRunning,
 } from "./focus-session-status";
 
@@ -9,6 +11,13 @@ describe("focus-session-status", () => {
   it("identifies running sessions", () => {
     expect(isFocusSessionRunning("running")).toBe(true);
     expect(isFocusSessionRunning("abandoned")).toBe(false);
+  });
+
+  it("identifies paused and active sessions", () => {
+    expect(isFocusSessionPaused("paused")).toBe(true);
+    expect(isFocusSessionActive("running")).toBe(true);
+    expect(isFocusSessionActive("paused")).toBe(true);
+    expect(isFocusSessionActive("completed")).toBe(false);
   });
 
   it("treats abandoned as non-blocking for category delete", () => {

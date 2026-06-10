@@ -168,10 +168,11 @@ describe("validateFocusSessionCreate", () => {
 describe("isValidFocusSessionStatus", () => {
   it("accepts known statuses", () => {
     expect(isValidFocusSessionStatus("running")).toBe(true);
+    expect(isValidFocusSessionStatus("paused")).toBe(true);
     expect(isValidFocusSessionStatus("converted")).toBe(true);
   });
 
   it("rejects unknown statuses", () => {
-    expect(isValidFocusSessionStatus("paused")).toBe(false);
+    expect(isValidFocusSessionStatus("hold")).toBe(false);
   });
 });

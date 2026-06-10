@@ -112,6 +112,8 @@ model FocusSession {
   convertedToTimeBlock   Boolean    @default(false)
   timeBlockId            String?    @unique
   timeBlock              TimeBlock? @relation(fields: [timeBlockId], references: [id], onDelete: SetNull)
+  pausedAt               DateTime?
+  pausedTotalSeconds     Int        @default(0)
   createdAt              DateTime   @default(now())
   updatedAt              DateTime   @updatedAt
 

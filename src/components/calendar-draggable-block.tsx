@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { updateTimeBlockSchedule } from "@/lib/actions/calendar-time-blocks";
+import { CalendarBlockCardContent } from "@/components/calendar-block-card";
 import {
   CALENDAR_GRID_HEIGHT_PX,
   calculateMovedRange,
@@ -13,6 +14,7 @@ import {
   type DayBlockLayout,
 } from "@/lib/calendar";
 import { calendarBlockPositionStyle } from "@/lib/calendar-block-style";
+import type { Locale } from "@/lib/i18n/types";
 
 const DRAG_THRESHOLD_PX = 5;
 const RESIZE_HANDLE_HEIGHT_PX = 10;
@@ -29,9 +31,12 @@ type Props = {
   color: string;
   timeLabel: string;
   layout: DayBlockLayout;
+  locale: Locale;
+  status?: string;
+  completionLevel?: number;
+  completionLabel?: string;
   isSelected?: boolean;
   compact?: boolean;
-  /** Day view: bottom resize handle. Week view must pass false. */
   enableResize?: boolean;
   onSelect: (blockId: string) => void;
   onSaveEnd: (ok: boolean) => void;
@@ -49,6 +54,10 @@ export function CalendarDraggableBlock({
   color,
   timeLabel,
   layout,
+  locale,
+  status,
+  completionLevel,
+  completionLabel,
   isSelected = false,
   compact = false,
   enableResize = true,
@@ -223,6 +232,14 @@ export function CalendarDraggableBlock({
     await saveSchedule(resized.startTime, resized.endTime);
   };
 
+  const positionStyle: CSSProperties = {
+    ...position,
+    height: resizeOffsetPx
+      ? `calc(${layout.heightPercent}% + ${resizeOffsetPx}px)`
+      : position.height,
+    transform: dragOffsetPx ? `translateY(${dragOffsetPx}px)` : undefined,
+  };
+
   return (
     <button
       type="button"
@@ -282,51 +299,42 @@ export function CalendarDraggableBlock({
         }
         clearBodyDragStyles();
       }}
-      className={`absolute overflow-hidden rounded border text-left text-white shadow-sm hover:brightness-95 ${
+      className={`absolute overflow-hidden border-0 bg-transparent p-0 text-left touch-none ${
         isDragging || isResizing || isSaving ? "z-20" : isSelected ? "z-10" : "z-[1]"
-      } touch-none ${
+      } ${
         isDragging
-          ? "cursor-grabbing opacity-90 ring-2 ring-white/40"
+          ? "cursor-grabbing"
           : isResizing
-            ? "cursor-ns-resize opacity-90 ring-2 ring-white/40"
+            ? "cursor-ns-resize"
             : isSaving
-            ? "cursor-wait opacity-80"
+            ? "cursor-wait"
             : "cursor-grab"
-      } ${compact ? "px-1 py-0.5" : "px-2 py-1"} ${
-        isSelected
-          ? "border-zinc-900 ring-2 ring-zinc-900 ring-offset-1"
-          : "border-white/25"
       }`}
-      style={{
-        ...position,
-        height: resizeOffsetPx
-          ? `calc(${layout.heightPercent}% + ${resizeOffsetPx}px)`
-          : position.height,
-        backgroundColor: color,
-        transform: dragOffsetPx ? `translateY(${dragOffsetPx}px)` : undefined,
-      }}
-      title={`${title} · ${categoryName} · ${timeLabel}`}
+      style={positionStyle}
       aria-pressed={isSelected}
       aria-grabbed={isDragging}
       aria-label={`${title}, ${categoryName}, ${timeLabel}`}
     >
-      <p
-        className={`pointer-events-none truncate font-semibold leading-tight ${
-          compact ? "text-[10px]" : "text-xs"
+      <CalendarBlockCardContent
+        title={title}
+        categoryName={categoryName}
+        color={color}
+        timeLabel={timeLabel}
+        locale={locale}
+        status={status}
+        completionLevel={completionLevel}
+        completionLabel={completionLabel}
+        compact={compact}
+        isSelected={isSelected}
+        className={`h-full ${
+          isDragging || isResizing || isSaving ? "opacity-90 ring-2 ring-primary/30" : ""
         }`}
-      >
-        {title}
-      </p>
-      {!compact ? (
-        <p className="pointer-events-none truncate text-[10px] leading-tight opacity-90">
-          {timeLabel}
-        </p>
-      ) : null}
+      />
 
       {enableResize ? (
       <span
         role="presentation"
-        className="absolute right-0 bottom-0 left-0 cursor-ns-resize bg-white/20 hover:bg-white/30"
+        className="absolute right-0 bottom-0 left-0 cursor-ns-resize bg-primary/10 hover:bg-primary/20"
         style={{ height: RESIZE_HANDLE_HEIGHT_PX }}
         onPointerDown={(e) => {
           if (e.button !== 0 || isSaving) return;

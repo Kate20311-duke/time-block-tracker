@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   abandonFocusSession,
   cancelStopwatch,
@@ -13,9 +14,19 @@ import { canConvertFocusSession } from "@/lib/actions/focus-shared";
 import { isFocusSessionCompleted } from "@/lib/focus-stats";
 import { focusSessionDisplayMinutes } from "@/lib/focus";
 import { isFocusSessionRunning } from "@/lib/focus-session-status";
-import type { Dictionary } from "@/lib/i18n/types";
+import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
+import { EmptyState } from "@/components/empty-state";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import type { Dictionary, Locale } from "@/lib/i18n/types";
 import { formatDateTime } from "@/lib/time";
-import type { Locale } from "@/lib/i18n/types";
 
 export type FocusHistoryItem = {
   id: string;
@@ -35,6 +46,8 @@ type Props = {
   sessions: FocusHistoryItem[];
   labels: Dictionary["focus"];
   locale: Locale;
+  cancelLabel: string;
+  confirmDeleteTitle: string;
 };
 
 function resolveFocusError(
@@ -65,6 +78,8 @@ function FocusHistoryRow({
   onBusy,
   onError,
   onDone,
+  cancelLabel,
+  confirmDeleteTitle,
 }: {
   session: FocusHistoryItem;
   labels: Dictionary["focus"];
@@ -73,6 +88,8 @@ function FocusHistoryRow({
   onBusy: (id: string | null) => void;
   onError: (message: string | null) => void;
   onDone: () => void;
+  cancelLabel: string;
+  confirmDeleteTitle: string;
 }) {
   const start = new Date(session.startTime);
   const end = session.endTime ? new Date(session.endTime) : null;
@@ -104,10 +121,15 @@ function FocusHistoryRow({
     onBusy(null);
 
     if (!result.ok) {
-      onError(resolveFocusError(result.error, labels));
+      const message = resolveFocusError(result.error, labels);
+      onError(message);
+      toast.error(message);
       return;
     }
 
+    toast.success(
+      isStopwatch ? labels.stopwatchSuccessCanceled : labels.confirmAbandonFocus,
+    );
     onDone();
   };
 
@@ -123,61 +145,55 @@ function FocusHistoryRow({
     onBusy(null);
 
     if (!result.ok) {
-      onError(resolveFocusError(result.error, labels));
+      const message = resolveFocusError(result.error, labels);
+      onError(message);
+      toast.error(message);
       return;
     }
 
+    toast.success(labels.convertConfirm);
     onDone();
   };
 
   return (
-    <li className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0 flex-1 space-y-1">
+    <li className="flex flex-col gap-3 py-4">
+      <div className="min-w-0 flex-1 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <span
-            className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+            className="inline-block size-2.5 shrink-0 rounded-full"
             style={{ backgroundColor: session.category.color }}
             aria-hidden
           />
-          <span className="break-words font-medium text-zinc-900">
-            {displayTitle}
-          </span>
-          <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-700">
-            {sessionStatusLabel(session.status, labels)}
-          </span>
-          {isStopwatch ? (
-            <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
-              {labels.stopwatchModeBadge}
-            </span>
-          ) : (
-            <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600">
-              {labels.pomodoroModeBadge}
-            </span>
-          )}
+          <span className="break-words font-medium">{displayTitle}</span>
         </div>
-        <p className="text-sm text-zinc-600">
+        <div className="flex flex-wrap gap-1.5">
+          <Badge variant="outline">
+            {sessionStatusLabel(session.status, labels)}
+          </Badge>
+          <Badge variant="secondary">
+            {isStopwatch ? labels.stopwatchModeBadge : labels.pomodoroModeBadge}
+          </Badge>
+        </div>
+        <p className="text-sm text-muted-foreground">
           {formatDateTime(start, locale)}
           {" · "}
-          {labels.historyCategory}: {session.category.name}
+          {session.category.name}
           {isTerminal || isRunning ? (
             <>
               {" · "}
-              {labels.historyDuration}: {minutes} {labels.minutesUnit}
+              {minutes} {labels.minutesUnit}
             </>
           ) : null}
         </p>
         {isTerminal ? (
-          <p className="text-sm text-zinc-500">
+          <p className="text-xs text-muted-foreground">
             {session.convertedToTimeBlock || session.status === "converted"
               ? labels.historyConverted
               : labels.historyNotConverted}
             {session.timeBlockId ? (
               <>
                 {" "}
-                <Link
-                  href="/time-blocks"
-                  className="underline hover:text-zinc-800"
-                >
+                <Link href="/time-blocks" className="underline hover:text-foreground">
                   →
                 </Link>
               </>
@@ -186,39 +202,62 @@ function FocusHistoryRow({
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:shrink-0">
+      <div className="flex flex-col gap-2 sm:flex-row">
         {isRunning ? (
-          <button
-            type="button"
-            onClick={handleEndRunning}
-            disabled={busyId !== null}
-            className="w-full min-h-11 rounded border border-red-200 bg-white px-3 py-2.5 text-sm font-medium text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:min-h-0 sm:py-1.5"
-          >
-            {busyId === session.id
-              ? labels.working
-              : isStopwatch
+          <ConfirmDeleteDialog
+            title={confirmDeleteTitle}
+            description={
+              isStopwatch
+                ? labels.confirmCancelStopwatch
+                : labels.confirmAbandonRunningHistory
+            }
+            confirmLabel={
+              isStopwatch
                 ? labels.historyCancelRunning
-                : labels.historyAbandonRunning}
-          </button>
+                : labels.historyAbandonRunning
+            }
+            cancelLabel={cancelLabel}
+            disabled={busyId !== null}
+            onConfirm={handleEndRunning}
+            trigger={
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={busyId !== null}
+                className="text-muted-foreground"
+              >
+                {busyId === session.id
+                  ? labels.working
+                  : isStopwatch
+                    ? labels.historyCancelRunning
+                    : labels.historyAbandonRunning}
+              </Button>
+            }
+          />
         ) : null}
         {canConvert ? (
-          <button
+          <Button
             type="button"
+            size="sm"
             onClick={handleConvert}
             disabled={busyId !== null}
-            className="w-full min-h-11 shrink-0 rounded bg-zinc-900 px-3 py-2.5 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:min-h-0 sm:py-1.5"
           >
-            {busyId === session.id
-              ? labels.working
-              : labels.convertConfirm}
-          </button>
+            {busyId === session.id ? labels.working : labels.convertConfirm}
+          </Button>
         ) : null}
       </div>
     </li>
   );
 }
 
-export function FocusHistory({ sessions, labels, locale }: Props) {
+export function FocusHistory({
+  sessions,
+  labels,
+  locale,
+  cancelLabel,
+  confirmDeleteTitle,
+}: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -237,50 +276,66 @@ export function FocusHistory({ sessions, labels, locale }: Props) {
       : null;
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-4 sm:p-6">
-      <h2 className="mb-4 text-lg font-semibold">{labels.historyTitle}</h2>
+    <Card className="lg:sticky lg:top-20">
+      <CardHeader>
+        <CardTitle className="text-base">{labels.historyTitle}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {errorMessage ? (
+          <div
+            role="alert"
+            className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          >
+            {errorMessage}
+          </div>
+        ) : null}
 
-      {errorMessage ? (
-        <div
-          role="alert"
-          className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-        >
-          {errorMessage}
-        </div>
-      ) : null}
-
-      {sessions.length === 0 ? (
-        <p className="text-sm text-zinc-500">{labels.historyEmpty}</p>
-      ) : (
-        <>
-          {bannerMessage ? (
-            <p
-              className={`mb-4 text-sm ${
-                runningSessions.length > 0
-                  ? "rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900"
-                  : "text-zinc-500"
-              }`}
-              role={runningSessions.length > 0 ? "status" : undefined}
-            >
-              {bannerMessage}
-            </p>
-          ) : null}
-          <ul className="divide-y divide-zinc-100">
-            {sessions.map((session) => (
-              <FocusHistoryRow
-                key={session.id}
-                session={session}
-                labels={labels}
-                locale={locale}
-                busyId={busyId}
-                onBusy={setBusyId}
-                onError={setErrorMessage}
-                onDone={() => router.refresh()}
-              />
-            ))}
-          </ul>
-        </>
-      )}
-    </section>
+        {sessions.length === 0 ? (
+          <EmptyState
+            title={labels.historyEmpty}
+            description={labels.historyEmpty}
+            actions={[
+              { label: labels.categoriesLink, href: "/categories" },
+              {
+                label: labels.stopwatchStart,
+                href: "/focus?mode=stopwatch",
+                variant: "outline",
+              },
+            ]}
+            className="border-0 shadow-none"
+          />
+        ) : (
+          <>
+            {bannerMessage ? (
+              <CardDescription
+                className={
+                  runningSessions.length > 0
+                    ? "mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900"
+                    : "mb-4"
+                }
+              >
+                {bannerMessage}
+              </CardDescription>
+            ) : null}
+            <ul className="divide-y divide-border">
+              {sessions.map((session) => (
+                <FocusHistoryRow
+                  key={session.id}
+                  session={session}
+                  labels={labels}
+                  locale={locale}
+                  busyId={busyId}
+                  onBusy={setBusyId}
+                  onError={setErrorMessage}
+                  onDone={() => router.refresh()}
+                  cancelLabel={cancelLabel}
+                  confirmDeleteTitle={confirmDeleteTitle}
+                />
+              ))}
+            </ul>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

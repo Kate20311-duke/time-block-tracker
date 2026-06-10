@@ -4,12 +4,22 @@ import type { FocusSessionStatus } from "@/lib/constants";
 export const FOCUS_SESSION_CATEGORY_BLOCKING_STATUSES = [
   "planned",
   "running",
+  "paused",
   "completed",
   "converted",
 ] as const satisfies readonly FocusSessionStatus[];
 
 export function isFocusSessionRunning(status: string): boolean {
   return status === "running";
+}
+
+export function isFocusSessionPaused(status: string): boolean {
+  return status === "paused";
+}
+
+/** Running or paused — blocks starting another session. */
+export function isFocusSessionActive(status: string): boolean {
+  return status === "running" || status === "paused";
 }
 
 export function isFocusSessionPlanned(status: string): boolean {

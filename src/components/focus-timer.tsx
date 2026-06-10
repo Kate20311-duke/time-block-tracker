@@ -15,6 +15,23 @@ import {
   formatFocusCountdown,
   parsePlannedFocusMinutes,
 } from "@/lib/focus";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import type { Dictionary } from "@/lib/i18n/types";
 
 export type FocusCategoryOption = {
@@ -37,6 +54,7 @@ export type OrphanRunningPomodoro = {
   id: string;
   title: string | null;
   categoryName: string;
+  categoryColor: string;
   plannedDurationMinutes: number;
 };
 
@@ -49,14 +67,29 @@ type Props = {
   orphanRunningPomodoro?: OrphanRunningPomodoro | null;
 };
 
-const inputClass =
-  "w-full rounded border border-zinc-300 px-3 py-2 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-500";
+function FocusAlert({
+  variant,
+  children,
+}: {
+  variant: "success" | "error" | "warning" | "info";
+  children: React.ReactNode;
+}) {
+  const styles = {
+    success: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    error: "border-destructive/30 bg-destructive/10 text-destructive",
+    warning: "border-amber-200 bg-amber-50 text-amber-900",
+    info: "border-primary/20 bg-primary/5 text-foreground",
+  } as const;
 
-const primaryBtn =
-  "w-full min-h-11 rounded bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:min-h-0 sm:py-2";
-
-const secondaryBtn =
-  "w-full min-h-11 rounded border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:min-h-0 sm:py-2";
+  return (
+    <div
+      role={variant === "error" ? "alert" : "status"}
+      className={`rounded-lg border px-4 py-3 text-sm ${styles[variant]}`}
+    >
+      {children}
+    </div>
+  );
+}
 
 function resolveFocusError(
   error: FocusSessionActionError | undefined,
@@ -314,18 +347,20 @@ export function FocusTimer({
 
   if (!hasCategories) {
     return (
-      <section className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center">
-        <h2 className="text-lg font-semibold text-amber-950">
-          {labels.emptyNoCategoriesTitle}
-        </h2>
-        <p className="mt-2 text-sm text-amber-900">
-          {labels.needCategoryPrefix}{" "}
-          <Link href="/categories" className="font-medium underline">
-            {labels.categoriesLink}
-          </Link>
-          {labels.needCategorySuffix}
-        </p>
-      </section>
+      <Card className="border-amber-200 bg-amber-50/50">
+        <CardHeader>
+          <CardTitle className="text-base text-amber-950">
+            {labels.emptyNoCategoriesTitle}
+          </CardTitle>
+          <CardDescription className="text-amber-900">
+            {labels.needCategoryPrefix}{" "}
+            <Link href="/categories" className="font-medium underline">
+              {labels.categoriesLink}
+            </Link>
+            {labels.needCategorySuffix}
+          </CardDescription>
+        </CardHeader>
+      </Card>
     );
   }
 
@@ -354,80 +389,87 @@ export function FocusTimer({
   };
 
   return (
-    <div className="space-y-6 sm:space-y-8">
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold">{labels.pomodoroTitle}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {labels.pomodoroSubtitle}
+        </p>
+      </div>
+
       {orphanRunningPomodoro ? (
-        <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <p className="text-sm text-amber-950">{labels.orphanPomodoroMessage}</p>
-          <p className="mt-2 text-sm text-amber-900">
-            {orphanRunningPomodoro.title?.trim() || labels.defaultTimeBlockTitle}
-            {" · "}
-            {orphanRunningPomodoro.categoryName}
-            {" · "}
-            {orphanRunningPomodoro.plannedDurationMinutes} {labels.minutesUnit}
-          </p>
-          <button
-            type="button"
-            onClick={handleAbandonOrphan}
-            disabled={busy}
-            className="mt-3 min-h-11 rounded border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {labelWhenBusy(
-              labels.orphanPomodoroAbandon,
-              labels.working,
-              busy,
-              "abandon",
-              busyAction,
-            )}
-          </button>
-        </section>
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardHeader className="pb-2">
+            <CardDescription className="text-amber-950">
+              {labels.orphanPomodoroMessage}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-amber-900">
+              {orphanRunningPomodoro.title?.trim() || labels.defaultTimeBlockTitle}
+              {" · "}
+              {orphanRunningPomodoro.categoryName}
+              {" · "}
+              {orphanRunningPomodoro.plannedDurationMinutes} {labels.minutesUnit}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleAbandonOrphan}
+              disabled={busy}
+              className="border-destructive/30 text-destructive hover:bg-destructive/10"
+            >
+              {labelWhenBusy(
+                labels.orphanPomodoroAbandon,
+                labels.working,
+                busy,
+                "abandon",
+                busyAction,
+              )}
+            </Button>
+          </CardContent>
+        </Card>
       ) : null}
 
       {sessionBlocked && phase === "setup" && !orphanRunningPomodoro ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <FocusAlert variant="warning">
           {labels.pomodoroBlockedByOtherSession}
-        </p>
+        </FocusAlert>
       ) : null}
 
-      <section
-        className="rounded-lg border border-zinc-200 bg-white p-4 text-center sm:p-6"
-        aria-busy={busy}
-      >
-        <p className="text-sm font-medium text-zinc-500">{labels.duration}</p>
-        <div
-          role="timer"
-          aria-live="polite"
-          aria-label={labels.timerAria}
-          className="mt-2 break-all font-mono text-5xl font-bold tracking-tight text-zinc-900 sm:text-6xl md:text-7xl"
-        >
-          {formatFocusCountdown(displaySeconds)}
-        </div>
-        {timeIsUp ? (
-          <p className="mt-3 text-sm text-amber-800">{labels.timeUp}</p>
-        ) : null}
-        {configLocked ? (
-          <p className="mt-2 text-sm text-zinc-500">{labels.sessionActive}</p>
-        ) : null}
-      </section>
+      <Card aria-busy={busy}>
+        <CardContent className="pt-6 text-center">
+          <p className="text-sm font-medium text-muted-foreground">
+            {labels.duration}
+          </p>
+          <div
+            role="timer"
+            aria-live="polite"
+            aria-label={labels.timerAria}
+            className="mt-2 break-all font-mono text-5xl font-semibold tabular-nums tracking-tight sm:text-6xl"
+          >
+            {formatFocusCountdown(displaySeconds)}
+          </div>
+          {timeIsUp ? (
+            <p className="mt-3 text-sm text-amber-800">{labels.timeUp}</p>
+          ) : null}
+          {configLocked ? (
+            <p className="mt-2 text-sm text-muted-foreground">
+              {labels.sessionActive}
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
 
       {statusMessage ? (
-        <div
-          role="status"
-          className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900"
-        >
-          {statusMessage}
-        </div>
+        <FocusAlert variant="success">{statusMessage}</FocusAlert>
       ) : null}
 
       {pendingConvertSessionId ? (
-        <section className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-          <p className="text-sm text-blue-950">{labels.convertPrompt}</p>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3">
-            <button
-              type="button"
-              onClick={handleConvert}
-              disabled={busy}
-              className={primaryBtn}
-            >
+        <FocusAlert variant="info">
+          <p>{labels.convertPrompt}</p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <Button type="button" onClick={handleConvert} disabled={busy}>
               {labelWhenBusy(
                 labels.convertConfirm,
                 labels.working,
@@ -435,131 +477,126 @@ export function FocusTimer({
                 "convert",
                 busyAction,
               )}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="outline"
               onClick={handleSkipConvert}
               disabled={busy}
-              className={secondaryBtn}
             >
               {labels.convertSkip}
-            </button>
+            </Button>
           </div>
-        </section>
+        </FocusAlert>
       ) : null}
 
       {errorMessage ? (
-        <div
-          role="alert"
-          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-        >
-          {errorMessage}
-        </div>
+        <FocusAlert variant="error">{errorMessage}</FocusAlert>
       ) : null}
 
-      <section className="rounded-lg border border-zinc-200 bg-white p-4 sm:p-6">
-        <h2 className="mb-1 text-lg font-semibold">{labels.pomodoroTitle}</h2>
-        <p className="mb-4 text-sm text-zinc-600">{labels.pomodoroSubtitle}</p>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-            <span className="font-medium">{labels.category}</span>
-            <select
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              disabled={configLocked || busy}
-              className={inputClass}
-            >
-              <option value="">{labels.selectCategory}</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-            <span className="font-medium">{labels.titleLabel}</span>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              disabled={configLocked || busy}
-              className={inputClass}
-              placeholder={labels.titlePlaceholder}
-            />
-          </label>
-
-          <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-            <span className="font-medium">{labels.noteOptional}</span>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              disabled={configLocked || busy}
-              rows={2}
-              className={inputClass}
-              placeholder={labels.notePlaceholder}
-            />
-          </label>
-
-          <fieldset className="sm:col-span-2" disabled={configLocked || busy}>
-            <legend className="mb-2 text-sm font-medium">{labels.duration}</legend>
-            <div className="flex flex-wrap gap-2">
-              {FOCUS_DURATION_PRESETS.map((minutes) => (
-                <button
-                  key={minutes}
-                  type="button"
-                  onClick={() => setDurationMode(minutes)}
-                  className={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                    durationMode === minutes
-                      ? "bg-zinc-900 text-white"
-                      : "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50"
-                  }`}
-                >
-                  {minutes} {labels.minutesUnit}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => setDurationMode("custom")}
-                className={`min-h-10 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  durationMode === "custom"
-                    ? "bg-zinc-900 text-white"
-                    : "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50"
-                }`}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{labels.setupTitle}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4">
+            <div className="space-y-2">
+              <label htmlFor="pomodoro-category" className="text-sm font-medium">
+                {labels.category}
+              </label>
+              <Select
+                value={categoryId}
+                onValueChange={setCategoryId}
+                disabled={configLocked || busy}
               >
-                {labels.durationCustom}
-              </button>
+                <SelectTrigger id="pomodoro-category" className="w-full">
+                  <SelectValue placeholder={labels.selectCategory} />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            {durationMode === "custom" ? (
-              <div className="mt-3 max-w-xs">
-                <label className="flex flex-col gap-1 text-sm">
-                  <span className="text-zinc-600">{labels.durationCustom}</span>
-                  <input
+
+            <div className="space-y-2">
+              <label htmlFor="pomodoro-title" className="text-sm font-medium">
+                {labels.titleLabel}
+              </label>
+              <Input
+                id="pomodoro-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                disabled={configLocked || busy}
+                placeholder={labels.titlePlaceholder}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="pomodoro-note" className="text-sm font-medium">
+                {labels.noteOptional}
+              </label>
+              <Textarea
+                id="pomodoro-note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                disabled={configLocked || busy}
+                rows={2}
+                placeholder={labels.notePlaceholder}
+              />
+            </div>
+
+            <fieldset disabled={configLocked || busy}>
+              <legend className="mb-2 text-sm font-medium">{labels.duration}</legend>
+              <div className="flex flex-wrap gap-2">
+                {FOCUS_DURATION_PRESETS.map((minutes) => (
+                  <Button
+                    key={minutes}
+                    type="button"
+                    size="sm"
+                    variant={durationMode === minutes ? "default" : "outline"}
+                    onClick={() => setDurationMode(minutes)}
+                  >
+                    {minutes} {labels.minutesUnit}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={durationMode === "custom" ? "default" : "outline"}
+                  onClick={() => setDurationMode("custom")}
+                >
+                  {labels.durationCustom}
+                </Button>
+              </div>
+              {durationMode === "custom" ? (
+                <div className="mt-3 max-w-xs space-y-2">
+                  <Input
                     type="number"
                     min={1}
                     step={1}
                     inputMode="numeric"
                     value={customMinutes}
                     onChange={(e) => setCustomMinutes(e.target.value)}
-                    className={inputClass}
                     aria-invalid={showInvalidDuration}
                   />
-                </label>
-                {showInvalidDuration ? (
-                  <p className="mt-1 text-sm text-amber-800" role="alert">
-                    {labels.invalidDurationHint}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-          </fieldset>
-        </div>
-      </section>
+                  {showInvalidDuration ? (
+                    <p className="text-sm text-amber-800" role="alert">
+                      {labels.invalidDurationHint}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </fieldset>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
-        <button
+      <div className="flex flex-wrap gap-2">
+        <Button
           type="button"
           onClick={handleStart}
           disabled={
@@ -569,31 +606,29 @@ export function FocusTimer({
             sessionBlocked ||
             orphanRunningPomodoro !== null
           }
-          className={primaryBtn}
         >
           {labelWhenBusy(labels.start, labels.working, busy, "start", busyAction)}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="outline"
           onClick={handlePause}
           disabled={busy || phase !== "running"}
-          className={secondaryBtn}
         >
           {labels.pause}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="outline"
           onClick={handleResume}
           disabled={busy || phase !== "paused"}
-          className={secondaryBtn}
         >
           {labels.resume}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={handleComplete}
           disabled={busy || !hasActiveSession || phase === "setup"}
-          className={primaryBtn}
         >
           {labelWhenBusy(
             labels.complete,
@@ -602,12 +637,13 @@ export function FocusTimer({
             "complete",
             busyAction,
           )}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="ghost"
           onClick={handleAbandon}
           disabled={busy || !hasActiveSession || phase === "setup"}
-          className="col-span-2 w-full min-h-11 rounded border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-800 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-1 sm:w-auto sm:min-h-0 sm:py-2"
+          className="text-muted-foreground"
         >
           {labelWhenBusy(
             labels.abandon,
@@ -616,7 +652,7 @@ export function FocusTimer({
             "abandon",
             busyAction,
           )}
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -1,7 +1,11 @@
 "use client";
 
+import type { CSSProperties } from "react";
+
+import { CalendarBlockCardContent } from "@/components/calendar-block-card";
 import type { DayBlockLayout } from "@/lib/calendar";
 import { calendarBlockPositionStyle } from "@/lib/calendar-block-style";
+import type { Locale } from "@/lib/i18n/types";
 
 type Props = {
   blockId: string;
@@ -10,9 +14,12 @@ type Props = {
   color: string;
   timeLabel: string;
   layout: DayBlockLayout;
+  locale: Locale;
+  status?: string;
+  completionLevel?: number;
+  completionLabel?: string;
   isSelected?: boolean;
   compact?: boolean;
-  /** Appended to title when block cannot be dragged in week view (e.g. cross-midnight). */
   dragDisabledHint?: string;
   onSelect: (blockId: string) => void;
 };
@@ -24,6 +31,10 @@ export function CalendarBlock({
   color,
   timeLabel,
   layout,
+  locale,
+  status,
+  completionLevel,
+  completionLabel,
   isSelected = false,
   compact = false,
   dragDisabledHint,
@@ -36,33 +47,27 @@ export function CalendarBlock({
     <button
       type="button"
       onClick={() => onSelect(blockId)}
-      className={`absolute overflow-hidden rounded border text-left text-white shadow-sm transition-shadow hover:brightness-95 ${
+      className={`absolute overflow-hidden border-0 bg-transparent p-0 text-left ${
         isSelected ? "z-10" : "z-[1]"
-      } ${compact ? "px-1 py-0.5" : "px-2 py-1"} ${
-        isSelected
-          ? "border-zinc-900 ring-2 ring-zinc-900 ring-offset-1"
-          : "border-white/25"
       }`}
-      style={{
-        ...position,
-        backgroundColor: color,
-      }}
-      title={`${title} · ${categoryName} · ${timeLabel}${hintSuffix}`}
+      style={position as CSSProperties}
       aria-pressed={isSelected}
       aria-label={`${title}, ${categoryName}, ${timeLabel}${hintSuffix}`}
     >
-      <p
-        className={`truncate font-semibold leading-tight ${
-          compact ? "text-[10px]" : "text-xs"
-        }`}
-      >
-        {title}
-      </p>
-      {!compact ? (
-        <p className="truncate text-[10px] leading-tight opacity-90">
-          {timeLabel}
-        </p>
-      ) : null}
+      <CalendarBlockCardContent
+        title={title}
+        categoryName={categoryName}
+        color={color}
+        timeLabel={timeLabel}
+        locale={locale}
+        status={status}
+        completionLevel={completionLevel}
+        completionLabel={completionLabel}
+        compact={compact}
+        isSelected={isSelected}
+        dragDisabledHint={dragDisabledHint}
+        className="h-full"
+      />
     </button>
   );
 }

@@ -18,6 +18,7 @@ type Props = {
   selectedBlockId?: string;
   calendarDate: string;
   continuedSegmentLabel: string;
+  completionLabel: string;
   onBlockSelect: (blockId: string) => void;
   onScheduleSaveEnd: (ok: boolean) => void;
   onEmptySlotClick?: (startTimeIso: string, endTimeIso: string) => void;
@@ -30,6 +31,7 @@ export function CalendarDayGrid({
   selectedBlockId,
   calendarDate,
   continuedSegmentLabel,
+  completionLabel,
   onBlockSelect,
   onScheduleSaveEnd,
   onEmptySlotClick,
@@ -39,7 +41,7 @@ export function CalendarDayGrid({
   return (
     <div className="flex gap-2 sm:gap-3">
       <div
-        className="w-12 shrink-0 text-right text-xs text-zinc-500 sm:w-14"
+        className="w-12 shrink-0 text-right text-xs text-muted-foreground sm:w-14"
         style={{ height: GRID_HEIGHT_PX }}
         aria-hidden
       >
@@ -62,6 +64,7 @@ export function CalendarDayGrid({
         blocks={blocks}
         selectedBlockId={selectedBlockId}
         continuedSegmentLabel={continuedSegmentLabel}
+        completionLabel={completionLabel}
         onBlockSelect={onBlockSelect}
         enableDrag
         calendarDate={calendarDate}

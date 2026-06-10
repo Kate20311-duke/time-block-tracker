@@ -5,6 +5,13 @@ import {
   TimeBlockForm,
   type TimeBlockFormLabels,
 } from "@/components/time-block-form";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 type CategoryOption = { id: string; name: string };
 
@@ -39,39 +46,33 @@ export function CalendarBlockCreatePanel({
   const formId = "calendar-block-create";
 
   return (
-    <section
-      aria-label={labels.panelAria}
-      className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm"
-    >
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <h2 className="text-lg font-semibold text-zinc-900">{labels.heading}</h2>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-        >
+    <Card aria-label={labels.panelAria}>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <CardTitle className="text-base">{labels.heading}</CardTitle>
+        <Button type="button" variant="outline" size="sm" onClick={onCancel}>
           {labels.cancel}
-        </button>
-      </div>
-
-      <TimeBlockForm
-        formId={formId}
-        action={createTimeBlockFromCalendar}
-        mode="create"
-        values={{ startTimeIso, endTimeIso }}
-        categories={categories}
-        statusOptions={statusOptions}
-        userTimeZone={userTimeZone}
-        labels={labels}
-        hiddenFields={{
-          calendarDate,
-          calendarView,
-        }}
-        showEfficiencyAndReview={false}
-        autoFocusTitle
-        submitVariant="secondary"
-        onCancel={onCancel}
-      />
-    </section>
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <TimeBlockForm
+          formId={formId}
+          action={createTimeBlockFromCalendar}
+          mode="create"
+          values={{ startTimeIso, endTimeIso }}
+          categories={categories}
+          statusOptions={statusOptions}
+          userTimeZone={userTimeZone}
+          labels={labels}
+          hiddenFields={{
+            calendarDate,
+            calendarView,
+          }}
+          showEfficiencyAndReview={false}
+          autoFocusTitle
+          submitVariant="secondary"
+          onCancel={onCancel}
+        />
+      </CardContent>
+    </Card>
   );
 }

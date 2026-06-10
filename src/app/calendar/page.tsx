@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { CalendarEmptyState } from "@/components/calendar-empty-state";
 import { CalendarInteractiveView } from "@/components/calendar-interactive-view";
+import { CalendarPageHeader } from "@/components/calendar-page-header";
+import { CalendarToolbar } from "@/components/calendar-toolbar";
+import { PageFeedback } from "@/components/page-feedback";
 import { toCalendarEditBlockData } from "@/lib/calendar-edit";
 import type { CalendarColumnBlock } from "@/components/calendar-day-column";
 import {
@@ -131,6 +135,8 @@ function mapBlocksForDay(
         title: block.title,
         categoryName: block.category.name,
         color: block.category.color,
+        status: block.status,
+        completionLevel: block.completionLevel,
         layout,
         startTimeIso: block.startTime.toISOString(),
         endTimeIso: block.endTime.toISOString(),
@@ -274,7 +280,10 @@ export default async function CalendarPage({
           title: selectedBlockRaw.title,
         })
       : "",
+    confirmDeleteTitle: t.common.confirmDeleteTitle,
     submitting: t.common.submitting,
+    completion: t.timeBlocks.completion,
+    minutesUnit: t.timeBlocks.minutesUnit,
   };
 
   const createFormLabels = {
@@ -293,121 +302,58 @@ export default async function CalendarPage({
     submitting: t.common.submitting,
   };
 
-  const viewSwitcherClass = (active: boolean) =>
-    `rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-      active
-        ? "bg-zinc-900 text-white"
-        : "border border-zinc-300 bg-white text-zinc-800 hover:bg-zinc-50"
-    }`;
+  const heading =
+    view === "week"
+      ? formatWeekRangeHeading(weekStart, locale, userTimeZone)
+      : formatCalendarDayHeading(selectedDay, locale, userTimeZone);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">{t.calendar.title}</h1>
-        <p className="mt-1 text-sm text-zinc-600">{t.calendar.subtitle}</p>
-      </div>
+      <CalendarPageHeader
+        labels={{
+          title: t.calendar.title,
+          pageDescription: t.calendar.pageDescription,
+        }}
+      />
 
-      <div
-        className="flex flex-wrap gap-2"
-        role="group"
-        aria-label={t.calendar.viewSwitcherAria}
-      >
-        <Link
-          href={buildCalendarHref(selectedDay, "week", userTimeZone)}
-          className={viewSwitcherClass(view === "week")}
-        >
-          {t.calendar.weekView}
-        </Link>
-        <Link
-          href={buildCalendarHref(selectedDay, "day", userTimeZone)}
-          className={viewSwitcherClass(view === "day")}
-        >
-          {t.calendar.dayView}
-        </Link>
-      </div>
+      <CalendarToolbar
+        view={view}
+        heading={heading}
+        weekViewHref={buildCalendarHref(selectedDay, "week", userTimeZone)}
+        dayViewHref={buildCalendarHref(selectedDay, "day", userTimeZone)}
+        prevHref={buildCalendarHref(prevAnchor, view, userTimeZone)}
+        nextHref={buildCalendarHref(nextAnchor, view, userTimeZone)}
+        todayHref={
+          view === "week"
+            ? !isCurrentWeek
+              ? buildCalendarHref(today, "week", userTimeZone)
+              : undefined
+            : !isToday
+              ? buildCalendarHref(today, "day", userTimeZone)
+              : undefined
+        }
+        todayLabel={view === "week" ? t.calendar.thisWeek : t.calendar.today}
+        prevLabel={view === "week" ? t.calendar.prevWeek : t.calendar.prevDay}
+        nextLabel={view === "week" ? t.calendar.nextWeek : t.calendar.nextDay}
+        labels={{
+          viewSwitcherAria: t.calendar.viewSwitcherAria,
+          weekView: t.calendar.weekView,
+          dayView: t.calendar.dayView,
+          dateNavAria: t.calendar.dateNavAria,
+        }}
+      />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-lg font-semibold text-zinc-900">
-          {view === "week"
-            ? formatWeekRangeHeading(weekStart, locale, userTimeZone)
-            : formatCalendarDayHeading(selectedDay, locale, userTimeZone)}
-        </p>
-        <nav
-          aria-label={t.calendar.dateNavAria}
-          className="flex flex-wrap items-center gap-2"
-        >
-          {view === "week" ? (
-            <>
-              <Link
-                href={buildCalendarHref(prevAnchor, "week", userTimeZone)}
-                className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-              >
-                {t.calendar.prevWeek}
-              </Link>
-              {!isCurrentWeek ? (
-                <Link
-                  href={buildCalendarHref(today, "week", userTimeZone)}
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-                >
-                  {t.calendar.thisWeek}
-                </Link>
-              ) : null}
-              <Link
-                href={buildCalendarHref(nextAnchor, "week", userTimeZone)}
-                className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-              >
-                {t.calendar.nextWeek}
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link
-                href={buildCalendarHref(prevAnchor, "day", userTimeZone)}
-                className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-              >
-                {t.calendar.prevDay}
-              </Link>
-              {!isToday ? (
-                <Link
-                  href={buildCalendarHref(today, "day", userTimeZone)}
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-                >
-                  {t.calendar.today}
-                </Link>
-              ) : null}
-              <Link
-                href={buildCalendarHref(nextAnchor, "day", userTimeZone)}
-                className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-              >
-                {t.calendar.nextDay}
-              </Link>
-            </>
-          )}
-        </nav>
-      </div>
-
-      {successMessage ? (
-        <div
-          role="status"
-          className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900"
-        >
-          {successMessage}
-        </div>
-      ) : null}
-
-      {errorMessage ? (
-        <div
-          role="alert"
-          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-        >
-          {errorMessage}
-        </div>
-      ) : null}
+      <PageFeedback
+        successMessage={successMessage}
+        errorMessage={errorMessage}
+        errorTitle={t.common.errorTitle}
+      />
 
       {!hasBlocks ? (
-        <p className="text-sm text-zinc-500">
-          {view === "week" ? t.calendar.emptyWeek : t.calendar.empty}
-        </p>
+        <CalendarEmptyState
+          title={view === "week" ? t.calendar.emptyWeek : t.calendar.empty}
+          description={t.calendar.emptyHint}
+        />
       ) : null}
 
       <Suspense fallback={null}>
@@ -441,6 +387,8 @@ export default async function CalendarPage({
           weekViewDragHintMessage={t.calendar.drag.weekViewHint}
           continuedSegmentLabel={t.calendar.continuedSegment}
           dragDisabledInWeekHint={t.calendar.drag.dragDisabledInWeek}
+          newTimeBlockLabel={t.calendar.newTimeBlock}
+          completionLabel={t.timeBlocks.completion}
           dayBlocks={
             view === "day"
               ? mapBlocksForDay(timeBlocks, selectedDay, userTimeZone)
@@ -462,9 +410,9 @@ export default async function CalendarPage({
         />
       </Suspense>
 
-      <p className="text-sm text-zinc-500">
+      <p className="text-sm text-muted-foreground">
         {t.calendar.editHintPrefix}{" "}
-        <Link href="/time-blocks" className="font-medium text-zinc-800 underline">
+        <Link href="/time-blocks" className="font-medium text-primary underline-offset-4 hover:underline">
           {t.calendar.editHintLink}
         </Link>
         {t.calendar.editHintSuffix}

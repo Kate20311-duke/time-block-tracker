@@ -10,6 +10,7 @@ export type Dictionary = {
   app: {
     brand: string;
     metaDescription: string;
+    tagline: string;
   };
   lang: {
     switcherAria: string;
@@ -23,10 +24,13 @@ export type Dictionary = {
     cancel: string;
     delete: string;
     submitting: string;
+    confirmDeleteTitle: string;
+    errorTitle: string;
   };
   nav: {
     aria: string;
     home: string;
+    overview: string;
     categories: string;
     timeBlocks: string;
     calendar: string;
@@ -36,12 +40,52 @@ export type Dictionary = {
     signIn: string;
     signOut: string;
   };
+  shell: {
+    navGroup: string;
+    searchPlaceholder: string;
+    newTimeBlock: string;
+    anonymousUser: string;
+    userAvatarAlt: string;
+    activeTimerIndicator: string;
+    activeTimerPaused: string;
+  };
   auth: {
     loginTitle: string;
     loginSubtitle: string;
     signInWithGitHub: string;
     setupHint: string;
     backHome: string;
+  };
+  landing: {
+    heroTitle: string;
+    heroSubtitle: string;
+    highlights: string[];
+    ctaSignIn: string;
+    ctaGetStarted: string;
+    localDemoHint: string;
+    featuresTitle: string;
+    features: {
+      plan: { title: string; description: string };
+      category: { title: string; description: string };
+      stopwatch: { title: string; description: string };
+      review: { title: string; description: string };
+    };
+    footerCtaTitle: string;
+    footerCtaDescription: string;
+  };
+  onboarding: {
+    title: string;
+    description: string;
+    stepLabel: string;
+    step1Title: string;
+    step1Description: string;
+    step1Action: string;
+    step2Title: string;
+    step2Description: string;
+    step2Action: string;
+    step3Title: string;
+    step3Description: string;
+    step3Action: string;
   };
   home: {
     title: string;
@@ -59,6 +103,12 @@ export type Dictionary = {
   };
   focus: {
     title: string;
+    pageTitle: string;
+    pageDescription: string;
+    tabStopwatch: string;
+    tabPomodoro: string;
+    runningBannerStopwatch: string;
+    runningBannerPomodoro: string;
     subtitle: string;
     setupTitle: string;
     pomodoroTitle: string;
@@ -98,6 +148,17 @@ export type Dictionary = {
     stopwatchStart: string;
     stopwatchEndAndSave: string;
     stopwatchCancel: string;
+    stopwatchPause: string;
+    stopwatchResume: string;
+    stopwatchPaused: string;
+    stopwatchResumed: string;
+    stopwatchPausedLabel: string;
+    stopwatchCompleteDialogTitle: string;
+    stopwatchCompleteDialogDescription: string;
+    instantRecordTitle: string;
+    confirmCancelStopwatch: string;
+    confirmAbandonFocus: string;
+    confirmAbandonRunningHistory: string;
     stopwatchStartedAt: string;
     stopwatchUntitled: string;
     stopwatchTitlePlaceholder: string;
@@ -127,6 +188,7 @@ export type Dictionary = {
     sessionStatus: {
       planned: string;
       running: string;
+      paused: string;
       completed: string;
       abandoned: string;
       converted: string;
@@ -143,12 +205,15 @@ export type Dictionary = {
       convertFailed: string;
       alreadyConverted: string;
       sessionAlreadyRunning: string;
+      invalidCompletion: string;
       generic: string;
     };
   };
   calendar: {
     title: string;
+    pageDescription: string;
     subtitle: string;
+    newTimeBlock: string;
     viewSwitcherAria: string;
     weekView: string;
     dayView: string;
@@ -161,6 +226,7 @@ export type Dictionary = {
     today: string;
     empty: string;
     emptyWeek: string;
+    emptyHint: string;
     editHintPrefix: string;
     editHintLink: string;
     editHintSuffix: string;
@@ -187,6 +253,7 @@ export type Dictionary = {
   };
   categories: {
     title: string;
+    pageDescription: string;
     subtitle: string;
     newCategory: string;
     allCategories: string;
@@ -195,6 +262,7 @@ export type Dictionary = {
     description: string;
     descriptionOptional: string;
     empty: string;
+    emptyHint: string;
     namePlaceholder: string;
     descriptionPlaceholder: string;
     timeBlockCount: string;
@@ -218,6 +286,7 @@ export type Dictionary = {
   };
   timeBlocks: {
     title: string;
+    pageDescription: string;
     subtitle: string;
     newTimeBlock: string;
     allTimeBlocks: string;
@@ -237,6 +306,9 @@ export type Dictionary = {
     reviewNoteOptional: string;
     duration: string;
     empty: string;
+    emptyHint: string;
+    goToCalendar: string;
+    goToFocusStopwatch: string;
     cannotEditNoCategories: string;
     needCategoryPrefix: string;
     needCategorySuffix: string;
@@ -302,8 +374,43 @@ export type Dictionary = {
     focusSessionCount: string;
     focusConvertedInCategory: string;
     focusNoData: string;
+    activeTimer: string;
+    activeTimerEmpty: string;
+    activeTimerStartedAt: string;
+    goToFocus: string;
+    manageOnFocusPage: string;
+    activeTimerPaused: string;
+    quickStart: string;
+    quickStartHint: string;
+    customTimer: string;
+    quickStartActiveSession: string;
+    recentBlocks: string;
+    recentBlocksHint: string;
+    recentEmptyHint: string;
+    goToCalendar: string;
+    goToFocusStopwatch: string;
+    focusSessionsStat: string;
+    completedBlocksStat: string;
+    categoryDistribution: string;
+    categoryShareHint: string;
+    weeklyDistribution: string;
+    weeklyDistributionHint: string;
+    completionRateLabel: string;
   };
   review: {
+    pageTitle: string;
+    pageDescription: string;
+    tabDay: string;
+    tabWeek: string;
+    scopeNote: string;
+    emptyDayHint: string;
+    emptyWeekHint: string;
+    completedBlocksCount: string;
+    blockCount: string;
+    categoryShareHint: string;
+    weeklyTotalBadge: string;
+    goToCalendar: string;
+    goToFocusStopwatch: string;
     dayTitle: string;
     daySubtitle: string;
     weekTitle: string;

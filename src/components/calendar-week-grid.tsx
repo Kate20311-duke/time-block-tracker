@@ -29,6 +29,7 @@ type Props = {
   columns: WeekGridColumn[];
   selectedBlockId?: string;
   continuedSegmentLabel: string;
+  completionLabel: string;
   dragDisabledHint: string;
   onBlockSelect: (blockId: string) => void;
   onScheduleSaveEnd: (ok: boolean) => void;
@@ -41,6 +42,7 @@ export function CalendarWeekGrid({
   columns,
   selectedBlockId,
   continuedSegmentLabel,
+  completionLabel,
   dragDisabledHint,
   onBlockSelect,
   onScheduleSaveEnd,
@@ -58,8 +60,8 @@ export function CalendarWeekGrid({
               key={column.dayHref}
               className={`rounded-md px-1 py-1.5 text-center text-xs font-medium sm:text-sm ${
                 column.isToday
-                  ? "bg-zinc-900 text-white"
-                  : "bg-zinc-100 text-zinc-700"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground"
               }`}
             >
               <Link
@@ -75,7 +77,7 @@ export function CalendarWeekGrid({
 
         <div className="flex gap-1 sm:gap-1.5">
           <div
-            className="w-12 shrink-0 text-right text-xs text-zinc-500 sm:w-14"
+            className="w-12 shrink-0 text-right text-xs text-muted-foreground sm:w-14"
             style={{ height: GRID_HEIGHT_PX }}
             aria-hidden
           >
@@ -101,6 +103,7 @@ export function CalendarWeekGrid({
                 blocks={column.blocks}
                 selectedBlockId={selectedBlockId}
                 continuedSegmentLabel={continuedSegmentLabel}
+                completionLabel={completionLabel}
                 compact
                 enableDrag
                 canDragBlock={(block) =>

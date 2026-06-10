@@ -1,6 +1,15 @@
 import Link from "next/link";
 import { TimeBlockForm } from "@/components/time-block-form";
 import { TimeBlockRow } from "@/components/time-block-row";
+import { TimeBlockEmptyState } from "@/components/time-blocks/time-block-empty-state";
+import { TimeBlockPageHeader } from "@/components/time-blocks/time-block-page-header";
+import { PageFeedback } from "@/components/page-feedback";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { createTimeBlock } from "@/lib/actions/time-blocks";
 import { TIME_BLOCK_STATUSES } from "@/lib/constants";
 import {
@@ -50,6 +59,17 @@ function resolveTimeBlockSuccess(
   return null;
 }
 
+function formatDateInTimeZone(
+  date: Date,
+  timeZone: string,
+  locale: "zh" | "en",
+): string {
+  return new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
+    dateStyle: "medium",
+    timeZone,
+  }).format(date);
+}
+
 export default async function TimeBlocksPage({
   searchParams,
 }: {
@@ -85,85 +105,89 @@ export default async function TimeBlocksPage({
 
   const createFormKey = success === "created" ? "created" : "default";
 
+  const formLabels = {
+    titleLabel: t.timeBlocks.titleLabel,
+    titlePlaceholder: t.timeBlocks.titlePlaceholder,
+    category: t.timeBlocks.category,
+    selectCategory: t.timeBlocks.selectCategory,
+    startTime: t.timeBlocks.startTime,
+    endTime: t.timeBlocks.endTime,
+    noteOptional: t.timeBlocks.noteOptional,
+    notePlaceholder: t.timeBlocks.notePlaceholder,
+    status: t.timeBlocks.status,
+    efficiencyOptional: t.timeBlocks.efficiencyOptional,
+    selectEfficiency: t.timeBlocks.selectEfficiency,
+    reviewNoteOptional: t.timeBlocks.reviewNoteOptional,
+    reviewNotePlaceholder: t.timeBlocks.reviewNotePlaceholder,
+    save: t.common.save,
+    cancel: t.common.cancel,
+    submitting: t.common.submitting,
+  };
+
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">{t.timeBlocks.title}</h1>
-        <p className="mt-1 text-sm text-zinc-600">{t.timeBlocks.subtitle}</p>
-      </div>
+    <div className="space-y-6">
+      <TimeBlockPageHeader
+        labels={{
+          title: t.timeBlocks.title,
+          pageDescription: t.timeBlocks.pageDescription,
+        }}
+      />
 
-      {successMessage ? (
-        <div
-          role="status"
-          className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900"
-        >
-          {successMessage}
-        </div>
-      ) : null}
+      <PageFeedback
+        successMessage={successMessage}
+        errorMessage={errorMessage}
+        errorTitle={t.common.errorTitle}
+      />
 
-      {errorMessage ? (
-        <div
-          role="alert"
-          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-        >
-          {errorMessage}
-        </div>
-      ) : null}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t.timeBlocks.newTimeBlock}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {categories.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {t.timeBlocks.needCategoryPrefix}{" "}
+              <Link href="/categories" className="text-primary underline-offset-4 hover:underline">
+                {t.timeBlocks.categoriesLink}
+              </Link>{" "}
+              {t.timeBlocks.needCategorySuffix}
+            </p>
+          ) : (
+            <TimeBlockForm
+              key={createFormKey}
+              formId="time-block-create-form"
+              action={createTimeBlock}
+              mode="create"
+              categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+              statusOptions={statusOptions}
+              efficiencyOptions={efficiencyOptions}
+              userTimeZone={userTimeZone}
+              labels={formLabels}
+              showEfficiencyAndReview
+              submitVariant="primary"
+              submitLabel={t.common.create}
+            />
+          )}
+        </CardContent>
+      </Card>
 
-      <section className="rounded-lg border border-zinc-200 bg-white p-6">
-        <h2 className="mb-4 text-lg font-semibold">{t.timeBlocks.newTimeBlock}</h2>
-        {categories.length === 0 ? (
-          <p className="text-sm text-amber-700">
-            {t.timeBlocks.needCategoryPrefix}{" "}
-            <Link href="/categories" className="underline">
-              {t.timeBlocks.categoriesLink}
-            </Link>{" "}
-            {t.timeBlocks.needCategorySuffix}
-          </p>
-        ) : (
-          <TimeBlockForm
-            key={createFormKey}
-            formId="time-block-create-form"
-            action={createTimeBlock}
-            mode="create"
-            categories={categories.map((c) => ({ id: c.id, name: c.name }))}
-            statusOptions={statusOptions}
-            efficiencyOptions={efficiencyOptions}
-            userTimeZone={userTimeZone}
-            labels={{
-              titleLabel: t.timeBlocks.titleLabel,
-              titlePlaceholder: t.timeBlocks.titlePlaceholder,
-              category: t.timeBlocks.category,
-              selectCategory: t.timeBlocks.selectCategory,
-              startTime: t.timeBlocks.startTime,
-              endTime: t.timeBlocks.endTime,
-              noteOptional: t.timeBlocks.noteOptional,
-              notePlaceholder: t.timeBlocks.notePlaceholder,
-              status: t.timeBlocks.status,
-              efficiencyOptional: t.timeBlocks.efficiencyOptional,
-              selectEfficiency: t.timeBlocks.selectEfficiency,
-              reviewNoteOptional: t.timeBlocks.reviewNoteOptional,
-              reviewNotePlaceholder: t.timeBlocks.reviewNotePlaceholder,
-              save: t.common.save,
-              submitting: t.common.submitting,
-            }}
-            showEfficiencyAndReview
-            submitVariant="primary"
-            submitLabel={t.common.create}
-          />
-        )}
-      </section>
-
-      <section>
-        <h2 className="mb-4 text-lg font-semibold">{t.timeBlocks.allTimeBlocks}</h2>
+      <section className="space-y-4">
+        <h2 className="text-base font-semibold">{t.timeBlocks.allTimeBlocks}</h2>
         {timeBlocks.length === 0 ? (
-          <p className="text-sm text-zinc-500">{t.timeBlocks.empty}</p>
+          <TimeBlockEmptyState
+            labels={{
+              empty: t.timeBlocks.empty,
+              emptyHint: t.timeBlocks.emptyHint,
+              goToCalendar: t.timeBlocks.goToCalendar,
+              goToFocusStopwatch: t.timeBlocks.goToFocusStopwatch,
+            }}
+          />
         ) : categories.length === 0 ? (
-          <p className="text-sm text-amber-700">
+          <p className="text-sm text-muted-foreground">
             {t.timeBlocks.cannotEditNoCategories}
           </p>
         ) : (
-          <ul className="space-y-4">
+          <div className="space-y-3">
             {timeBlocks.map((block) => {
               const minutes = durationMinutes(block.startTime, block.endTime);
 
@@ -190,18 +214,16 @@ export default async function TimeBlocksPage({
                   statusOptions={statusOptions}
                   efficiencyOptions={efficiencyOptions}
                   userTimeZone={userTimeZone}
+                  locale={locale}
                   labels={{
-                    titleLabel: t.timeBlocks.titleLabel,
-                    category: t.timeBlocks.category,
-                    startTime: t.timeBlocks.startTime,
-                    endTime: t.timeBlocks.endTime,
-                    noteOptional: t.timeBlocks.noteOptional,
-                    status: t.timeBlocks.status,
-                    efficiencyOptional: t.timeBlocks.efficiencyOptional,
-                    selectEfficiency: t.timeBlocks.selectEfficiency,
-                    reviewNoteOptional: t.timeBlocks.reviewNoteOptional,
+                    ...formLabels,
                     durationFormatted: `${minutes} ${t.timeBlocks.minutesUnit}`,
-                    statusCompletionFormatted: getStatusLabel(block.status, locale),
+                    dateFormatted: formatDateInTimeZone(
+                      block.startTime,
+                      userTimeZone,
+                      locale,
+                    ),
+                    completion: t.timeBlocks.completion,
                     startFormatted: formatDateTimeInTimeZone(
                       block.startTime,
                       userTimeZone,
@@ -215,16 +237,15 @@ export default async function TimeBlocksPage({
                     confirmDelete: formatMessage(t.timeBlocks.confirmDelete, {
                       title: block.title,
                     }),
+                    confirmDeleteTitle: t.common.confirmDeleteTitle,
                     edit: t.common.edit,
-                    save: t.common.save,
                     cancel: t.common.cancel,
                     delete: t.common.delete,
-                    submitting: t.common.submitting,
                   }}
                 />
               );
             })}
-          </ul>
+          </div>
         )}
       </section>
     </div>

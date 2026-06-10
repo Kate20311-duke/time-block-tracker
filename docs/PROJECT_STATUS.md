@@ -31,6 +31,12 @@
 
 **下一步（推荐）**：专注页 UI 打磨 / 整体 redesign（见 §21.6）
 
+**UI-1：Dashboard + App Shell（已完成第一版）** — 见 §34
+
+**UI-2：Focus 页 UI 打磨（已完成第一版）** — 见 §35
+
+**UI-3：Review 页 v0 风格对齐（已完成第一版）** — 见 §36
+
 - **Phase 9（已完成）正计时秒表**
   - `FocusSession.mode`：`pomodoro` | `stopwatch`（默认 `pomodoro`）
   - `TimeBlock.source`：`manual` | `pomodoro` | `stopwatch`（默认 `manual`）
@@ -1644,4 +1650,458 @@ docker compose up -d
 - [ ] 日视图拖/resize 仍正常
 - [ ] 周视图显示正确、可点击编辑、列头进日视图、不可拖
 - [ ] 刷新后位置正确
+
+## 34. UI-1 — Dashboard + App Shell（已完成第一版）
+
+### 34.1 目标
+
+- 参考 `reference/v0` 的视觉与结构，**不**直接复制 mock 数据或 import 生产代码
+- 替换顶栏 `AppNav` 为 **侧边栏 + 顶栏 App Shell**（已登录应用路由）
+- 重构 `/dashboard` 为 Card 布局：概览统计、进行中计时、快速开始、周图表、分类分布、最近时间块
+- **不改** Prisma schema、Server Actions、统计口径（`stats.ts` / `focus-stats.ts` 仍分离）
+
+### 34.2 行为
+
+| 项 | 说明 |
+|----|------|
+| App Shell | 路由 `/categories`、`/time-blocks`、`/calendar`、`/dashboard`、`/focus`、`/review/*` 使用 `SidebarProvider` + `AppSidebar` + `AppHeader` |
+| 公开页 | `/`、`/login` 仍为简化顶栏 + `max-w-4xl` 内容区 |
+| 导航 | `src/lib/app-nav-config.ts` — 图标侧栏项；回顾链至 `/review/day` |
+| 顶栏 | 当前页标题、占位搜索框（未接业务）、「新建时间块」→ `/time-blocks` |
+| Dashboard 数据 | 服务端 `dashboard/page.tsx` 仍用 `*ForUser` + `getDashboardDateRanges` + 现有 stats/focus 函数 |
+| 进行中计时 | `runningFocusSessionForUser` + 客户端 `ElapsedTimer`；操作链至 `/focus`（不新增 timer actions） |
+| 快速开始 | 分类按钮链至 `/focus`（最多 4 个） |
+| 主题 | `globals.css` 青绿 primary（对齐 v0 参考色） |
+
+### 34.3 新增 / 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/components/app-shell.tsx` | Shell 组合 |
+| `src/components/app-sidebar.tsx` | 侧栏导航 + 用户区 + 语言切换 |
+| `src/components/app-header.tsx` | 顶栏 |
+| `src/components/app-layout-controller.tsx` | 按路由切换 Shell / 公开布局 |
+| `src/lib/app-nav-config.ts` | 侧栏项与标题解析 |
+| `src/components/dashboard-view.tsx` | Dashboard 呈现层 |
+| `src/components/dashboard-active-timer.tsx` | 进行中会话卡片（client） |
+| `src/components/dashboard-quick-start.tsx` | 快速开始卡片 |
+| `src/components/dashboard-charts.tsx` | shadcn Card + ChartContainer |
+| `src/app/dashboard/page.tsx` | 保留取数逻辑，传递 props |
+| `src/app/layout.tsx` | 使用 `AppLayoutController` |
+| `src/app/globals.css` | v0 风格 CSS 变量 |
+| `src/lib/i18n/*` | `shell.*`、`nav.overview`、Dashboard 新文案 |
+| `eslint.config.mjs` / `tsconfig.json` | 排除 `reference/` |
+
+**删除**：`src/components/app-nav.tsx`（由 App Shell 取代）
+
+**参考代码**：`reference/v0/` 仅作视觉参考；生产代码无 `reference/` import。
+
+### 34.4 验证（2026-06-09）
+
+| 命令 | 结果 |
+|------|------|
+| `pnpm lint` | ✅ |
+| `pnpm build` | ✅ |
+| `pnpm test` | ✅ 195 tests |
+
+### 34.5 已知限制 / 下一步
+
+- 顶栏搜索为占位 UI，未接时间块搜索
+- 快速开始 / 进行中卡片仅跳转 `/focus`，不在 Dashboard 内启动计时
+- 其他页面（日历、专注、复盘等）仍为旧版内容布局，仅共享 App Shell
+- **推荐下一步**：Focus 页 UI 打磨（§21.6）或 Review 页 v0 风格对齐
+
+## 35. UI-2 — Focus 页 UI 打磨（已完成第一版）
+
+### 35.1 目标
+
+- `/focus` 与 Dashboard / App Shell 视觉一致（shadcn Card、Button、Tabs、Badge 等）
+- **正计时（秒表）为主 Tab**，番茄钟为次级 Tab
+- 保留全部现有 FocusSession / stopwatch / Pomodoro / TimeBlock 转换业务逻辑
+- Dashboard「快速开始」「进行中计时」通过 query 深链到 Focus 页
+
+### 35.2 正计时逻辑状态
+
+**已支持完整正计时业务**（Phase 9，本阶段仅 UI 重组）：
+
+| 能力 | 状态 |
+|------|------|
+| `startStopwatch` | ✅ 未改 |
+| `completeStopwatchAndCreateTimeBlock` | ✅ 未改 |
+| `cancelStopwatch` | ✅ 未改 |
+| 单用户单 `running` 会话互斥 | ✅ 未改 |
+| 结束自动写入 `TimeBlock`（`source=stopwatch`） | ✅ 未改 |
+
+### 35.3 UI 行为
+
+| 项 | 说明 |
+|----|------|
+| 布局 | 左 2/3：Tabs（正计时 / 番茄钟）；右 1/3：最近专注记录（`lg:sticky`） |
+| 默认 Tab | `?mode=stopwatch` 或有 running 秒表 → 正计时；`?mode=pomodoro` 或 orphan Pomodoro → 番茄钟 |
+| 深链 | `/focus?mode=stopwatch&category=<id>` 预填分类（Dashboard 快速开始） |
+| 进行中 | running 秒表在主 Tab 内大号计时；若当前 Tab 不匹配则顶部 `FocusRunningBanner` 提示 |
+| 正计时 UI | 大号 `ElapsedTimer`；「结束并写入时间块」主按钮；「取消计时」ghost 次要 |
+| 番茄钟 | 保留倒计时、暂停/继续、完成、放弃、转换 TimeBlock 全流程 |
+| 历史列表 | Badge 显示状态 / 模式；时长、是否已写入 TimeBlock；running 行可放弃/取消 |
+
+### 35.4 保留的业务逻辑（未改）
+
+- Server Actions：`focus-sessions.ts`、`focus-shared.ts`
+- Prisma schema / Auth / Dashboard 统计 / Calendar / Review
+- Pomodoro 客户端倒计时（不写库暂停）
+- orphan running Pomodoro 刷新后放弃
+- 历史补转 TimeBlock（`convertFocusSessionToTimeBlock`）
+
+### 35.5 新增 / 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/components/focus/focus-page-view.tsx` | 客户端页面编排（Tabs + 布局 + query 解析） |
+| `src/components/focus/focus-page-header.tsx` | 页内标题与说明 |
+| `src/components/focus/focus-running-banner.tsx` | 非当前 Tab 时的进行中提示 |
+| `src/components/stopwatch-timer.tsx` | shadcn 样式；`initialCategoryId` |
+| `src/components/focus-timer.tsx` | shadcn 样式；`OrphanRunningPomodoro` 增 `categoryColor` |
+| `src/components/focus-history.tsx` | Card + Badge 列表 |
+| `src/app/focus/page.tsx` | 数据获取 + `FocusPageView` |
+| `src/components/dashboard-quick-start.tsx` | `?mode=stopwatch&category=` 深链 |
+| `src/components/dashboard-active-timer.tsx` | `?mode=stopwatch|pomodoro` 深链 |
+| `src/lib/i18n/*` | `pageTitle`、`tabStopwatch`、`runningBanner*` 等 |
+
+### 35.6 验证（2026-06-09）
+
+| 命令 | 结果 |
+|------|------|
+| `pnpm lint` | ✅ |
+| `pnpm build` | ✅ |
+| `pnpm test` | ✅ 195 tests |
+
+### 35.7 已知限制 / 下一阶段
+
+- 番茄钟刷新后倒计时 UI 仍不恢复（仅 DB `running` + orphan 放弃流程）
+- 秒表无暂停（Phase 9 范围外）
+- Dashboard 仍不在页内启动计时，仅深链
+- **推荐下一步**：Calendar / 列表页 UI 统一
+
+## 36. UI-3 — Review 页 v0 风格对齐（已完成第一版）
+
+### 36.1 目标
+
+- `/review/day` 与 `/review/week` 与 Dashboard / Focus 视觉一致
+- 成为「每日 / 每周复盘」中心：概览卡片、分类分布、列表、空状态
+- **仅 UI 与页面组织**；统计仍用 `summarizeCompletionQuality`、`clipBlocksToRange`、`formatBlockDurationInRange` 等
+
+### 36.2 统计口径
+
+**未改变。** 复盘页仍仅统计 **TimeBlock**（与改造前一致）；未新增 FocusSession 查询或合并统计。页面顶部 `scopeNote` 说明与 Dashboard 双视角一致。
+
+### 36.3 UI 行为
+
+| 项 | 说明 |
+|----|------|
+| 导航 | `ReviewModeNav` — 每日 / 每周链至 `/review/day`、`/review/week`（保留 `?date=`） |
+| 日期选择 | `ReviewDateControls` — 原 GET 表单逻辑不变 |
+| 概览 | 4 卡：计划时长、估算完成、完成率、跳过时长（来自 `summarizeCompletionQuality`） |
+| 周视图 | 本周总时长 Badge + CSS 柱状「每日分解」+ Progress 列表 |
+| 分类 | Progress 堆叠条 + 占比列表 |
+| 列表 | 标题、分类/状态 Badge、时间范围、裁剪时长、reviewNote |
+| 空状态 | 链至 `/calendar` 与 `/focus?mode=stopwatch` |
+
+### 36.4 新增 / 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/components/review/review-page-header.tsx` | 页标题与说明 |
+| `src/components/review/review-mode-nav.tsx` | 日/周切换 |
+| `src/components/review/review-date-controls.tsx` | 日期表单与跳转 |
+| `src/components/review/review-summary-cards.tsx` | 概览统计卡 |
+| `src/components/review/review-category-breakdown.tsx` | 分类 Progress |
+| `src/components/review/review-daily-breakdown.tsx` | 周每日分解 |
+| `src/components/review/review-time-block-list.tsx` | 时间块列表 |
+| `src/components/review/review-empty-state.tsx` | 空状态 |
+| `src/components/review/review-scope-note.tsx` | TimeBlock 口径说明 |
+| `src/lib/review-ui.ts` | 列表映射与完成数 helper |
+| `src/app/review/day/page.tsx` | 日复盘页重构 |
+| `src/app/review/week/page.tsx` | 周复盘页重构 |
+| `src/lib/i18n/*` | `scopeNote`、`tabDay`、`empty*Hint` 等 |
+
+### 36.5 验证（2026-06-09）
+
+| 命令 | 结果 |
+|------|------|
+| `pnpm lint` | ✅ |
+| `pnpm build` | ✅ |
+| `pnpm test` | ✅ 195 tests |
+
+### 36.6 已知限制 / 下一阶段
+
+- 复盘页仍无 FocusSession 统计（有意保持原业务边界）
+- 周视图柱状图为 CSS 简易图，非 Recharts
+- **推荐下一步**：Calendar 页 UI 统一
+
+## 37. UI-4 — Categories / Time Blocks 列表与表单统一（已完成第一版）
+
+### 37.1 目标
+
+- `/categories` 与 `/time-blocks` 与 Dashboard / Focus / Review 视觉一致
+- Card 包装创建表单与列表；Badge 展示分类、状态、时长；保留删除确认
+- **仅 UI 与页面组织**；Server Actions、验证、删除约束逻辑不变
+
+### 37.2 业务逻辑
+
+**未改变。** 仍使用 `createCategory` / `updateCategory` / `deleteCategory`、`createTimeBlock` / `updateTimeBlock` / `deleteTimeBlock`；分类删除前仍检查 timeBlocks 与 focusSessions；TimeBlock 表单仍通过 `TimeBlockForm` + `TimeBlockDatetimeFields` 提交 UTC ISO。
+
+### 37.3 UI 行为
+
+| 页 | 说明 |
+|----|------|
+| Categories | 页标题「分类」+ 说明；Card 创建表单；列表 Card 含色条、名称、关联数量 Badge、编辑/删除（`confirm()` 保留） |
+| Categories 空状态 | 虚线 Card 引导创建第一个分类 |
+| Time Blocks | 页标题「时间块」+ 说明；Card 创建区；列表 Card 含分类 Badge、状态 Badge、partial 完成度、日期/时间范围、备注 |
+| Time Blocks 空状态 | 链至 `/calendar` 与 `/focus?mode=stopwatch` |
+
+### 37.4 新增 / 修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/components/categories/category-page-header.tsx` | 页标题 |
+| `src/components/categories/category-form-card.tsx` | Card 创建表单 |
+| `src/components/categories/category-empty-state.tsx` | 空状态 |
+| `src/components/time-blocks/time-block-page-header.tsx` | 页标题 |
+| `src/components/time-blocks/time-block-status-badge.tsx` | 状态 + partial 完成度 |
+| `src/components/time-blocks/time-block-empty-state.tsx` | 空状态 |
+| `src/components/page-feedback.tsx` | 成功/错误提示 |
+| `src/components/category-row.tsx` | shadcn Card + Button 列表行 |
+| `src/components/time-block-row.tsx` | 对齐 Review 列表样式 |
+| `src/components/time-block-form.tsx` | shadcn Input/Textarea |
+| `src/components/submit-button.tsx` | shadcn Button |
+| `src/components/delete-confirm-button.tsx` | destructive Button + confirm |
+| `src/app/categories/page.tsx` | 页面编排 |
+| `src/app/time-blocks/page.tsx` | 页面编排 |
+| `src/lib/i18n/*` | `pageDescription`、`emptyHint`、空状态跳转文案 |
+
+### 37.5 验证（2026-06-09）
+
+| 命令 | 结果 |
+|------|------|
+| `pnpm lint` | ✅ |
+| `pnpm build` | ✅ |
+| `pnpm test` | ✅ |
+
+### 37.6 已知限制 / 下一阶段
+
+- 创建/编辑仍用原生 `<select>`（Server Actions 兼容），非 Radix Select
+- 列表页仍为内联编辑，未改为 Dialog/Sheet
+- **推荐下一步**：Calendar 页 UI 统一（见 §38）
+
+## 38. UI-5 — Calendar 视觉细节与详情面板美化（已完成第一版）
+
+### 38.1 目标
+
+- `/calendar` 与 Dashboard / Focus / Review 视觉一致
+- 工具栏、时间块卡片、创建/编辑面板、空状态产品化
+- **仅展示层**；布局算法、拖拽、resize、时区、URL query 语义不变
+
+### 38.2 明确未改的核心逻辑
+
+| 区域 | 状态 |
+|------|------|
+| `src/lib/calendar.ts` | ✅ 未改 |
+| 拖拽 / resize | ✅ CalendarDraggableBlock 指针逻辑未改 |
+| 周视图 resize 禁用 | ✅ `enableResize={!compact}` 保留 |
+| Server Actions | ✅ calendar-time-blocks actions 未改 |
+| URL `date` / `view` / `blockId` | ✅ 行为不变 |
+
+### 38.3 UI 行为
+
+| 项 | 说明 |
+|----|------|
+| 页头 | `CalendarPageHeader` + `CalendarToolbar` |
+| 新建 | `CalendarQuickCreateButton` — 默认 9:00 或今日 snapped 当前时间 |
+| 时间块 | 左色条 + Card 风格；日视图显示状态/partial 完成度 Badge |
+| 编辑面板 | Card + `CalendarBlockPanelSummary` + 原 TimeBlockForm |
+| 空状态 | 虚线 Card |
+
+### 38.4 新增 / 修改文件
+
+见 `docs/AI_CONTEXT.md` UI-5 阶段；主要：`calendar-page-header`、`calendar-toolbar`、`calendar-block-card`、panels、grids、`calendar/page.tsx`、`calendar-slot-create.ts`、i18n。
+
+### 38.5 验证（2026-06-09）
+
+| 命令 | 结果 |
+|------|------|
+| `pnpm lint` | ✅ |
+| `pnpm build` | ✅ |
+| `pnpm test` | ✅ |
+
+### 38.6 已知限制 / 下一阶段
+
+- 周视图 compact 块不显示状态 Badge
+- 编辑仍为页内 Card 面板，非 Sheet/Dialog
+- **推荐下一步**：Settings 页（可选）
+
+## 39. UI-6 — 全站 polish（已完成第一版）
+
+### 39.1 目标
+
+- Loading / Skeleton、Empty / Error 状态、Toast、删除确认 Dialog、表单 loading、移动端最小安全优化
+- **仅 UI 层**；不改业务逻辑、统计口径、Auth、schema
+
+### 39.2 完成项
+
+| 项 | 说明 |
+|----|------|
+| Toaster | `Providers` + `ThemeProvider` 挂载于 `layout.tsx` |
+| PageFeedback | 客户端组件：inline 提示 + sonner toast 双通道 |
+| 删除确认 | `DeleteConfirmButton` 改为 Dialog；Focus 取消/放弃同样确认 |
+| SubmitButton | pending 时 Loader2 + disabled |
+| EmptyState | 通用组件；Categories / TimeBlocks / Review / Calendar / Dashboard 复用 |
+| PageLoading | 各主路由 `loading.tsx` skeleton |
+| Focus toast | 正计时开始/结束/取消、历史放弃/转换 client action 提示 |
+| 移动端 | AppShell `overflow-x-hidden`；Header 新建按钮小屏图标 |
+
+### 39.3 保留行为
+
+- Server action + redirect 的 `?success=` / `?error=` **仍保留** inline PageFeedback（并 mirror toast）
+- Calendar 拖拽/resize、Dashboard 统计、Focus 计时逻辑未改
+
+### 39.4 验证（2026-06-09）
+
+| 命令 | 结果 |
+|------|------|
+| `pnpm lint` | ✅ |
+| `pnpm build` | ✅ |
+| `pnpm test` | ✅ |
+
+### 39.5 已知限制 / 下一阶段
+
+- 番茄钟 client 倒计时成功仍主要用 inline alert，toast 覆盖不完整
+- Calendar 移动端周视图仍依赖横向滚动
+- **推荐下一步**：Settings 页（时区/语言/账户，可选）
+
+## 40. Feature-2 — 秒表增强（pause / complete dialog / quick start / header indicator）
+
+### 40.1 Schema
+
+| 字段 | 说明 |
+|------|------|
+| `FocusSession.pausedAt` | 最近一次暂停开始的墙钟时刻（`null` = 未暂停） |
+| `FocusSession.pausedTotalSeconds` | 累计暂停秒数（不含当前暂停段，resume 时累加） |
+| `FocusSession.status = paused` | **仅 stopwatch**；pomodoro 不使用 |
+
+迁移：`prisma/migrations/20260609120000_stopwatch_pause_fields/migration.sql`
+
+### 40.2 TimeBlock.endTime 语义（stopwatch 专用）
+
+秒表完成时：
+
+- `TimeBlock.startTime = FocusSession.startTime`
+- `TimeBlock.endTime = startTime + activeDuration`（**有效计时**，不含暂停）
+- `FocusSession.endTime = 墙钟完成时刻`（审计/历史用）
+
+Calendar 与 Dashboard **统计仍以 TimeBlock 为准**；块在日历上表示“记录的有效时长区间”，**不表示真实结束时刻**。手动块与 pomodoro 转换块不受影响。
+
+实现：`src/lib/focus-session-elapsed.ts` + `completeStopwatchInTransaction`
+
+### 40.3 Server Actions
+
+| Action | 说明 |
+|--------|------|
+| `pauseStopwatch` | `running` → `paused`，写入 `pausedAt` |
+| `resumeStopwatch` | `paused` → `running`，累加 `pausedTotalSeconds`，清空 `pausedAt` |
+| `completeStopwatchAndCreateTimeBlock` | 接受 `title` / `note` / `status` / `completionLevel`；支持 `running`/`paused` claim |
+| `cancelStopwatch` | `running`/`paused` → `abandoned`；不创建 TimeBlock |
+| `startStopwatch` / `createFocusSession` | 互斥改为 `activeFocusSessionForUser`（`running` **或** `paused`） |
+
+结束 Dialog **取消** → 不调用 complete action，session 保持 active。
+
+默认 complete 字段：title（session → 分类名 → `instantRecordTitle`）、note（session）、status=`completed`、completionLevel=`100`。
+
+### 40.4 UI
+
+| 区域 | 变更 |
+|------|------|
+| `/focus` 秒表 | 暂停/继续；结束打开 `StopwatchCompleteDialog` |
+| Dashboard 快速开始 | 页内 `startStopwatch`（分类名作默认 title）；有 active session 时 toast 拦截 |
+| Dashboard 活动计时 | 支持 paused 状态与 pause-aware elapsed |
+| AppHeader | `GlobalFocusTimerIndicator`（layout 查询 `activeFocusSessionForUser`） |
+
+**未改：** pomodoro 业务逻辑、Calendar 拖拽/resize/TZ、Dashboard TimeBlock 统计口径。
+
+### 40.5 测试覆盖
+
+- pause / resume / pause 后 complete / paused cancel
+- active session 互斥（`rejectStopwatchStartWhenActive`）
+- repeated complete 防重复（transaction claim）
+- elapsed 与 TimeBlock.endTime 语义单测
+
+### 40.6 验证
+
+```bash
+pnpm exec prisma migrate deploy   # 或 migrate dev
+pnpm prisma generate
+pnpm lint
+pnpm build
+pnpm test
+```
+
+## 41. Product-1 — Demo 体验打磨
+
+### 41.1 目标
+
+让外部访客与朋友打开 demo 后快速理解产品，无需口头解释过多。**仅** Landing、本地 seed、轻量 onboarding、文档；不改业务逻辑与统计口径。
+
+### 41.2 Landing Page
+
+| 项 | 说明 |
+|----|------|
+| `/` 未登录 | 新产品 Landing（Hero、4 功能卡片、GitHub 登录 CTA） |
+| `/` 已登录 | `redirect("/dashboard")` |
+| 风格 | 复用 shadcn `Card` / `Button`，与 App 设计 token 一致 |
+| i18n | `landing.*` 中英文 |
+
+### 41.3 Demo seed（仅本地）
+
+| 项 | 说明 |
+|----|------|
+| 脚本 | `scripts/seed-demo.ts` → `pnpm db:seed:demo` |
+| 分类 | 学习 / 工作 / 休息 / 运动 / 娱乐（description 含 `[Demo]`） |
+| 数据 | 最近一周 TimeBlocks + FocusSessions（多 status / completionLevel） |
+| 绑定用户 | `DEMO_SEED_USER_EMAIL`（须先本地 GitHub 登录） |
+| 安全 | `assertDemoSeedAllowed`：默认仅 localhost；非本地须 `DEMO_SEED=1` |
+| 生产 | **不**接入 Vercel build；**不**创建线上共享 demo 账号 |
+
+### 41.4 Onboarding
+
+- Dashboard 顶部 **checklist card**（无 tour 库）
+- 三步：创建分类 → 时间块/正计时 → 看板/复盘
+- 有分类且有（TimeBlock 或 FocusSession）后隐藏
+
+### 41.5 文档
+
+| 文件 | 内容 |
+|------|------|
+| `README.md` | 简介、功能、技术栈、本地运行、demo seed、部署、截图占位 |
+| `docs/DEPLOYMENT.md` | Vercel + Neon 索引与 FAQ |
+| `docs/SCREENSHOTS.md` | 截图指南 |
+| Demo URL | README 占位 `<!-- your-demo-url -->` |
+
+### 41.6 验证
+
+```bash
+pnpm lint && pnpm test && pnpm build
+# seed 手动：pnpm db:seed:demo（仅本地）
+```
+
+### 41.7 已知限制
+
+- 线上 Demo 须 GitHub 登录，无免登录浏览
+- 无共享 demo 账号；演示数据仅本地 seed
+- 截图文件需自行截取，README 为占位
+- Landing「本地 demo」说明指向 README，非应用内 seed
+
+### 41.8 下一阶段建议
+
+- 替换 README Demo URL 与 `public/screenshots/` 真实截图
+- Settings 页（语言/时区偏好）
+- 可选 staging Neon branch
 

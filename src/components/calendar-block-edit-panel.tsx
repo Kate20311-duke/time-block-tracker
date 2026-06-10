@@ -4,12 +4,23 @@ import {
   deleteTimeBlockFromCalendar,
   updateTimeBlockFromCalendar,
 } from "@/lib/actions/calendar-time-blocks";
+import { CalendarBlockPanelSummary } from "@/components/calendar-block-panel-summary";
 import { DeleteConfirmButton } from "@/components/delete-confirm-button";
 import {
   TimeBlockForm,
   type TimeBlockFormLabels,
 } from "@/components/time-block-form";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import type { CalendarEditBlockData } from "@/lib/calendar-edit";
+import { durationMinutes } from "@/lib/time";
+import type { Locale } from "@/lib/i18n/types";
 
 export type { CalendarEditBlockData };
 
@@ -19,6 +30,9 @@ type PanelLabels = TimeBlockFormLabels & {
   panelAria: string;
   delete: string;
   confirmDelete: string;
+  confirmDeleteTitle: string;
+  completion: string;
+  minutesUnit: string;
 };
 
 type Props = {
@@ -27,6 +41,7 @@ type Props = {
   statusOptions: { value: string; label: string }[];
   efficiencyOptions: { value: string; label: string }[];
   userTimeZone: string;
+  locale: Locale;
   startTimeIso: string;
   endTimeIso: string;
   calendarDate: string;
@@ -41,6 +56,7 @@ export function CalendarBlockEditPanel({
   statusOptions,
   efficiencyOptions,
   userTimeZone,
+  locale,
   startTimeIso,
   endTimeIso,
   calendarDate,
@@ -49,73 +65,75 @@ export function CalendarBlockEditPanel({
   onCancel,
 }: Props) {
   const formId = `calendar-block-edit-${block.id}`;
+  const minutes = durationMinutes(new Date(startTimeIso), new Date(endTimeIso));
 
   return (
-    <section
-      aria-label={labels.panelAria}
-      className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm"
-    >
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            className="h-3 w-3 shrink-0 rounded-full"
-            style={{ backgroundColor: block.category.color }}
-            aria-hidden
-          />
-          <h2 className="truncate text-lg font-semibold text-zinc-900">
-            {block.title}
-          </h2>
-        </div>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-        >
+    <Card aria-label={labels.panelAria}>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <CardTitle className="text-base">{block.title}</CardTitle>
+        <Button type="button" variant="outline" size="sm" onClick={onCancel}>
           {labels.cancel}
-        </button>
-      </div>
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <CalendarBlockPanelSummary
+          locale={locale}
+          userTimeZone={userTimeZone}
+          categoryName={block.category.name}
+          categoryColor={block.category.color}
+          startTimeIso={startTimeIso}
+          endTimeIso={endTimeIso}
+          status={block.status}
+          completionLevel={block.completionLevel}
+          completionLabel={labels.completion}
+          durationLabel={`${minutes} ${labels.minutesUnit}`}
+          note={block.note}
+        />
 
-      <TimeBlockForm
-        formId={formId}
-        action={updateTimeBlockFromCalendar}
-        mode="edit"
-        values={{
-          id: block.id,
-          title: block.title,
-          categoryId: block.categoryId,
-          status: block.status,
-          efficiencyLevel: block.efficiencyLevel,
-          note: block.note,
-          reviewNote: block.reviewNote,
-          startTimeIso,
-          endTimeIso,
-        }}
-        categories={categories}
-        statusOptions={statusOptions}
-        efficiencyOptions={efficiencyOptions}
-        userTimeZone={userTimeZone}
-        labels={labels}
-        hiddenFields={{
-          calendarDate,
-          calendarView,
-          calendarBlockId: block.id,
-        }}
-        submitVariant="secondary"
-        onCancel={onCancel}
-      />
+        <TimeBlockForm
+          formId={formId}
+          action={updateTimeBlockFromCalendar}
+          mode="edit"
+          values={{
+            id: block.id,
+            title: block.title,
+            categoryId: block.categoryId,
+            status: block.status,
+            efficiencyLevel: block.efficiencyLevel,
+            note: block.note,
+            reviewNote: block.reviewNote,
+            startTimeIso,
+            endTimeIso,
+          }}
+          categories={categories}
+          statusOptions={statusOptions}
+          efficiencyOptions={efficiencyOptions}
+          userTimeZone={userTimeZone}
+          labels={labels}
+          hiddenFields={{
+            calendarDate,
+            calendarView,
+            calendarBlockId: block.id,
+          }}
+          submitVariant="secondary"
+          onCancel={onCancel}
+        />
 
-      <div className="mt-4 border-t border-zinc-100 pt-4">
+        <Separator />
+
         <DeleteConfirmButton
           action={deleteTimeBlockFromCalendar}
           id={block.id}
           confirmMessage={labels.confirmDelete}
+          confirmTitle={labels.confirmDeleteTitle}
+          cancelLabel={labels.cancel ?? "Cancel"}
           deleteLabel={labels.delete}
           extraFields={{
             calendarDate,
             calendarView,
           }}
         />
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }

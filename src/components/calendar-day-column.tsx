@@ -19,6 +19,8 @@ export type CalendarColumnBlock = {
   title: string;
   categoryName: string;
   color: string;
+  status: string;
+  completionLevel: number;
   layout: DayBlockLayout;
   startTimeIso: string;
   endTimeIso: string;
@@ -31,6 +33,7 @@ type Props = {
   selectedBlockId?: string;
   compact?: boolean;
   continuedSegmentLabel: string;
+  completionLabel: string;
   onBlockSelect: (blockId: string) => void;
   /** Enables drag for blocks that pass canDragBlock (default: all). */
   enableDrag?: boolean;
@@ -53,6 +56,7 @@ export function CalendarDayColumn({
   selectedBlockId,
   compact = false,
   continuedSegmentLabel,
+  completionLabel,
   onBlockSelect,
   enableDrag = false,
   canDragBlock,
@@ -96,13 +100,13 @@ export function CalendarDayColumn({
 
   return (
     <div
-      className="relative min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white"
+      className="relative min-w-0 flex-1 rounded-lg border border-border bg-card"
       style={{ height: GRID_HEIGHT_PX }}
     >
       {hours.map((hour) => (
         <div
           key={hour}
-          className="absolute right-0 left-0 border-t border-zinc-100"
+          className="absolute right-0 left-0 border-t border-border/60"
           style={{ top: hour * HOUR_ROW_PX, height: HOUR_ROW_PX }}
         />
       ))}
@@ -131,6 +135,10 @@ export function CalendarDayColumn({
                 categoryName={block.categoryName}
                 color={block.color}
                 timeLabel={timeLabel(block)}
+                locale={locale}
+                status={block.status}
+                completionLevel={block.completionLevel}
+                completionLabel={completionLabel}
                 layout={block.layout}
                 isSelected={selectedBlockId === block.blockId}
                 compact={compact}
@@ -150,6 +158,10 @@ export function CalendarDayColumn({
               timeLabel={timeLabel(block)}
               layout={block.layout}
               blockId={block.blockId}
+              locale={locale}
+              status={block.status}
+              completionLevel={block.completionLevel}
+              completionLabel={completionLabel}
               isSelected={selectedBlockId === block.blockId}
               compact={compact}
               dragDisabledHint={

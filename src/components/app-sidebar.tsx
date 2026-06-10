@@ -105,8 +105,9 @@ export function AppSidebar({ locale, dict, user, signOutAction }: Props) {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <div className="flex w-full items-center gap-2 px-2 py-1.5">
+            <div className="w-full min-w-0 px-2 py-1.5 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-1">
               <LanguageSwitcher
+                variant="sidebar"
                 locale={locale}
                 labels={{
                   aria: dict.lang.switcherAria,

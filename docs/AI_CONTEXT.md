@@ -28,6 +28,7 @@ Personal time-block planner + Pomodoro + **stopwatch** focus tracker. **Phase 9:
 | **UI-6** | **Done** (Site-wide polish: loading, empty, toast, confirm) — see `PROJECT_STATUS.md` §39 |
 | **Feature-2** | **Done** (Stopwatch pause/resume, complete dialog, dashboard quick start, header timer) — see `PROJECT_STATUS.md` §40 |
 | **Product-1** | **Done** (Landing, local demo seed, onboarding, README/deploy docs) — see `PROJECT_STATUS.md` §41 |
+| **UI bugfix** | **Done** (Sidebar language dropdown opens upward; no overlay on calendar edit panel) — see `PROJECT_STATUS.md` §42 |
 
 ## Stack
 
@@ -44,6 +45,7 @@ Browser → middleware (auth gate) → App Router pages (requireUser + *ForUser)
 - **Public:** `/` (landing when logged out), `/login`, `/api/auth/*`
 - **Private:** `/categories`, `/time-blocks`, `/calendar`, `/dashboard`, `/focus`, `/review/*`
 - **Layout:** logged-in app routes use `AppShell` (sidebar + header); `/` (logged out) and `/login` use simplified public header (`AppLayoutController`); logged-in `/` → `/dashboard`
+- **Language:** `LanguageSwitcher` — `variant="inline"` (landing/public header); `variant="sidebar"` (AppSidebar footer dropdown, `side="top"` to avoid covering main content)
 - **No** REST API for business data; writes via Server Actions only
 
 ## Auth / session

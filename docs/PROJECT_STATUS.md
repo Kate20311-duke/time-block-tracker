@@ -2105,3 +2105,24 @@ pnpm lint && pnpm test && pnpm build
 - Settings 页（语言/时区偏好）
 - 可选 staging Neon branch
 
+## 42. UI bugfix — Sidebar 语言菜单遮挡 Calendar 编辑区
+
+### 42.1 问题
+
+Windows / Chrome 下，AppSidebar 底部语言切换（原横向「中文 / English」按钮组）在侧栏宽度不足或折叠时向右侧溢出，覆盖主内容区 Calendar 时间块编辑面板的「保存 / 取消」按钮。
+
+### 42.2 修复
+
+| 文件 | 变更 |
+|------|------|
+| `src/components/language-switcher.tsx` | 新增 `variant="sidebar"`：紧凑触发器 + `DropdownMenuContent` **`side="top"`**、`align="start"`，菜单在侧栏内向上展开；折叠态仅显示 Languages 图标 |
+| `src/components/app-sidebar.tsx` | 使用 `variant="sidebar"`；footer 容器 `min-w-0` + 折叠居中 |
+
+**未改：** Landing / 公开 header 仍用 `variant="inline"`（默认）；Calendar 编辑逻辑、Prisma、业务 actions 无变更。
+
+### 42.3 验证
+
+- Calendar 编辑时间块时，语言菜单不遮挡保存/取消
+- 侧栏展开与 icon 折叠、Dashboard / Focus / Review 语言切换正常
+- `pnpm lint` / `pnpm test` / `pnpm build`
+

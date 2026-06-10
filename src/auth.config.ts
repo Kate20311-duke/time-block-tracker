@@ -20,6 +20,10 @@ export const authConfig = {
         return true;
       }
 
+      if (pathname === "/manifest.webmanifest") {
+        return true;
+      }
+
       return !!auth?.user;
     },
     jwt({ token, user }) {

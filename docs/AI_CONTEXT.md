@@ -30,6 +30,7 @@ Personal time-block planner + Pomodoro + **stopwatch** focus tracker. **Phase 9:
 | **Product-1** | **Done** (Landing, local demo seed, onboarding, README/deploy docs) — see `PROJECT_STATUS.md` §41 |
 | **UI bugfix** | **Done** (Sidebar language dropdown opens upward; no overlay on calendar edit panel) — see `PROJECT_STATUS.md` §42 |
 | **Auth bugfix** | **Done** (GitHub OAuth guarded `profile()` — production `OAuthProfileParseError`) — see `PROJECT_STATUS.md` §43 |
+| **PWA** | **Done** (installable MVP: manifest + icons; no service worker) — see `PROJECT_STATUS.md` §44 |
 
 ## Stack
 
@@ -63,6 +64,17 @@ Browser → middleware (auth gate) → App Router pages (requireUser + *ForUser)
 - Session: **JWT** (`session: { strategy: "jwt" }`)
 - Sign-in page: `/login`
 - **GitHub `profile()`** (`src/auth.ts`): guarded mapping — `id: String(profile.id ?? profile.sub)` with fallbacks for `name` / `email` / `image`. Avoids Auth.js default `profile.id.toString()` when GitHub userinfo omits `id` (production `OAuthProfileParseError`). Verify on Vercel: `/login` → GitHub → lands on `/dashboard`; no `OAuthProfileParseError` in Runtime Logs.
+
+### PWA (installable MVP)
+
+- **Manifest:** `src/app/manifest.ts` → `/manifest.webmanifest` (`name`: Time Block Tracker, `start_url`: `/`, `display`: standalone).
+- **Constants:** `src/lib/pwa.ts` — theme `#1f7a9e`, background `#f8fafc`.
+- **Icons:** `public/icons/icon-192.png`, `icon-512.png`, `public/apple-touch-icon.png`, `public/favicon.ico`.
+- **Metadata:** `layout.tsx` — `themeColor`, `icons`, `appleWebApp`.
+- **Auth:** `/manifest.webmanifest` is public in `auth.config.ts` (must not require login).
+- **No service worker** — offline / push intentionally deferred; do **not** cache `/api/auth/*`, `/api/*`, or authenticated pages if adding SW later.
+- **Test:** Lighthouse PWA (Chrome), Android install, iOS Safari Add to Home Screen, Vercel HTTPS. See `PROJECT_STATUS.md` §44.
+- **Next likely:** Google login or AI planning MVP.
 
 ## Data model & ownership
 
@@ -296,8 +308,9 @@ Teams · sharing · invites · payments · password login · dev Credentials in 
 
 ## Next likely tasks
 
-1. **Settings page** — timezone, locale, profile (optional)
-2. Pomodoro refresh recovery (localStorage) — optional
-3. Cross-midnight stats; Review + Focus summary
+1. **Google login** — second OAuth provider alongside GitHub
+2. **AI planning MVP** — time-block suggestions / review assist
+3. **Settings page** — timezone, locale, profile (optional)
+4. Pomodoro refresh recovery (localStorage) — optional
 
-Full status: `docs/PROJECT_STATUS.md` §21、§34–§39
+Full status: `docs/PROJECT_STATUS.md` §21、§34–§44

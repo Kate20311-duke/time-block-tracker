@@ -2168,3 +2168,84 @@ OAuth token 交换可成功，但在将 GitHub userinfo 映射为 Auth.js 用户
 4. Vercel → Project → **Logs**（Runtime）：筛选 `OAuthProfileParseError` 或 `profile`，确认登录流程无新错误。
 5. 若仍失败且日志为 `GitHub profile is missing id`，检查 Vercel 上 `AUTH_GITHUB_*` 是否与 GitHub OAuth App 匹配，以及 GitHub API `/user` 是否返回有效用户对象。
 
+## 44. PWA — 可安装 MVP（已完成第一版）
+
+### 44.1 目标
+
+让应用在移动端与桌面浏览器可「添加到主屏幕 / 安装」，以独立窗口（`standalone`）打开。**本阶段保守**：仅 manifest + 图标 + metadata；**不**实现离线缓存或 Service Worker。
+
+### 44.2 实现
+
+| 项 | 说明 |
+|----|------|
+| Manifest | `src/app/manifest.ts`（Next.js App Router 约定，自动暴露 `/manifest.webmanifest`） |
+| 常量 | `src/lib/pwa.ts` — 名称、主题色、start_url |
+| Metadata | `src/app/layout.tsx` — `themeColor`、`icons`、`appleWebApp`、iOS 相关 meta |
+| 图标 | `public/icons/icon-192.png`、`icon-512.png`；`public/apple-touch-icon.png`；`public/favicon.ico` |
+| Auth 放行 | `src/auth.config.ts` — `/manifest.webmanifest` 无需登录（避免 PWA 安装检测失败） |
+| Service Worker | **未添加**（离线能力 intentionally deferred） |
+
+### 44.3 Manifest 详情
+
+| 字段 | 值 |
+|------|-----|
+| `name` | Time Block Tracker |
+| `short_name` | TimeBlock |
+| `description` | Personal time-block calendar, focus timer, and time tracking. |
+| `start_url` | `/`（已登录用户由首页 redirect 至 `/dashboard`；未登录见 Landing 或经 middleware 跳转 `/login`） |
+| `scope` | `/` |
+| `display` | `standalone` |
+| `theme_color` | `#1f7a9e`（与 UI primary 青蓝色一致） |
+| `background_color` | `#f8fafc` |
+| `icons` | 192×192、512×512（`purpose: any` + maskable 512） |
+
+### 44.4 如何测试安装
+
+**前提：** 须 **HTTPS**（Vercel 生产域名或 `localhost` 开发）。
+
+1. **Chrome 桌面 — Lighthouse**
+   - 打开生产或本地 HTTPS 站点 → DevTools → Lighthouse → Categories 勾选 **Progressive Web App** → Analyze。
+   - 预期：manifest 与图标可检测；**无 Service Worker** 时「离线 / SW」相关项可能未通过（已知限制）。
+
+2. **Android Chrome**
+   - 访问已部署站点 → 菜单 → **安装应用** / **添加到主屏幕**（视 Chrome 版本与参与度启发式）。
+   - 安装后从主屏幕图标打开，应为 `standalone` 全屏壳层；GitHub 登录流程应正常。
+
+3. **iPhone Safari**
+   - 打开生产 HTTPS URL → 分享 → **添加到主屏幕**。
+   - 确认主屏幕图标为 `apple-touch-icon`；打开后无浏览器地址栏（standalone 近似体验）。
+   - 未登录访问私有路由应仍跳转 `/login`。
+
+4. **Vercel 生产**
+   - 部署后访问 `https://<domain>/manifest.webmanifest`（无需登录）应返回 JSON manifest。
+   - 登录 → 安装 → 再次打开 → `/` 或私有页行为与浏览器一致。
+
+### 44.5 已知限制
+
+- **无真正离线模式**：未注册 Service Worker；断网后除浏览器缓存外无法使用。
+- **无推送通知**。
+- **后台计时**：秒表 / 番茄钟在应用切后台或锁屏时依赖浏览器与系统，可能暂停或不准。
+- **Chrome 安装提示**：部分环境可能不显示自动 install banner（无 SW、未满足参与度等）；用户仍可手动「安装应用」或「添加到主屏幕」。
+- **图标**：当前为简洁占位风格 PNG；后续可替换为正式品牌资源。
+
+### 44.6 文件变更
+
+```
+src/app/manifest.ts
+src/lib/pwa.ts
+src/app/layout.tsx          # metadata
+src/auth.config.ts          # 公开 manifest 路由
+public/icons/icon-192.png
+public/icons/icon-512.png
+public/apple-touch-icon.png
+public/favicon.ico
+docs/PROJECT_STATUS.md
+docs/AI_CONTEXT.md
+```
+
+### 44.7 建议下一阶段
+
+1. **Google 登录**（OAuth provider 扩展，与现有 GitHub 并列）
+2. **AI 规划 MVP**（时间块建议 / 复盘辅助）
+3. 可选：轻量 Service Worker（仅安装壳层，**不**缓存 `/api/auth/*` 与动态页）
+

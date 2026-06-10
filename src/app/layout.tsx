@@ -10,6 +10,7 @@ import { activeFocusSessionForUser, categoriesForUser } from "@/lib/db/scoped";
 import { getDictionary } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n/server";
 import { getSessionUser } from "@/lib/session";
+import { PWA_SHORT_NAME, PWA_THEME_COLOR } from "@/lib/pwa";
 import { THEME_INIT_SCRIPT } from "@/lib/theme-init-script";
 import "./globals.css";
 
@@ -29,6 +30,34 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: dict.app.brand,
     description: dict.app.metaDescription,
+    applicationName: PWA_SHORT_NAME,
+    themeColor: [
+      { media: "(prefers-color-scheme: light)", color: PWA_THEME_COLOR },
+      { media: "(prefers-color-scheme: dark)", color: PWA_THEME_COLOR },
+    ],
+    appleWebApp: {
+      capable: true,
+      title: PWA_SHORT_NAME,
+      statusBarStyle: "default",
+    },
+    icons: {
+      icon: [
+        { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+        { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      ],
+      apple: [
+        { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      ],
+    },
+    other: {
+      "mobile-web-app-capable": "yes",
+      "apple-mobile-web-app-title": PWA_SHORT_NAME,
+      "msapplication-TileColor": PWA_THEME_COLOR,
+      "msapplication-navbutton-color": PWA_THEME_COLOR,
+    },
+    formatDetection: {
+      telephone: false,
+    },
   };
 }
 

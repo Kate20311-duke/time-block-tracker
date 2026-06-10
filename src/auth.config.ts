@@ -1,7 +1,7 @@
 import type { NextAuthConfig } from "next-auth";
 
 /**
- * Edge-safe Auth.js config (no Prisma). Used by middleware and merged in auth.ts.
+ * Edge-safe Auth.js config (no Prisma). Used by proxy and merged in auth.ts.
  */
 export const authConfig = {
   pages: {

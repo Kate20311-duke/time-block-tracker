@@ -2126,3 +2126,45 @@ Windows / Chrome 下，AppSidebar 底部语言切换（原横向「中文 / Engl
 - 侧栏展开与 icon 折叠、Dashboard / Focus / Review 语言切换正常
 - `pnpm lint` / `pnpm test` / `pnpm build`
 
+## 43. Auth bugfix — 生产 GitHub OAuth profile 解析错误
+
+### 43.1 问题
+
+Vercel Runtime Logs 在 GitHub 登录回调阶段报错：
+
+```
+OAuthProfileParseError
+TypeError: Cannot read properties of undefined (reading 'toString')
+at Object.profile(...)
+[auth][details]: { "provider": "github" }
+```
+
+OAuth token 交换可成功，但在将 GitHub userinfo 映射为 Auth.js 用户时失败。
+
+### 43.2 根因
+
+`src/auth.ts` 使用 Auth.js 内置 GitHub provider 的**默认** `profile()`。其实现为 `profile.id.toString()`，**未**校验 `id` 是否存在。
+
+当 GitHub `/user` 响应缺少 `id`（例如 API 错误 JSON、异常响应体、或极少数字段形态差异）时，`profile.id` 为 `undefined`，触发上述 `TypeError` 并被包装为 `OAuthProfileParseError`。
+
+### 43.3 修复
+
+在 `src/auth.ts` 的 `GitHub({ ... })` 中覆盖 `profile()`，使用防护式 ID 与字段回退：
+
+| 字段 | 映射 |
+|------|------|
+| `id` | `String(profile.id ?? profile.sub)`；两者皆无则抛出明确错误 |
+| `name` | `profile.name ?? profile.login ?? "GitHub User"` |
+| `email` | `profile.email ?? null` |
+| `image` | `profile.avatar_url ?? null` |
+
+**未改：** Prisma schema、UI、`auth.config.ts` middleware 逻辑、数据库迁移。
+
+### 43.4 Vercel 验证
+
+1. 确认 Production 环境变量：`AUTH_SECRET`、`AUTH_URL`（生产域名）、`AUTH_GITHUB_ID`、`AUTH_GITHUB_SECRET`、`AUTH_TRUST_HOST=true`（如适用）。
+2. GitHub OAuth App 回调 URL 与 `AUTH_URL` 一致：`https://<vercel-domain>/api/auth/callback/github`。
+3. 打开 `https://<vercel-domain>/login` →「使用 GitHub 登录」→ 授权后应进入 `/dashboard`，顶栏显示用户信息与「退出」。
+4. Vercel → Project → **Logs**（Runtime）：筛选 `OAuthProfileParseError` 或 `profile`，确认登录流程无新错误。
+5. 若仍失败且日志为 `GitHub profile is missing id`，检查 Vercel 上 `AUTH_GITHUB_*` 是否与 GitHub OAuth App 匹配，以及 GitHub API `/user` 是否返回有效用户对象。
+

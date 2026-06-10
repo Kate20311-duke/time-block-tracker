@@ -29,6 +29,7 @@ Personal time-block planner + Pomodoro + **stopwatch** focus tracker. **Phase 9:
 | **Feature-2** | **Done** (Stopwatch pause/resume, complete dialog, dashboard quick start, header timer) — see `PROJECT_STATUS.md` §40 |
 | **Product-1** | **Done** (Landing, local demo seed, onboarding, README/deploy docs) — see `PROJECT_STATUS.md` §41 |
 | **UI bugfix** | **Done** (Sidebar language dropdown opens upward; no overlay on calendar edit panel) — see `PROJECT_STATUS.md` §42 |
+| **Auth bugfix** | **Done** (GitHub OAuth guarded `profile()` — production `OAuthProfileParseError`) — see `PROJECT_STATUS.md` §43 |
 
 ## Stack
 
@@ -61,6 +62,7 @@ Browser → middleware (auth gate) → App Router pages (requireUser + *ForUser)
 - Provider: **GitHub OAuth only**
 - Session: **JWT** (`session: { strategy: "jwt" }`)
 - Sign-in page: `/login`
+- **GitHub `profile()`** (`src/auth.ts`): guarded mapping — `id: String(profile.id ?? profile.sub)` with fallbacks for `name` / `email` / `image`. Avoids Auth.js default `profile.id.toString()` when GitHub userinfo omits `id` (production `OAuthProfileParseError`). Verify on Vercel: `/login` → GitHub → lands on `/dashboard`; no `OAuthProfileParseError` in Runtime Logs.
 
 ## Data model & ownership
 

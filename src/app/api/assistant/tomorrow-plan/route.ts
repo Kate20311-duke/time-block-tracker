@@ -3,24 +3,25 @@ import {
   assistantErrorResponse,
   assistantJsonResponse,
 } from "@/lib/assistant/api-response";
-import { handleTimeReviewRequest } from "@/lib/assistant/time-review-handler";
 import {
   getUserIdSuffix,
   logAssistantError,
   logAssistantInfo,
 } from "@/lib/assistant/logger";
+import { handleTomorrowPlanRequest } from "@/lib/assistant/tomorrow-plan-handler";
+import { USER_GOAL_MAX_LENGTH } from "@/lib/assistant/tomorrow-plan-types";
 import { getLocale } from "@/lib/i18n/server";
 import { ensureDbUser, getSessionUser } from "@/lib/session";
 import { getUserCalendarTimeZone } from "@/lib/user-calendar-timezone.server";
 
 export const dynamic = "force-dynamic";
 
-const ROUTE_PATH = "/api/assistant/weekly-review";
+const ROUTE_PATH = "/api/assistant/tomorrow-plan";
 
-/**
- * @deprecated Prefer POST /api/assistant/time-review with optional startDate/endDate.
- * Kept for backward compatibility; defaults to last 7 days when body is empty.
- */
+type RequestBody = {
+  userGoal?: string;
+};
+
 export async function POST(request: Request) {
   const startedAt = Date.now();
 
@@ -33,18 +34,31 @@ export async function POST(request: Request) {
     });
   }
 
-  let body: { startDate?: string; endDate?: string } = {};
+  let body: RequestBody = {};
   try {
-    body = (await request.json()) as { startDate?: string; endDate?: string };
+    body = (await request.json()) as RequestBody;
   } catch {
-    body = {};
+    return assistantErrorResponse({
+      status: 400,
+      error: "INVALID_INPUT",
+      message: "Invalid request body",
+    });
+  }
+
+  const rawGoal = typeof body.userGoal === "string" ? body.userGoal.trim() : "";
+  if (rawGoal.length > USER_GOAL_MAX_LENGTH) {
+    return assistantErrorResponse({
+      status: 400,
+      error: "INVALID_INPUT",
+      message: "目标内容过长，请控制在 500 字以内。",
+    });
   }
 
   try {
     const ensuredUser = await ensureDbUser(user);
     const rateLimited = enforceAssistantRateLimit(
       ensuredUser.id,
-      "weekly-review",
+      "tomorrow-plan",
       ROUTE_PATH,
     );
     if (rateLimited) return rateLimited;
@@ -54,62 +68,60 @@ export async function POST(request: Request) {
       getLocale(),
     ]);
 
-    const result = await handleTimeReviewRequest({
+    const result = await handleTomorrowPlanRequest({
       userId: ensuredUser.id,
       timeZone,
       locale,
-      startDate: body.startDate,
-      endDate: body.endDate,
+      userGoal: body.userGoal ?? "",
     });
 
     if (!result.ok) {
-      if (result.error.code === "internal") {
-        logAssistantError(
-          "assistant.time_review.error",
-          new Error("internal"),
-          {
-            route: ROUTE_PATH,
-            durationMs: Date.now() - startedAt,
-            userIdSuffix: getUserIdSuffix(ensuredUser.id),
-          },
-        );
+      if (result.error.code === "invalid_goal") {
         return assistantErrorResponse({
-          status: 500,
-          error: "INTERNAL_ERROR",
-          message: "Failed to generate weekly review",
+          status: 400,
+          error: "INVALID_INPUT",
+          message: "Invalid user goal",
         });
       }
 
+      logAssistantError("assistant.tomorrow_plan.error", new Error("internal"), {
+        route: ROUTE_PATH,
+        durationMs: Date.now() - startedAt,
+        userIdSuffix: getUserIdSuffix(ensuredUser.id),
+        goalLength: rawGoal.length,
+      });
       return assistantErrorResponse({
-        status: 400,
-        error: "INVALID_INPUT",
-        message: "Invalid date range",
+        status: 500,
+        error: "INTERNAL_ERROR",
+        message: "Failed to generate tomorrow plan",
       });
     }
 
     const event =
       result.data.source === "fallback"
-        ? "assistant.time_review.fallback"
-        : "assistant.time_review.success";
+        ? "assistant.tomorrow_plan.fallback"
+        : "assistant.tomorrow_plan.success";
 
     logAssistantInfo(event, {
       route: ROUTE_PATH,
       source: result.data.source,
       durationMs: Date.now() - startedAt,
       userIdSuffix: getUserIdSuffix(ensuredUser.id),
-      recordedDays: result.data.summary.dataQuality.recordedDays,
+      goalLength: rawGoal.length,
+      blockCount: result.data.plan.suggestedBlocks.length,
     });
 
     return assistantJsonResponse(result.data);
   } catch (error) {
-    logAssistantError("assistant.time_review.error", error, {
+    logAssistantError("assistant.tomorrow_plan.error", error, {
       route: ROUTE_PATH,
       durationMs: Date.now() - startedAt,
+      goalLength: rawGoal.length,
     });
     return assistantErrorResponse({
       status: 500,
       error: "INTERNAL_ERROR",
-      message: "Failed to generate weekly review",
+      message: "Failed to generate tomorrow plan",
     });
   }
 }

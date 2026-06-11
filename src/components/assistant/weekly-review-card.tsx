@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -6,12 +5,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { AssistantSourceNotice } from "@/components/assistant/assistant-source-notice";
 import { CopyReviewButton } from "@/components/assistant/copy-review-button";
 import { WeeklyReviewSummaryBar } from "@/components/assistant/weekly-review-summary-bar";
 import type {
   TimeReviewResponse,
   TimeReviewResult,
-  TimeReviewSource,
 } from "@/lib/assistant/weekly-review-types";
 import { formatWeeklyReviewPlainText } from "@/lib/assistant/format-review-copy";
 import type { Dictionary, Locale } from "@/lib/i18n/types";
@@ -35,40 +34,6 @@ function ReviewSection({
       </ul>
     </section>
   );
-}
-
-function SourceNotice({
-  source,
-  labels,
-}: {
-  source: TimeReviewSource;
-  labels: Dictionary["assistant"];
-}) {
-  if (source === "fallback") {
-    return (
-      <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-muted-foreground">
-        {labels.sourceFallbackNotice}
-      </p>
-    );
-  }
-
-  if (source === "mock" && process.env.NODE_ENV === "development") {
-    return (
-      <p className="rounded-lg border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-        {labels.sourceMockDevNotice}
-      </p>
-    );
-  }
-
-  if (source === "deepseek") {
-    return (
-      <Badge variant="secondary" className="w-fit">
-        {labels.sourceDeepseekNotice}
-      </Badge>
-    );
-  }
-
-  return null;
 }
 
 type Props = {
@@ -119,7 +84,7 @@ export function WeeklyReviewCard({
           dataScopeNote={dataScopeNote}
         />
 
-        <SourceNotice source={source} labels={labels} />
+        <AssistantSourceNotice source={source} labels={labels} />
 
         <ReviewBody review={review} labels={labels} />
       </CardContent>

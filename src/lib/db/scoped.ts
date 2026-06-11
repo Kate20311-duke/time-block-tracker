@@ -13,6 +13,7 @@ import type {
   Category,
   FocusSession,
   Prisma,
+  Routine,
   TimeBlock,
 } from "@/generated/prisma";
 import {
@@ -37,11 +38,16 @@ type FocusSessionFindManyArgs = Omit<Prisma.FocusSessionFindManyArgs, "where"> &
   where?: Prisma.FocusSessionWhereInput;
 };
 
+type RoutineFindManyArgs = Omit<Prisma.RoutineFindManyArgs, "where"> & {
+  where?: Prisma.RoutineWhereInput;
+};
+
 type CategoryPayload<T extends CategoryFindManyArgs> = Prisma.CategoryGetPayload<T>;
 type TimeBlockPayload<T extends TimeBlockFindManyArgs> =
   Prisma.TimeBlockGetPayload<T>;
 type FocusSessionPayload<T extends FocusSessionFindManyArgs> =
   Prisma.FocusSessionGetPayload<T>;
+type RoutinePayload<T extends RoutineFindManyArgs> = Prisma.RoutineGetPayload<T>;
 
 export {
   categoryScopeWhere,
@@ -85,6 +91,18 @@ export async function focusSessionsForUser<T extends FocusSessionFindManyArgs>(
   }) as Promise<FocusSessionPayload<T>[]>;
 }
 
+/** List routines owned by `userId`. */
+export async function routinesForUser<T extends RoutineFindManyArgs>(
+  userId: string,
+  options?: T,
+): Promise<RoutinePayload<T>[]> {
+  const { where, ...rest } = options ?? ({} as T);
+  return prisma.routine.findMany({
+    ...rest,
+    where: { userId, ...where },
+  }) as Promise<RoutinePayload<T>[]>;
+}
+
 /** Ensure `categoryId` exists and belongs to `userId`; returns the category row. */
 export async function assertCategoryOwned(
   userId: string,
@@ -125,6 +143,27 @@ export async function assertTimeBlockOwned(
   }
 
   return block;
+}
+
+/** Ensure `routineId` exists and belongs to `userId`. */
+export async function assertRoutineOwned(
+  userId: string,
+  routineId: string,
+): Promise<Routine> {
+  const trimmedId = routineId.trim();
+  if (!trimmedId) {
+    throw new ScopedAccessError();
+  }
+
+  const routine = await prisma.routine.findFirst({
+    where: { id: trimmedId, userId },
+  });
+
+  if (!routine) {
+    throw new ScopedAccessError();
+  }
+
+  return routine;
 }
 
 /** Ensure `focusSessionId` exists and its category belongs to `userId`. */

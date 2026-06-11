@@ -10,6 +10,7 @@ import {
   validateRangeState,
   type ReviewRangeState,
 } from "@/components/assistant/review-range-selector";
+import { TomorrowPlanSection } from "@/components/assistant/tomorrow-plan-section";
 import { WeeklyReviewCard } from "@/components/assistant/weekly-review-card";
 import { ReviewScopeNote } from "@/components/review/review-scope-note";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { readAssistantApiError } from "@/lib/assistant/api-error-client";
 import {
   rangesEqual,
   resolvePresetRange,
@@ -101,13 +103,10 @@ export function AssistantPageView({ labels, locale, timeZone }: Props) {
         }),
       });
 
-      if (response.status === 401) {
-        setError(labels.errorUnauthorized);
-        return;
-      }
-
       if (!response.ok) {
-        setError(labels.errorFailed);
+        setError(
+          await readAssistantApiError(response, labels, labels.errorFailed),
+        );
         return;
       }
 
@@ -242,6 +241,12 @@ export function AssistantPageView({ labels, locale, timeZone }: Props) {
           loading={loading}
         />
       ) : null}
+
+      <TomorrowPlanSection
+        labels={labels}
+        locale={locale}
+        timeZone={timeZone}
+      />
     </div>
   );
 }

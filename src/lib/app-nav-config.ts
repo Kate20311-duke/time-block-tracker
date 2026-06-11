@@ -3,6 +3,7 @@ import {
   Blocks,
   Calendar,
   LayoutDashboard,
+  Repeat,
   Sparkles,
   Tags,
   Timer,
@@ -19,6 +20,7 @@ export type AppNavLabelKey = keyof Pick<
   | "categories"
   | "review"
   | "assistant"
+  | "routines"
 >;
 
 export type AppNavItem = {
@@ -34,6 +36,7 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
   { href: "/focus", labelKey: "focus", icon: Timer },
   { href: "/time-blocks", labelKey: "timeBlocks", icon: Blocks },
   { href: "/categories", labelKey: "categories", icon: Tags },
+  { href: "/routines", labelKey: "routines", icon: Repeat },
   { href: "/review", labelKey: "review", icon: BarChart3, matchPrefix: true },
   { href: "/assistant", labelKey: "assistant", icon: Sparkles },
 ];
@@ -41,6 +44,7 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
 export const APP_ROUTE_PREFIXES = [
   "/assistant",
   "/categories",
+  "/routines",
   "/time-blocks",
   "/calendar",
   "/dashboard",

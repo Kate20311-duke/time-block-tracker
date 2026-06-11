@@ -18,6 +18,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   categories    Category[]
+  routines      Routine[]
 
   @@schema("app")
 }
@@ -72,8 +73,32 @@ model Category {
   updatedAt     DateTime       @updatedAt
   timeBlocks    TimeBlock[]
   focusSessions FocusSession[]
+  routines      Routine[]
 
   @@index([userId])
+  @@schema("app")
+}
+
+model Routine {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  startTime  String
+  endTime    String
+  daysOfWeek Int[]
+  startDate  DateTime
+  endDate    DateTime?
+  isActive   Boolean   @default(true)
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([userId, isActive])
   @@schema("app")
 }
 

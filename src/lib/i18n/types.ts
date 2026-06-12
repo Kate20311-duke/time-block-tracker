@@ -39,6 +39,7 @@ export type Dictionary = {
     assistant: string;
     focus: string;
     routines: string;
+    settings: string;
     signIn: string;
     signOut: string;
   };
@@ -653,6 +654,119 @@ export type Dictionary = {
     tomorrowPlanSelectItemsHint: string;
     tomorrowPlanAllApplied: string;
     tomorrowPlanApplyTooManyBlocks: string;
+  };
+  settings: {
+    title: string;
+    pageDescription: string;
+    export: {
+      sectionTitle: string;
+      description: string;
+      timezoneNote: string;
+      fromLabel: string;
+      toLabel: string;
+      downloadCsvButton: string;
+      downloadExcelButton: string;
+    };
+    import: {
+      sectionTitle: string;
+      description: string;
+      importNotice: string;
+      supportedOnlyNote: string;
+      recurringSkippedNote: string;
+      duplicateSkippedNote: string;
+      conflictSkippedNote: string;
+      conflictOptionalNote: string;
+      noOverwriteNote: string;
+      includeConflictsLabel: string;
+      fileLabel: string;
+      previewButton: string;
+      previewing: string;
+      selectedFile: string;
+      categoryLabel: string;
+      selectCategory: string;
+      noCategories: string;
+      createCategoryLink: string;
+      importButton: string;
+      importing: string;
+      importSuccessSummary: string;
+      importDetailedSummary: string;
+      moreSkipped: string;
+      summaryTotal: string;
+      summaryReady: string;
+      summaryDuplicate: string;
+      summaryBatchDuplicate: string;
+      summaryConflict: string;
+      summaryInvalid: string;
+      summaryImportUnsupported: string;
+      summarySupported: string;
+      summaryWarning: string;
+      summaryUnsupported: string;
+      truncatedNotice: string;
+      emptyEvents: string;
+      colSummary: string;
+      colStart: string;
+      colEnd: string;
+      colLocation: string;
+      colImportStatus: string;
+      colParserStatus: string;
+      colNotes: string;
+      colConflicts: string;
+      status: {
+        supported: string;
+        warning: string;
+        unsupported: string;
+      };
+      importStatus: {
+        ready: string;
+        duplicate: string;
+        batch_duplicate: string;
+        conflict: string;
+        unsupported: string;
+        invalid: string;
+      };
+      reasons: {
+        recurring: string;
+        cancelled: string;
+        missing_end: string;
+        invalid_range: string;
+        all_day: string;
+        missing_time_zone: string;
+      };
+      skipReasons: {
+        not_supported: string;
+        all_day: string;
+        invalid_dates: string;
+        invalid_range: string;
+        invalid_title: string;
+        duplicate_exact: string;
+        batch_duplicate: string;
+        conflict: string;
+        batch_limit: string;
+      };
+      checkReasons: {
+        duplicate_exact: string;
+        batch_duplicate: string;
+        time_conflict: string;
+        unsupported: string;
+        invalid: string;
+      };
+      errors: {
+        unauthorized: string;
+        missingFile: string;
+        invalidType: string;
+        tooLarge: string;
+        empty: string;
+        invalidIcs: string;
+        generic: string;
+        missingCategory: string;
+        missingCategoryPreview: string;
+        missingEvents: string;
+        invalidCategory: string;
+        invalidEvents: string;
+        tooManyEvents: string;
+        importFailed: string;
+      };
+    };
   };
   review: {
     pageTitle: string;

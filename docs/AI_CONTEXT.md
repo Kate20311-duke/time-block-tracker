@@ -31,24 +31,34 @@ Personal time-block planner + Pomodoro + **stopwatch** focus tracker. **Phase 9:
 | **UI bugfix** | **Done** (Sidebar language dropdown opens upward; no overlay on calendar edit panel) — see `PROJECT_STATUS.md` §42 |
 | **Auth bugfix** | **Done** (GitHub OAuth guarded `profile()` — production `OAuthProfileParseError`) — see `PROJECT_STATUS.md` §43 |
 | **PWA** | **Done** (installable MVP: manifest + icons; no service worker) — see `PROJECT_STATUS.md` §44 |
+| **Routines** | **Done** (`/routines`, `Routine` model, AI generate API) — see `PROJECT_STATUS.md` §45 |
+| **Assistant** | **Done** (`/assistant`, AI review + tomorrow plan + apply API) — see `PROJECT_STATUS.md` §46 |
+| **Import/Export** | **Partial** — CSV + Excel export + ICS preview/import + duplicate/conflict detection (§48–§52); ICS export / `ImportBatch` not started; see `PROJECT_STATUS.md` §47–§52 |
+| **CSV export** | **Done** — `GET /api/export/time-blocks.csv`; see `PROJECT_STATUS.md` §48 |
+| **Excel export** | **Done** — `GET /api/export/time-blocks.xlsx`; `exceljs`; see `PROJECT_STATUS.md` §49 |
+| **ICS preview** | **Done** — `POST /api/import/ics/preview`; `ical.js`; read-only; see `PROJECT_STATUS.md` §50 |
+| **ICS import** | **Done** — `POST /api/import/ics/apply`; `source=ics_import`; see `PROJECT_STATUS.md` §51 |
+| **ICS duplicate/conflict** | **Done** — `duplicate-detection.ts`; preview `importCheck`; apply re-validates; see `PROJECT_STATUS.md` §52 |
 
 ## Stack
 
-Next.js 16 App Router · TypeScript · Tailwind 4 · Prisma 7 · PostgreSQL `app` schema · pnpm · Node 20+ · Recharts · Vitest · **Auth.js v5** (`next-auth@beta`)
+Next.js 16 App Router · TypeScript · Tailwind 4 · Prisma 7 · PostgreSQL `app` schema · pnpm · Node 20+ · Recharts · Vitest · **Auth.js v5** (`next-auth@beta`) · **openai** (Assistant) · **exceljs** (Excel export) · **ical.js** (ICS preview)
 
 ## Architecture
 
 ```
-Browser → middleware (auth gate) → App Router pages (requireUser + *ForUser)
-                              → Server Actions (requireUser + assert*Owned)
-                              → src/lib/db/scoped.ts → prisma
+Browser → src/proxy.ts (auth gate) → App Router pages (requireUser + *ForUser)
+                                 → Server Actions (requireUser + assert*Owned)
+                                 → API Routes (getSessionUser + scoped reads/writes)
+                                 → src/lib/db/scoped.ts → prisma
 ```
 
-- **Public:** `/` (landing when logged out), `/login`, `/api/auth/*`
-- **Private:** `/categories`, `/time-blocks`, `/calendar`, `/dashboard`, `/focus`, `/review/*`
+- **Public:** `/` (landing when logged out), `/login`, `/api/auth/*`, `/manifest.webmanifest`
+- **Private:** `/categories`, `/time-blocks`, `/calendar`, `/dashboard`, `/focus`, `/review/*`, `/routines`, `/assistant`, `/settings`
 - **Layout:** logged-in app routes use `AppShell` (sidebar + header); `/` (logged out) and `/login` use simplified public header (`AppLayoutController`); logged-in `/` → `/dashboard`
 - **Language:** `LanguageSwitcher` — `variant="inline"` (landing/public header); `variant="sidebar"` (AppSidebar footer dropdown, `side="top"` to avoid covering main content)
-- **No** REST API for business data; writes via Server Actions only
+- **CRUD writes:** Server Actions (categories, time-blocks, calendar, focus, routines)
+- **Exceptions (API Routes):** Auth callback; Assistant (`/api/assistant/*`); Routine generate (`/api/routines/generate`); **CSV export** (`GET /api/export/time-blocks.csv`); **Excel export** (`GET /api/export/time-blocks.xlsx`); **ICS preview** (`POST /api/import/ics/preview`, multipart, no DB write); **ICS apply** (`POST /api/import/ics/apply`, JSON, transactional create)
 
 ## Auth / session
 
@@ -57,8 +67,8 @@ Browser → middleware (auth gate) → App Router pages (requireUser + *ForUser)
 | Edge config | `src/auth.config.ts` |
 | Full Auth.js + Prisma adapter | `src/auth.ts` |
 | Routes | `src/app/api/auth/[...nextauth]/route.ts` |
-| Route protection | `src/middleware.ts` |
-| Session helpers | `src/lib/session.ts` — `getSessionUser()`, `requireUser()` |
+| Route protection | `src/proxy.ts` (Next.js 16 proxy; exports `proxy` from `authConfig.authorized`) |
+| Session helpers | `src/lib/session.ts` — `getSessionUser()`, `requireUser()`, `ensureDbUser()` |
 
 - Provider: **GitHub OAuth only**
 - Session: **JWT** (`session: { strategy: "jwt" }`)
@@ -74,15 +84,16 @@ Browser → middleware (auth gate) → App Router pages (requireUser + *ForUser)
 - **Auth:** `/manifest.webmanifest` is public in `auth.config.ts` (must not require login).
 - **No service worker** — offline / push intentionally deferred; do **not** cache `/api/auth/*`, `/api/*`, or authenticated pages if adding SW later.
 - **Test:** Lighthouse PWA (Chrome), Android install, iOS Safari Add to Home Screen, Vercel HTTPS. See `PROJECT_STATUS.md` §44.
-- **Next likely:** Google login or AI planning MVP.
 
 ## Data model & ownership
 
-- **`User`** — Auth.js + `Category[]`
-- **`Category.userId`** — required; root of tenant isolation
+- **`User`** — Auth.js + `Category[]` + `Routine[]`
+- **`Category.userId`** — required; root of tenant isolation for Category / TimeBlock / FocusSession
+- **`Routine.userId`** — required; **direct** user ownership (parallel to Category)
 - **`TimeBlock`**, **`FocusSession`** — no `userId`; owned via **`category.userId`**
 - **`FocusSession.mode`**: `pomodoro` | `stopwatch` (default `pomodoro`)
-- **`TimeBlock.source`**: `manual` | `pomodoro` | `stopwatch` (default `manual`)
+- **`TimeBlock.source`**: `manual` | `pomodoro` | `stopwatch` | `ics_import` (default `manual`) — `TIME_BLOCK_SOURCES` in `src/lib/constants.ts`. Pomodoro/stopwatch have special time semantics; `ics_import` is for ICS apply only.
+- **`ImportBatch`**: **does not exist yet** — planned for import history/rollback (see §47)
 
 Rule: never read/write private rows with `{ id }` alone.
 
@@ -93,11 +104,13 @@ Rule: never read/write private rows with `{ id }` alone.
 | `categoriesForUser(userId, opts?)` | Lists / dropdowns |
 | `timeBlocksForUser(userId, opts?)` | Calendar, dashboard, lists |
 | `focusSessionsForUser(userId, opts?)` | Focus, dashboard |
+| `routinesForUser(userId, opts?)` | Routines list |
 | `runningFocusSessionForUser(userId, opts?)` | At most one `status=running` session |
 | `activeFocusSessionForUser(userId, opts?)` | At most one `status in (running, paused)` session |
 | `assertCategoryOwned` | Before category-scoped creates |
 | `assertTimeBlockOwned` | Before block update/delete/schedule |
 | `assertFocusSessionOwned` | Before focus update/convert |
+| `assertRoutineOwned` | Before routine update/delete/toggle |
 
 Errors: `ScopedAccessError` / `isScopedAccessError`.
 
@@ -110,7 +123,39 @@ Errors: `ScopedAccessError` / `isScopedAccessError`.
 5. **Focus convert** → `assertFocusSessionOwned` + transaction claim `category: { userId }`.
 6. **One active focus session per user** — `startStopwatch` / `createFocusSession` call `activeFocusSessionForUser` first (`running` or `paused`).
 
-Action files: `categories.ts`, `time-blocks.ts`, `calendar-time-blocks.ts`, `focus-sessions.ts`, `focus-shared.ts` (transaction).
+Action files: `categories.ts`, `time-blocks.ts`, `calendar-time-blocks.ts`, `focus-sessions.ts`, `focus-shared.ts` (transaction), `routines.ts`.
+
+### API Routes (non-CRUD)
+
+| Route | Auth | Purpose |
+|-------|------|---------|
+| `POST /api/assistant/time-review` | `getSessionUser` | AI time-block review for date range |
+| `POST /api/assistant/weekly-review` | `getSessionUser` | AI weekly summary |
+| `POST /api/assistant/tomorrow-plan` | `getSessionUser` | Generate tomorrow plan drafts |
+| `POST /api/assistant/tomorrow-plan/apply` | `getSessionUser` + `ensureDbUser` | Batch create TimeBlocks with overlap checks |
+| `POST /api/routines/generate` | `getSessionUser` + `ensureDbUser` | Expand active routines to suggested blocks (no DB write) |
+| `GET /api/export/time-blocks.csv` | `getSessionUser` + `ensureDbUser` | CSV export (`?from=&to=`); see §48 |
+| `GET /api/export/time-blocks.xlsx` | `getSessionUser` + `ensureDbUser` | Excel export (`?from=&to=`); `exceljs`; see §49 |
+| `POST /api/import/ics/preview` | `getSessionUser` | ICS upload parse preview JSON only; `ical.js`; see §50 |
+| `POST /api/import/ics/apply` | `getSessionUser` + `ensureDbUser` | Import supported events → TimeBlocks; `ics-to-time-blocks.ts`; see §51 |
+
+Env: `DEEPSEEK_API_KEY`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_MODEL` (see `.env.example`). Rate limit: `src/lib/assistant/rate-limit.ts`.
+
+Bulk apply pattern: `src/lib/assistant/tomorrow-plan-apply.ts` — interval overlap vs existing blocks, routines, and batch; all creates `source=manual`. **Reuse for import conflict detection.**
+
+### Routines (`/routines`)
+
+- **Model:** `Routine` — `userId`, optional `categoryId`, `startTime`/`endTime` as `HH:mm` strings, `daysOfWeek` int[], `startDate`/`endDate`, `isActive`
+- **Actions:** `createRoutine`, `updateRoutine`, `toggleRoutineActive`, `deleteRoutine`
+- **UI:** `src/app/routines/page.tsx`, `src/components/routines/*`
+- **Generate:** client calls `POST /api/routines/generate` with date range → preview only
+
+### Assistant (`/assistant`)
+
+- **Page:** `src/app/assistant/page.tsx` → `AssistantPageView`
+- **Sections:** time review (custom range), weekly review card, tomorrow plan (generate + apply)
+- **Data scope:** reads via scoped helpers; apply writes `planned` TimeBlocks with `assertCategoryOwned`
+- **Not implemented:** external calendar import/export
 
 ### Focus modes (Phase 9)
 
@@ -287,30 +332,51 @@ pnpm dev
 pnpm exec prisma generate && pnpm typecheck && pnpm lint && pnpm test && pnpm build
 ```
 
-175 tests; no E2E. Timezone: `stats-list-duration.test.ts`, `calendar-redirect-timezone.test.ts`.
+303 tests (2026-06-12); no E2E. Timezone: `stats-list-duration.test.ts`, `calendar-redirect-timezone.test.ts`, `timezone-integration.test.ts`.
 
 **Audit rules for new code:** pages → `requireUser` + `*ForUser`; actions → `requireUser` + `assert*Owned`; never `update({ where: { id } })` on private models.
 
 Manual dual-GitHub-user checklist: `PROJECT_STATUS.md` §18.10.
 
+## Import / export (partial — export + ICS preview + ICS import)
+
+See `PROJECT_STATUS.md` §47–§51. Summary for new sessions:
+
+- **Shared export loader:** `loadTimeBlockExportData` — parse range + `timeBlocksForUser` + `mapBlocksToExportRows`.
+- **Shared rows:** `src/lib/export/time-block-rows.ts` — `EXPORT_COLUMNS`, `exportRowToValues`.
+- **CSV export (done):** `GET /api/export/time-blocks.csv` — `src/lib/export/csv.ts` (UTF-8 BOM).
+- **Excel export (done):** `GET /api/export/time-blocks.xlsx` — `src/lib/export/excel.ts` (`exceljs`).
+- **ICS preview (done):** `POST /api/import/ics/preview` — `multipart/form-data` field `file`; `parseIcsPreview` in `src/lib/import/ics-parse.ts`; types in `ics-types.ts`; **no DB writes**. Event `status`: `supported` | `warning` | `unsupported` (RRULE/cancelled → unsupported; all-day → warning). Max 500 events in response.
+- **ICS import (done):** `POST /api/import/ics/apply` — JSON `{ categoryId, events[], includeConflicts? }`; server re-validates via `duplicate-detection.ts`; `source=ics_import`; max 200/request.
+- **ICS duplicate/conflict (done):** Preview with optional `categoryId` → `importCheck` on each event; exact duplicate + batch duplicate skipped; time overlap conflicts skipped unless `includeConflicts`; no overwrite.
+- **UI:** `/settings` → category first → preview table (import status + conflicts) → optional include conflicts → import summary with counts.
+- **Not implemented:** ICS export; CSV import; `ImportBatch`; rollback; overwrite/replace.
+- **Isolation:** Every import/export path must use `requireUser` / `getSessionUser` + `*ForUser` + `assertCategoryOwned` on creates.
+- **`TimeBlock.source`:** ICS apply uses `ics_import` (string column, no migration).
+- **TZ:** Convert external times to UTC instants using user calendar TZ (same as TZ-2).
+- **API Routes preferred** for file download (`Content-Disposition`) and upload (`multipart/form-data`); preview before persist.
+- **Phased plan:** (1) CSV export → (2) Excel export → (3) ICS preview → (4) ICS import → (5) duplicate/conflict detection → (6) `ImportBatch` + rollback → (7) ICS export.
+- **Vercel + Neon:** `build` does not run `migrate deploy`; any future `ImportBatch` schema requires **manual** `pnpm exec prisma migrate deploy` against Neon before/alongside deploy.
+
 ## Do NOT add yet
 
-Teams · sharing · invites · payments · password login · dev Credentials in production · E2E (unless asked)
+Teams · sharing · invites · payments · password login · dev Credentials in production · E2E (unless asked) · `ImportBatch` without scoped rollback design
 
 ## Security rules (always)
 
 1. Private pages → `requireUser()` + `*ForUser` helpers.
 2. Server Actions → `requireUser()` + `assert*Owned`; no `update({ where: { id } })` on private models.
-3. Do not query Category / TimeBlock / FocusSession without `userId` / `category.userId` filtering.
+3. Do not query Category / TimeBlock / FocusSession / Routine without `userId` / `category.userId` filtering.
 4. Do not bypass `src/lib/db/scoped.ts`.
 5. Validate category ownership before creating TimeBlock or FocusSession.
 6. No Docker seed or shared demo data in production. Local demo: `pnpm db:seed:demo` (see README § Demo seed).
+7. Import/export (when built): API Routes for files; preserve isolation; no unscoped bulk `prisma.timeBlock.create`.
 
 ## Next likely tasks
 
-1. **Google login** — second OAuth provider alongside GitHub
-2. **AI planning MVP** — time-block suggestions / review assist
-3. **Settings page** — timezone, locale, profile (optional)
+1. **Import/export** — `ImportBatch` + rollback (Phase 6) → ICS export (CSV + Excel + ICS import + duplicate/conflict done, §48–§52)
+2. **Settings page** — extend with timezone, locale, profile (data export entry exists at `/settings`)
+3. **Google login** — second OAuth provider alongside GitHub
 4. Pomodoro refresh recovery (localStorage) — optional
 
-Full status: `docs/PROJECT_STATUS.md` §21、§34–§44
+Full status: `docs/PROJECT_STATUS.md` §21、§34–§52

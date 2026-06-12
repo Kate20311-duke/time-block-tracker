@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   CALENDAR_CREATE_DEFAULT_DURATION_MINUTES,
+  defaultSlotTimesForDay,
   slotTimesFromGridClick,
 } from "@/lib/calendar-slot-create";
+import { getValidTimeBlockRange } from "@/lib/validation";
 import { CALENDAR_GRID_HEIGHT_PX } from "@/lib/calendar";
 import { wallTimeInTimeZoneToUtcIso } from "@/lib/datetime-local-iso";
 
@@ -41,5 +43,22 @@ describe("slotTimesFromGridClick", () => {
       NY,
     );
     expect(slot).toBeNull();
+  });
+});
+
+describe("defaultSlotTimesForDay", () => {
+  const TZ = "Asia/Shanghai";
+  const today = "2026-06-12";
+
+  it("keeps a valid range near end of day on today", () => {
+    const now = new Date(wallTimeInTimeZoneToUtcIso(today, 23, 58, TZ));
+    const slot = defaultSlotTimesForDay(today, TZ, now);
+    const range = getValidTimeBlockRange(
+      new Date(slot.startTimeIso),
+      new Date(slot.endTimeIso),
+    );
+
+    expect(range).not.toBeNull();
+    expect(range!.end.getTime()).toBeGreaterThan(range!.start.getTime());
   });
 });

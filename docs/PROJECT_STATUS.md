@@ -29,13 +29,41 @@
 
 **Phase 5 及更早**：专注、复盘、日历等 — 见上文各 Phase 小节
 
-**下一步（推荐）**：专注页 UI 打磨 / 整体 redesign（见 §21.6）
-
 **UI-1：Dashboard + App Shell（已完成第一版）** — 见 §34
 
 **UI-2：Focus 页 UI 打磨（已完成第一版）** — 见 §35
 
 **UI-3：Review 页 v0 风格对齐（已完成第一版）** — 见 §36
+
+**UI-4：Categories / Time Blocks 列表 UI（已完成第一版）** — 见 §37
+
+**UI-5：Calendar 视觉细节（已完成第一版）** — 见 §38
+
+**UI-6：全站 polish（已完成第一版）** — 见 §39
+
+**Feature-2：秒表暂停/恢复与完成对话框（已完成）** — 见 §40
+
+**Product-1：Landing / demo seed / onboarding（已完成）** — 见 §41
+
+**PWA：可安装 MVP（已完成，无 Service Worker）** — 见 §44
+
+**Phase 45：Routines 重复日程（已完成）** — 见 §45
+
+**Phase 46：Assistant AI 助手（已完成）** — 见 §46
+
+**Phase 48：CSV 导出 MVP（已完成）** — 见 §48
+
+**Phase 49：Excel 导出 MVP（已完成）** — 见 §49
+
+**Phase 50：ICS 上传解析与预览（已完成）** — 见 §50
+
+**Phase 51：ICS 导入为 TimeBlock（已完成）** — 见 §51
+
+**Phase 52：ICS 导入重复与冲突检测（已完成）** — 见 §52
+
+**下一步（推荐）**：`ImportBatch` + 导入历史 + 回滚（阶段 6，见 §47）
+
+**当前验证（2026-06-12）**：`pnpm test` → **303+** 项通过（历史小节中的较低测试数仅为当时快照；合并 Phase 48 后见最新 `pnpm test` 输出）
 
 - **Phase 9（已完成）正计时秒表**
   - `FocusSession.mode`：`pomodoro` | `stopwatch`（默认 `pomodoro`）
@@ -540,6 +568,7 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 | id | String (cuid) | 主键 |
 | name, email, image | 可选 | GitHub 资料 |
 | categories | Category[] | 用户拥有的分类 |
+| routines | Routine[] | 用户拥有的重复日程 |
 
 另：`Account`、`Session`、`VerificationToken`（Prisma Adapter 标准表）。
 
@@ -556,6 +585,30 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 | updatedAt | DateTime | 自动更新 |
 | timeBlocks | TimeBlock[] | 关联时间块 |
 | focusSessions | FocusSession[] | 关联专注 |
+| routines | Routine[] | 可选关联的重复日程 |
+
+### Routine
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String (cuid) | 主键 |
+| **userId** | String | 外键 → User（**直接归属**，与 Category 并列） |
+| title | String | 标题 |
+| categoryId | String? | 可选外键 → Category（`onDelete: SetNull`） |
+| startTime | String | 每日开始时刻（`HH:mm`，非 DateTime） |
+| endTime | String | 每日结束时刻（`HH:mm`） |
+| daysOfWeek | Int[] | 重复星期（0=周日 … 6=周六，与 JS `getDay()` 一致） |
+| startDate | DateTime | 生效开始日 |
+| endDate | DateTime? | 可选结束日 |
+| isActive | Boolean | 默认 `true` |
+| notes | String? | 可选备注 |
+| createdAt / updatedAt | DateTime | 审计字段 |
+
+**关系**：User 1 — N Routine；Category 0..1 — N Routine。
+
+**Server Actions**（`src/lib/actions/routines.ts`）：`createRoutine`、`updateRoutine`、`toggleRoutineActive`、`deleteRoutine`（均 `requireUser` + `assertCategoryOwned` / `assertRoutineOwned`）。
+
+**AI 生成**：`POST /api/routines/generate` — 按日期范围将活跃 Routine 展开为建议 TimeBlock 列表（不自动写入库）。
 
 ### TimeBlock
 
@@ -595,9 +648,11 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 | status | String | 默认 `planned`；见下方 |
 | convertedToTimeBlock | Boolean | 是否已转为 TimeBlock，默认 false |
 | timeBlockId | String? | 可选，唯一，关联生成的 TimeBlock |
+| pausedAt | DateTime? | 秒表暂停开始时刻（`null` = 未暂停） |
+| pausedTotalSeconds | Int | 累计暂停秒数，默认 0 |
 | createdAt / updatedAt | DateTime | 审计字段 |
 
-**status 字符串值**：`planned` | `running` | `completed` | `abandoned` | `converted`
+**status 字符串值**：`planned` | `running` | `paused`（**仅 stopwatch**） | `completed` | `abandoned` | `converted`
 
 **关系**：
 
@@ -613,9 +668,13 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 | `completeFocusSession` | `completed` + `endTime` + `actualDurationMinutes` |
 | `abandonFocusSession` | `abandoned`；可选 `endTime` |
 | `convertFocusSessionToTimeBlock` | 仅 `completed` 且未转换；创建 `TimeBlock`（`source=pomodoro`）并链接 |
-| `startStopwatch` | 创建 `mode=stopwatch`、`status=running`；拒绝已有 running 会话 |
-| `completeStopwatchAndCreateTimeBlock` | 事务结束秒表并创建 `TimeBlock`（`source=stopwatch`） |
-| `cancelStopwatch` | `abandoned`，不创建 TimeBlock |
+| `startStopwatch` | 创建 `mode=stopwatch`、`status=running`；拒绝已有 active 会话 |
+| `pauseStopwatch` | `running` → `paused`，写入 `pausedAt` |
+| `resumeStopwatch` | `paused` → `running`，累加 `pausedTotalSeconds` |
+| `completeStopwatchAndCreateTimeBlock` | 事务结束秒表并创建 `TimeBlock`（`source=stopwatch`）；支持 `running`/`paused` |
+| `cancelStopwatch` | `running`/`paused` → `abandoned`，不创建 TimeBlock |
+
+**活跃会话互斥**：`startStopwatch` / `createFocusSession` 调用 `activeFocusSessionForUser`（`status in (running, paused)`）。
 
 ### 迁移
 
@@ -623,20 +682,33 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 - `20260521180044_add_category_description`
 - `20260528030837_add_timeblock_review_fields`（新增 `TimeBlock.efficiencyLevel`、`TimeBlock.reviewNote`）
 - `20260529120000_add_focus_session`（新增 `FocusSession` 表）
+- `20260529191846_auth_and_category_user`（Auth 表 + `Category.userId`）
 - `20260601120000_add_focus_mode_timeblock_source`（`FocusSession.mode`、`TimeBlock.source`）
+- `20260609120000_stopwatch_pause_fields`（`pausedAt`、`pausedTotalSeconds`、`status=paused`）
+- `20260610220340_add_routines`（`Routine` 表）
 
 ## 7. 已实现页面
 
 | 路由 | 类型 | 功能 |
 |------|------|------|
-| `/` | 动态 | 应用介绍、快速入口（含日历） |
+| `/` | 动态 | 未登录：Landing；已登录：`redirect("/dashboard")` |
+| `/login` | 动态 | GitHub OAuth 登录 |
 | `/categories` | 动态 | 分类 CRUD（查看/编辑模式 + 顶部新建表单） |
 | `/time-blocks` | 动态 | 时间块 CRUD（列表 + 表单） |
-| `/calendar` | 动态 | **周/日视图**（默认周）；`?date=`、`?view=day\|week` |
-| `/dashboard` | 动态 | 时间块统计 + 图表 + 专注会话统计（分区展示） |
-| `/focus` | 动态 | 正计时秒表 + 番茄钟；秒表结束自动写入时间块 |
+| `/calendar` | 动态 | **周/日视图**（默认周）；`?date=`、`?view=day\|week`、`?blockId=` |
+| `/dashboard` | 动态 | 时间块统计 + 图表 + 专注会话统计 + onboarding + 快速开始秒表 |
+| `/focus` | 动态 | 正计时秒表（默认 Tab）+ 番茄钟；秒表暂停/恢复；结束对话框写 TimeBlock |
+| `/review/day` | 动态 | 每日复盘（TimeBlock 口径） |
+| `/review/week` | 动态 | 每周复盘（TimeBlock 口径） |
+| `/routines` | 动态 | 重复日程 CRUD + AI 生成时间块预览 |
+| `/assistant` | 动态 | AI 时间复盘、周复盘摘要、明日计划与批量写入 |
+| `/settings` | 动态 | 设置（CSV / Excel 导出 + ICS 预览/导入，见 §48–§51） |
 
-全局布局：`src/app/layout.tsx` + `src/components/app-nav.tsx`（顶栏、当前路由高亮）。
+**未实现**：ICS 导出、CSV 导入、`ImportBatch` 回滚、覆盖/替换（见 §47、§52）。
+
+全局布局：已登录应用路由使用 `AppShell`（`src/components/app-shell.tsx` 侧栏 + 顶栏）；`/login` 与未登录 `/` 使用公开顶栏（`AppLayoutController`）。导航项见 `src/lib/app-nav-config.ts`。
+
+**路由保护**：`src/proxy.ts`（Next.js 16；原 `middleware.ts` 命名已迁移为 proxy）。
 
 ## 8. 重要命令
 
@@ -2245,7 +2317,419 @@ docs/AI_CONTEXT.md
 
 ### 44.7 建议下一阶段
 
-1. **Google 登录**（OAuth provider 扩展，与现有 GitHub 并列）
-2. **AI 规划 MVP**（时间块建议 / 复盘辅助）
-3. 可选：轻量 Service Worker（仅安装壳层，**不**缓存 `/api/auth/*` 与动态页）
+见 **§47 导入/导出路线图**（当前推荐优先级）。更远期：Google 登录、Settings 页、轻量 Service Worker。
+
+## 45. Phase 45 — Routines 重复日程（已完成）
+
+### 45.1 目标
+
+用户定义按星期重复的日程模板（如「周一至五 09:00–12:00 学习」），在 `/routines` 管理；可选关联分类；支持启用/停用与 AI 辅助生成未来 TimeBlock 草稿。
+
+### 45.2 数据模型
+
+见 §6 `Routine` — **`userId` 直接归属**（不经 Category 间接隔离）；`categoryId` 可选，写入/更新时仍 `assertCategoryOwned`。
+
+迁移：`20260610220340_add_routines`
+
+### 45.3 Server Actions（`src/lib/actions/routines.ts`）
+
+| Action | 说明 |
+|--------|------|
+| `createRoutine` | 新建；校验 `startTime`/`endTime`（`HH:mm`）、`daysOfWeek`、`startDate`/`endDate` |
+| `updateRoutine` | 全量更新 |
+| `toggleRoutineActive` | 切换 `isActive` |
+| `deleteRoutine` | `deleteMany` + `assertRoutineOwned` |
+
+### 45.4 API Route
+
+| 路由 | 方法 | 说明 |
+|------|------|------|
+| `/api/routines/generate` | POST | 按 `startDate`/`endDate` 展开活跃 Routine → 建议块列表（JSON，**不写入** TimeBlock） |
+
+鉴权：`getSessionUser()` + `ensureDbUser()`；须登录。
+
+### 45.5 UI
+
+- 路由：`/routines`（`src/app/routines/page.tsx`）
+- 组件：`src/components/routines/*`（表单、列表、`RoutineGenerateCard`）
+- 侧栏入口：`APP_NAV_ITEMS` → `routines`
+
+### 45.6 与 Assistant / 明日计划
+
+Assistant 明日计划读取次日 Routine 占用（`getTomorrowRoutineBlocks`），与已有 TimeBlock 一并做冲突检测（见 `tomorrow-plan-apply.ts`）。
+
+### 45.7 已知限制
+
+- Routine 的 `startTime`/`endTime` 为每日墙钟字符串，不含时区字段；跨 DST 行为依赖用户 TZ cookie。
+- 生成 API 仅返回建议，不自动 persist。
+- **无** Routine → TimeBlock 自动同步 cron。
+
+## 46. Phase 46 — Assistant AI 助手（已完成）
+
+### 46.1 目标
+
+`/assistant` 提供基于用户已记录数据的 AI 能力：可选日期范围的**时间复盘**、**周复盘摘要**、**明日计划**（生成草稿并可批量写入 TimeBlock）。
+
+### 46.2 架构
+
+- **页面**：`src/app/assistant/page.tsx` → `AssistantPageView`（客户端调 API）
+- **业务数据**：读取 scoped `timeBlocksForUser` / `categoriesForUser`；写入经 `applyTomorrowPlanBlocks`（`source=manual`）
+- **LLM**：OpenAI 兼容 Chat Completions（DeepSeek 等）；配置见 `.env.example`：`DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`、`DEEPSEEK_MODEL`
+- **依赖**：`openai` npm 包（`package.json`）
+- **限流**：`src/lib/assistant/rate-limit.ts` + `enforceAssistantRateLimit`
+
+### 46.3 API Routes（均需登录）
+
+| 路由 | 方法 | 说明 |
+|------|------|------|
+| `/api/assistant/time-review` | POST | 指定日期范围的 TimeBlock 复盘文案 |
+| `/api/assistant/weekly-review` | POST | 周维度摘要 |
+| `/api/assistant/tomorrow-plan` | POST | 生成明日计划块草稿 |
+| `/api/assistant/tomorrow-plan/apply` | POST | 批量创建 `planned` TimeBlock；含与现有块/Routine/批次内重叠检测 |
+
+鉴权模式：`getSessionUser()` → 401；`ensureDbUser(user)`。与 CRUD Server Actions 并列，**文件上传/下载类功能亦应采用 API Route**（见 §47）。
+
+### 46.4 批量写入与冲突检测（可复用于导入）
+
+`src/lib/assistant/tomorrow-plan-apply.ts`：
+
+- 每条创建前 `assertCategoryOwned`（隐式经 category 列表）
+- 与当日已有 TimeBlock、Routine 展开区间、本批次已接受块做 `intervalsOverlap` 检测
+- 跳过原因：`conflict_existing`、`conflict_routine`、`conflict_batch` 等
+- 创建字段：`status=planned`、`source=manual`、`completionLevel=0`
+
+### 46.5 UI 区块
+
+- 时间复盘 + 范围选择器（`ReviewRangeSelector`）
+- 周复盘卡片（`WeeklyReviewCard`）
+- 明日计划（`TomorrowPlanSection`）— 预览后调用 apply API
+- `ReviewScopeNote`：统计口径仍为 TimeBlock，与 Dashboard 一致
+
+### 46.6 已知限制
+
+- 无 API Key 或限流时可能 fallback / mock（见 `source` 字段：`deepseek` | `mock` | `fallback`）
+- Assistant **不**导入外部日历；**不**实现导出
+- 生产须配置 `DEEPSEEK_*`（或兼容端点）环境变量
+
+## 47. 导入/导出路线图（部分完成）
+
+> **当前状态**：**CSV / Excel 导出**（§48–§49）、**ICS 预览/导入**（§50–§52，含重复与冲突检测）已实现。**尚无** ICS 导出、CSV 导入、`ImportBatch`、覆盖/替换。`/settings` 提供导出与 ICS 导入入口。
+
+### 47.1 原则
+
+| 原则 | 说明 |
+|------|------|
+| **用户数据隔离** | 所有读写必须 `requireUser()` / `getSessionUser()` + `*ForUser` / `assertCategoryOwned`；禁止仅凭 `id` 写入 |
+| **`TimeBlock.source`** | 已存在：`manual` \| `pomodoro` \| `stopwatch`（`src/lib/constants.ts`）。导入写入默认 `manual`；若将来增加 `import` / `ics` 等来源，须同步扩展常量、校验与文档，并注意与 pomodoro/stopwatch 语义区分 |
+| **时区** | DB 存 UTC；导入外部时间须经 `getUserCalendarTimeZone()` 或显式 TZ 转为 UTC ISO（与 TZ-2 一致） |
+| **API Route 优先** | **文件下载（CSV/Excel/ICS 导出）与上传（ICS 预览）** 宜用 `src/app/api/export/*`、`src/app/api/import/*` Route Handler（`Content-Disposition`、multipart）；批量确认导入可用 API 或 Server Action + 事务 |
+| **Vercel + Neon** | `pnpm run build` **不**跑 migrate；若将来新增 `ImportBatch` 等 schema，须对 Neon **手动** `pnpm exec prisma migrate deploy` 后再部署 |
+| **复用现有逻辑** | 冲突检测可参考 `tomorrow-plan-apply.ts`；scoped 查询参考 `timeBlocksForUser`；revalidate 参考 `revalidateTimeBlockPaths()` |
+
+### 47.2 建议分阶段
+
+| 阶段 | 能力 | 要点 |
+|------|------|------|
+| **1** | **CSV 导出** | ✅ 已完成 — `GET /api/export/time-blocks.csv?from=&to=`；零 schema 变更（§48） |
+| **2** | **Excel 导出** | ✅ 已完成 — `GET /api/export/time-blocks.xlsx`；`exceljs`（§49） |
+| **3** | **ICS 上传与预览** | ✅ 已完成 — `POST /api/import/ics/preview`；`ical.js`（§50）；**不写库** |
+| **4** | **ICS 导入为 TimeBlock** | ✅ 已完成 — `POST /api/import/ics/apply`；`source=ics_import`（§51） |
+| **5** | **重复/冲突检测** | ✅ 已完成 — `duplicate-detection.ts`；预览含 `importCheck`；apply 服务端复检（§52） |
+| **6** | **导入历史与回滚** | 需新 Prisma 模型（如 `ImportBatch` + `ImportBatchItem`）— **当前不存在**；事务内记录 batch id 以便 scoped 回滚删除 |
+| **7** | **ICS 导出** | 由 scoped TimeBlock 生成 VEVENT；UID 可用 `timeBlock.id` 便于日后去重 |
+
+### 47.3 建议新建路径（实施时）
+
+```
+src/lib/export/csv.ts              # ✅ 阶段 1
+src/lib/export/excel.ts            # ✅ 阶段 2
+src/lib/export/time-block-query.ts # ✅ 阶段 1
+src/lib/export/time-block-rows.ts  # ✅ 共享行映射
+src/lib/export/filenames.ts        # ✅ 共享文件名
+src/lib/export/load-time-block-export.ts  # ✅ 共享 scoped 查询
+src/app/api/export/time-blocks.csv/route.ts   # ✅ 阶段 1
+src/app/api/export/time-blocks.xlsx/route.ts  # ✅ 阶段 2
+src/app/settings/page.tsx          # ✅ 数据导出入口
+src/lib/export/ics.ts              # 阶段 7
+src/lib/import/ics-types.ts        # ✅ 阶段 3
+src/lib/import/ics-parse.ts        # ✅ 阶段 3
+src/lib/import/ics-upload.ts       # ✅ 阶段 3
+src/app/api/import/ics/preview/route.ts  # ✅ 阶段 3
+src/lib/import/conflict.ts         # 阶段 5
+src/app/api/import/*               # 阶段 4+
+```
+
+### 47.4 明确未做
+
+- [x] CSV 导出（只读）
+- [x] Excel 导出（只读）
+- [ ] CSV 导入
+- [x] ICS 上传解析与预览（只读）
+- [x] ICS 导入为 TimeBlock（§51）
+- [ ] ICS 导出
+- [ ] `ImportBatch` 模型与回滚 UI
+- [ ] Settings 其他区块（时区/语言/账户偏好）
+- [x] `exceljs`（Excel 导出）
+- [x] `ical.js`（ICS 预览）
+
+### 47.5 更远期（非导入导出）
+
+- Google 登录（第二 OAuth provider）
+- Settings 扩展（时区/语言/账户）
+- Pomodoro 刷新恢复（localStorage）
+- 轻量 Service Worker（不缓存 `/api/auth/*`）
+
+## 48. Phase 48 — CSV 导出 MVP（已完成）
+
+### 48.1 目标
+
+只读导出当前用户的 TimeBlock 为 CSV；**无** Prisma schema 变更；**无**导入能力。
+
+### 48.2 API Route
+
+| 项 | 说明 |
+|----|------|
+| 路径 | `GET /api/export/time-blocks.csv` |
+| 查询参数 | `from=YYYY-MM-DD`、`to=YYYY-MM-DD`（可选；缺省为**当前日历月**，用户 TZ） |
+| 鉴权 | `getSessionUser()` → 401；`ensureDbUser()` |
+| 查询 | `timeBlocksForUser(userId, { where: overlap, include: category, orderBy: startTime asc })` |
+| 响应 | `Content-Type: text/csv; charset=utf-8`；`Content-Disposition: attachment; filename="time-blocks-{from}-to-{to}.csv"` |
+
+重叠查询与 Dashboard/日历一致：`startTime < rangeEnd && endTime > rangeStart`（`buildTimeBlockOverlapWhere`）。
+
+### 48.3 工具层
+
+| 文件 | 说明 |
+|------|------|
+| `src/lib/export/csv.ts` | `escapeCsvCell`、`timeBlocksToCsv`、UTF-8 BOM、用户 TZ 格式化 `YYYY-MM-DD HH:mm:ss` |
+| `src/lib/export/time-block-query.ts` | `parseExportDateRange`、`defaultExportMonthRange`、`buildTimeBlockOverlapWhere` |
+
+### 48.4 CSV 列
+
+Title · Category · Category Color · Start Time · End Time · Duration Minutes · Status · Completion Level · Efficiency Level · Source · Note · Created At · Updated At
+
+时间列按 `getUserCalendarTimeZone()` 格式化（与日历显示 TZ 一致，非 raw ISO）。
+
+### 48.5 UI
+
+- `/settings` — `DataExportSection`：日期范围 +「下载 CSV」链接至 API
+- 侧栏：`APP_NAV_ITEMS` → Settings
+
+### 48.6 测试
+
+- `src/lib/export/csv.test.ts` — CSV 转义、BOM、时区格式化
+- `src/lib/export/time-block-query.test.ts` — 日期范围解析与 overlap where
+
+### 48.7 已知限制
+
+- 无 ICS、CSV 导入（Excel 导出见 §49）
+- 无 `ImportBatch` / 回滚
+- 未在导出列中标注 IANA 时区字符串（列值为该 TZ 下的本地墙钟时间）
+- 大范围导出受 Vercel serverless 超时与响应体积限制（未来可分页或异步 Job）
+
+## 49. Phase 49 — Excel 导出 MVP（已完成）
+
+### 49.1 目标
+
+只读导出当前用户 TimeBlock 为 `.xlsx`；复用 Phase 1 查询与行映射；**无** schema 变更。
+
+### 49.2 依赖
+
+- `exceljs`（`package.json`）
+
+### 49.3 API Route
+
+| 项 | 说明 |
+|----|------|
+| 路径 | `GET /api/export/time-blocks.xlsx` |
+| 查询参数 | `from` / `to`（与 CSV 相同；缺省当前日历月） |
+| 鉴权 | `getSessionUser()` + `ensureDbUser()` |
+| 查询 | `loadTimeBlockExportData` → `timeBlocksForUser` + overlap |
+| 响应 | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`；`filename="time-blocks-{from}-to-{to}.xlsx"` |
+
+### 49.4 工具层
+
+| 文件 | 说明 |
+|------|------|
+| `src/lib/export/excel.ts` | `timeBlocksToExcelBuffer` — worksheet `Time Blocks`，粗体表头，冻结首行，列宽 |
+| `src/lib/export/time-block-rows.ts` | 共享列定义与 `mapBlocksToExportRows` / `exportRowToValues` |
+| `src/lib/export/load-time-block-export.ts` | 共享 scoped 加载（CSV / Excel 路由共用） |
+| `src/lib/export/filenames.ts` | `buildTimeBlocksExportFilename` |
+
+### 49.5 列（与 CSV 一致）
+
+Title · Category · Category Color · Start Time · End Time · Duration Minutes · Status · Completion Level · Efficiency Level · Source · Note · Created At · Updated At
+
+### 49.6 UI
+
+`/settings` → `DataExportSection`：**下载 CSV** + **下载 Excel**（同一日期范围）
+
+### 49.7 测试
+
+- `src/lib/export/excel.test.ts` — buffer、工作表名、表头、数据行
+- `src/lib/export/filenames.test.ts`
+- 既有 `csv.test.ts` / `time-block-query.test.ts` 仍通过
+
+### 49.8 已知限制
+
+- 无 ICS、无导入、无 `ImportBatch`
+- 无多 sheet、无图表、无条件格式
+- 与 CSV 相同：时间列为用户 TZ 墙钟字符串，非 ISO Z
+
+## 50. Phase 50 — ICS 上传解析与预览（已完成）
+
+### 50.1 目标
+
+用户上传 `.ics` 文件 → 服务端解析 → JSON 预览。**不**创建 TimeBlock、**不**改 Prisma schema。
+
+### 50.2 依赖
+
+- `ical.js`（`package.json`）
+
+### 50.3 API Route
+
+| 项 | 说明 |
+|----|------|
+| 路径 | `POST /api/import/ics/preview` |
+| 请求 | `multipart/form-data`，字段 `file`（`.ics`，最大 4 MB） |
+| 鉴权 | `getSessionUser()` → 401 |
+| 响应 | `IcsPreviewResult` JSON（事件列表 + 汇总计数 + `truncated`） |
+
+**不写库**；不调用 `prisma`；不读取其他用户数据。
+
+### 50.4 解析与分类
+
+| 文件 | 说明 |
+|------|------|
+| `src/lib/import/ics-types.ts` | `ParsedIcsEvent`、`IcsPreviewResult` |
+| `src/lib/import/ics-parse.ts` | `parseIcsPreview` — `ical.js` 解析 VEVENT |
+| `src/lib/import/ics-upload.ts` | 文件类型/大小校验 |
+
+**`ParsedIcsEvent.status`**
+
+| 状态 | 规则（首版） |
+|------|----------------|
+| `unsupported` | 含 `RRULE`、 `STATUS:CANCELLED`、缺少结束时间、无效时间范围 |
+| `warning` | 全天事件、定时事件无显式 TZ（非 `unsupported` 时） |
+| `supported` | 其余单次定时事件 |
+
+预览最多返回 **500** 条（`ICS_PREVIEW_MAX_EVENTS`）；`summary` 仍统计全部解析数量。
+
+### 50.5 UI
+
+`/settings` → `IcsImportPreviewSection`：选文件 →「解析并预览」→ 汇总 Badge + 表格（标题、起止、状态、说明）。
+
+### 50.6 测试
+
+- `src/lib/import/ics-parse.test.ts`
+- `src/lib/import/ics-upload.test.ts`
+
+### 50.7 已知限制
+
+- **不导入**数据库；无分类映射、无冲突检测、无 `ImportBatch`
+- 重复事件仅标记为 `unsupported`（不展开 RRULE）
+- 无 ICS 导出
+- 大文件受 Vercel body 限制（4 MB 应用层上限）
+
+## 51. Phase 51 — ICS 导入为 TimeBlock（已完成）
+
+### 51.1 目标
+
+用户在 `/settings` 预览 ICS 后，选择目标 **Category**，将 `status=supported` 的定时事件批量写入 **TimeBlock**（`status=planned`）。
+
+### 51.2 API Route
+
+| 项 | 说明 |
+|----|------|
+| 路径 | `POST /api/import/ics/apply` |
+| 请求 | JSON：`{ categoryId, events[] }`（客户端仅发送 supported 子集；服务端重校验） |
+| 鉴权 | `getSessionUser()` → `ensureDbUser` → 401 |
+| 上限 | 单次最多 **200** 条（`ICS_APPLY_MAX_EVENTS`） |
+| 响应 | `{ importedCount, skippedCount, createdTimeBlockIds, skipped[] }` |
+
+`assertCategoryOwned` 校验分类归属；`prisma.$transaction` 批量 `create`；成功后 `revalidatePath` 日历/仪表盘/时间块/复盘/设置。
+
+### 51.3 映射（`src/lib/import/ics-to-time-blocks.ts`）
+
+| ICS / 输入 | TimeBlock |
+|------------|-----------|
+| `summary` | `title`（最长 100） |
+| `description` + `location` | `note`（`Location: …` 追加） |
+| `start` / `end`（ISO 定时） | `startTime` / `endTime` |
+| 所选 `categoryId` | `categoryId` |
+| — | `status=planned`，`completionLevel=0` |
+| — | `source=ics_import`（`TIME_BLOCK_SOURCES` 已扩展，无 schema 迁移） |
+
+**仅导入**：`status=supported`、非全天、有效 `start < end`。`warning`（全天、缺 TZ）与 `unsupported`（RRULE 等）跳过。
+
+### 51.4 重复处理（Phase 4 最小版，§52 已扩展）
+
+同用户、同分类、同 `title` + `startTime` + `endTime` 的**精确重复**跳过（`duplicate_exact`）。完整检测见 §52。
+
+### 51.5 UI
+
+`IcsImportPreviewSection`：分类下拉（无分类时提示去 `/categories`）→「导入支持的事件」→ 成功摘要。
+
+### 51.6 测试
+
+- `src/lib/import/ics-to-time-blocks.test.ts`
+- `src/lib/import/ics-apply.test.ts`
+- 既有 ICS 预览 / 导出测试仍通过
+
+### 51.7 已知限制
+
+- 无 `ImportBatch`、无回滚
+- 无 ICS 导出、无 CSV/Excel 导入
+- 重复事件不展开；全天事件不导入
+- 重复/冲突检测见 §52
+
+## 52. Phase 52 — ICS 导入重复与冲突检测（已完成）
+
+### 52.1 目标
+
+导入前检测：**精确重复**（已有 TimeBlock）、**批次内重复**、**时间重叠冲突**；预览与 apply 均服务端强制执行。
+
+### 52.2 检测规则（`src/lib/import/duplicate-detection.ts`）
+
+| 类型 | 规则 |
+|------|------|
+| **精确重复** | 同用户、所选分类、规范化 `title` + 相同 UTC `startTime`/`endTime` |
+| **批次重复** | 同一 ICS 文件中后者与前者完全相同（`batch_duplicate`） |
+| **时间冲突** | 与任意已有 TimeBlock 区间重叠（`startA < endB && endA > startB`），且非精确重复 |
+| **优先级** | unsupported → invalid → duplicate → batch_duplicate → conflict → ready |
+
+标题规范化：`trim` + 折叠连续空白。
+
+### 52.3 预览 API 增强
+
+`POST /api/import/ics/preview` — multipart 可选字段 `categoryId`：
+
+- 有 `categoryId` 且归属当前用户 → 事件附带 `importCheck` + `summary.importCheck` 计数
+- 无 `categoryId` → 仅解析（与 Phase 3 兼容）
+- 无效分类 → 400 `INVALID_CATEGORY`
+
+### 52.4 Apply 增强
+
+`POST /api/import/ics/apply` — JSON 新增 `includeConflicts?: boolean`：
+
+- 默认跳过：精确重复、批次重复、冲突、无效、不支持
+- `includeConflicts: true` 时允许导入冲突事件（重复仍跳过）
+- 响应含 `duplicateCount`、`batchDuplicateCount`、`conflictSkippedCount`、`conflictImportedCount` 等
+
+### 52.5 UI
+
+`/settings` → 先选分类 → 上传 → 预览表格显示导入状态与冲突详情 → 可选「同时导入时间冲突的事件」→ 详细导入摘要。
+
+### 52.6 测试
+
+- `src/lib/import/duplicate-detection.test.ts`
+- `src/lib/import/ics-apply.test.ts`（扩展）
+
+### 52.7 已知限制
+
+- 无 `ImportBatch`、无回滚、无覆盖/替换
+- 无 ICS 导出；RRULE 仍不展开
+- 批次内时间重叠（非精确重复）不单独标记
+
+**推荐下一步**：阶段 6 — `ImportBatch` + 导入历史 + 回滚。
 

@@ -29,6 +29,23 @@ export function datetimeLocalValueToUtcIso(value: string): string | null {
   return date.toISOString();
 }
 
+/**
+ * Parse a `datetime-local` wire string as wall time in `timeZone` → UTC ISO.
+ * Use with `instantToDatetimeLocalValue` so display and submit share one IANA zone.
+ */
+export function datetimeLocalValueInTimeZoneToUtcIso(
+  value: string,
+  timeZone: string,
+): string | null {
+  if (!isDatetimeLocalValue(value)) return null;
+  const [dateParam, timePart] = value.split("T");
+  const [hourRaw, minuteRaw] = timePart.split(":");
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+  return wallTimeInTimeZoneToUtcIso(dateParam, hour, minute, timeZone);
+}
+
 /** Format a UTC instant for `datetime-local` defaultValue in an IANA timezone. */
 export function instantToDatetimeLocalValue(
   instant: Date | string,

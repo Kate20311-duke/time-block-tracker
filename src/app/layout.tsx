@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { auth } from "@/auth";
 import { AppLayoutController } from "@/components/app-layout-controller";
@@ -24,6 +24,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export function generateViewport(): Viewport {
+  return {
+    themeColor: [
+      { media: "(prefers-color-scheme: light)", color: PWA_THEME_COLOR },
+      { media: "(prefers-color-scheme: dark)", color: PWA_THEME_COLOR },
+    ],
+  };
+}
+
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getLocale();
   const dict = getDictionary(locale);
@@ -31,10 +40,6 @@ export async function generateMetadata(): Promise<Metadata> {
     title: dict.app.brand,
     description: dict.app.metaDescription,
     applicationName: PWA_SHORT_NAME,
-    themeColor: [
-      { media: "(prefers-color-scheme: light)", color: PWA_THEME_COLOR },
-      { media: "(prefers-color-scheme: dark)", color: PWA_THEME_COLOR },
-    ],
     appleWebApp: {
       capable: true,
       title: PWA_SHORT_NAME,

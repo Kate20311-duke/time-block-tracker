@@ -74,6 +74,11 @@ export function defaultSlotTimesForDay(
     );
   }
 
+  const maxStartMinutes = MINUTES_PER_DAY - defaultDurationMinutes;
+  if (startMinutes > maxStartMinutes) {
+    startMinutes = snapMinutes(maxStartMinutes);
+  }
+
   const endMinutes = Math.min(
     MINUTES_PER_DAY,
     startMinutes + defaultDurationMinutes,

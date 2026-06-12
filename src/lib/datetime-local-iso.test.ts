@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  datetimeLocalValueInTimeZoneToUtcIso,
   instantToDatetimeLocalValue,
   isDatetimeLocalValue,
   parseUtcIsoString,
@@ -61,5 +62,20 @@ describe("isDatetimeLocalValue", () => {
   it("accepts YYYY-MM-DDTHH:mm", () => {
     expect(isDatetimeLocalValue("2026-06-01T09:00")).toBe(true);
     expect(isDatetimeLocalValue("2026-06-01T9:00")).toBe(false);
+  });
+});
+
+describe("datetimeLocalValueInTimeZoneToUtcIso", () => {
+  it("round-trips with instantToDatetimeLocalValue in the same IANA zone", () => {
+    const iso = wallTimeInTimeZoneToUtcIso(
+      "2026-06-12",
+      14,
+      30,
+      "Asia/Shanghai",
+    );
+    const local = instantToDatetimeLocalValue(iso, "Asia/Shanghai");
+    expect(
+      datetimeLocalValueInTimeZoneToUtcIso(local, "Asia/Shanghai"),
+    ).toBe(iso);
   });
 });

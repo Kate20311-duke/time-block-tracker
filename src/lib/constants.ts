@@ -30,7 +30,12 @@ export type FocusSessionMode = (typeof FOCUS_SESSION_MODES)[number];
 /** Placeholder for stopwatch sessions; UI uses elapsed time, not this value. */
 export const STOPWATCH_PLANNED_DURATION_PLACEHOLDER_MINUTES = 1;
 
-export const TIME_BLOCK_SOURCES = ["manual", "pomodoro", "stopwatch"] as const;
+export const TIME_BLOCK_SOURCES = [
+  "manual",
+  "pomodoro",
+  "stopwatch",
+  "ics_import",
+] as const;
 
 export type TimeBlockSource = (typeof TIME_BLOCK_SOURCES)[number];
 

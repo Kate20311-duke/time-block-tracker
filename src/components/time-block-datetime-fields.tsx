@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  datetimeLocalValueToUtcIso,
+  datetimeLocalValueInTimeZoneToUtcIso,
   instantToDatetimeLocalValue,
 } from "@/lib/datetime-local-iso";
 
@@ -32,10 +32,11 @@ function resolveInitialLocal(
 function resolveInitialIso(
   iso: string | undefined,
   local: string,
+  timeZone: string,
 ): string {
   if (iso) return iso;
   if (!local) return "";
-  return datetimeLocalValueToUtcIso(local) ?? "";
+  return datetimeLocalValueInTimeZoneToUtcIso(local, timeZone) ?? "";
 }
 
 export function TimeBlockDatetimeFields({
@@ -62,15 +63,15 @@ export function TimeBlockDatetimeFields({
   const [startLocal, setStartLocal] = useState(initialStartLocal);
   const [endLocal, setEndLocal] = useState(initialEndLocal);
   const [startIso, setStartIso] = useState(() =>
-    resolveInitialIso(startTimeIso, initialStartLocal),
+    resolveInitialIso(startTimeIso, initialStartLocal, timeZone),
   );
   const [endIso, setEndIso] = useState(() =>
-    resolveInitialIso(endTimeIso, initialEndLocal),
+    resolveInitialIso(endTimeIso, initialEndLocal, timeZone),
   );
 
   const syncIsoToHiddenInputs = useCallback((): boolean => {
-    const start = datetimeLocalValueToUtcIso(startLocal);
-    const end = datetimeLocalValueToUtcIso(endLocal);
+    const start = datetimeLocalValueInTimeZoneToUtcIso(startLocal, timeZone);
+    const end = datetimeLocalValueInTimeZoneToUtcIso(endLocal, timeZone);
     if (!start || !end) {
       return false;
     }
@@ -83,17 +84,23 @@ export function TimeBlockDatetimeFields({
     setStartIso(start);
     setEndIso(end);
     return true;
-  }, [startLocal, endLocal]);
+  }, [startLocal, endLocal, timeZone]);
 
-  const syncStart = useCallback((value: string) => {
-    setStartLocal(value);
-    setStartIso(datetimeLocalValueToUtcIso(value) ?? "");
-  }, []);
+  const syncStart = useCallback(
+    (value: string) => {
+      setStartLocal(value);
+      setStartIso(datetimeLocalValueInTimeZoneToUtcIso(value, timeZone) ?? "");
+    },
+    [timeZone],
+  );
 
-  const syncEnd = useCallback((value: string) => {
-    setEndLocal(value);
-    setEndIso(datetimeLocalValueToUtcIso(value) ?? "");
-  }, []);
+  const syncEnd = useCallback(
+    (value: string) => {
+      setEndLocal(value);
+      setEndIso(datetimeLocalValueInTimeZoneToUtcIso(value, timeZone) ?? "");
+    },
+    [timeZone],
+  );
 
   useEffect(() => {
     if (!formId) return;

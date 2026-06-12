@@ -47,10 +47,11 @@ export function CalendarBlock({
     <button
       type="button"
       onClick={() => onSelect(blockId)}
-      className={`absolute overflow-hidden border-0 bg-transparent p-0 text-left ${
-        isSelected ? "z-10" : "z-[1]"
-      }`}
-      style={position as CSSProperties}
+      className="absolute overflow-hidden border-0 bg-transparent p-0 text-left"
+      style={{
+        ...(position as CSSProperties),
+        zIndex: isSelected ? 10 : layout.columnIndex + 1,
+      }}
       aria-pressed={isSelected}
       aria-label={`${title}, ${categoryName}, ${timeLabel}${hintSuffix}`}
     >

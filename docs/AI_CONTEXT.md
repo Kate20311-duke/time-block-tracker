@@ -243,9 +243,10 @@ Dashboard: TimeBlock totals from `stats.ts` only; FocusSession totals from `focu
 ### Calendar layout (Phase 9.3 + TZ-3)
 
 - **Visible segment:** `getVisibleSegmentInDay(block, day, userTimeZone)` → clip to user TZ day bounds from cookie.
-- **Multi-block layout:** `layoutBlocksInDay` + `assignOverlapColumns` — overlap uses visible intervals; adjacent blocks do not overlap.
+- **Multi-block layout:** `layoutBlocksInDay` + `assignOverlapColumns` — overlap uses visible intervals (`startA < endB && endA > startB`); adjacent blocks (touching endpoints) stay full width. Inputs include `id`; calendar page maps layout by block id (fixes same-time stacks). See `PROJECT_STATUS.md` §53.
+- **Overlapping TimeBlocks are allowed** — UI renders them side-by-side; ICS import never overwrites; conflict detection is informational only.
 - **Labels:** `formatCalendarBlockTimeLabel` — clipped segments show visible time + `t.calendar.continuedSegment`.
-- **Position:** `calendarBlockPositionStyle` — `leftPercent` / `widthPercent` for overlap columns.
+- **Position:** `calendarBlockPositionStyle` — `leftPercent` / `widthPercent` + small gap for overlap columns.
 
 ### Calendar drag & resize (Phase 9.2–9.6, active)
 

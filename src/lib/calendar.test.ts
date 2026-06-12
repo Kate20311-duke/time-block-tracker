@@ -512,10 +512,12 @@ describe("layoutBlocksInDay overlap columns", () => {
     const layouts = layoutBlocksInDay(
       [
         {
+          id: "a",
           startTime: atCalendarTime("2026-05-21", 6),
           endTime: atCalendarTime("2026-05-21", 8),
         },
         {
+          id: "b",
           startTime: atCalendarTime("2026-05-21", 7),
           endTime: atCalendarTime("2026-05-21", 9),
         },
@@ -528,14 +530,61 @@ describe("layoutBlocksInDay overlap columns", () => {
     expect(layouts[0].columnIndex).not.toBe(layouts[1].columnIndex);
   });
 
+  it("assigns two columns for exact same-time blocks", () => {
+    const start = atCalendarTime("2026-05-21", 10);
+    const end = atCalendarTime("2026-05-21", 11);
+    const layouts = layoutBlocksInDay(
+      [
+        { id: "a", title: "A", startTime: start, endTime: end },
+        { id: "b", title: "B", startTime: start, endTime: end },
+      ],
+      day,
+    );
+    const byId = Object.fromEntries(layouts.map((layout) => [layout.id, layout]));
+    expect(byId.a?.columnIndex).toBe(0);
+    expect(byId.b?.columnIndex).toBe(1);
+    expect(byId.a?.columnsInGroup).toBe(2);
+    expect(byId.b?.columnsInGroup).toBe(2);
+    expect(byId.a?.widthPercent).toBe(50);
+    expect(byId.b?.leftPercent).toBe(50);
+  });
+
+  it("assigns three columns for three overlapping blocks", () => {
+    const layouts = layoutBlocksInDay(
+      [
+        {
+          id: "a",
+          startTime: atCalendarTime("2026-05-21", 10),
+          endTime: atCalendarTime("2026-05-21", 12),
+        },
+        {
+          id: "b",
+          startTime: atCalendarTime("2026-05-21", 10, 15),
+          endTime: atCalendarTime("2026-05-21", 10, 45),
+        },
+        {
+          id: "c",
+          startTime: atCalendarTime("2026-05-21", 10, 30),
+          endTime: atCalendarTime("2026-05-21", 11, 30),
+        },
+      ],
+      day,
+    );
+    expect(layouts).toHaveLength(3);
+    expect(new Set(layouts.map((layout) => layout.columnIndex)).size).toBe(3);
+    expect(layouts.every((layout) => layout.columnsInGroup === 3)).toBe(true);
+  });
+
   it("keeps full width for non-overlapping blocks", () => {
     const layouts = layoutBlocksInDay(
       [
         {
+          id: "a",
           startTime: atCalendarTime("2026-05-21", 4),
           endTime: atCalendarTime("2026-05-21", 5),
         },
         {
+          id: "b",
           startTime: atCalendarTime("2026-05-21", 5),
           endTime: atCalendarTime("2026-05-21", 6),
         },

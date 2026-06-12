@@ -61,6 +61,8 @@
 
 **Phase 52：ICS 导入重复与冲突检测（已完成）** — 见 §52
 
+**Phase 53：日历重叠块并排布局修复（已完成）** — 见 §53
+
 **下一步（推荐）**：`ImportBatch` + 导入历史 + 回滚（阶段 6，见 §47）
 
 **当前验证（2026-06-12）**：`pnpm test` → **303+** 项通过（历史小节中的较低测试数仅为当时快照；合并 Phase 48 后见最新 `pnpm test` 输出）
@@ -2732,4 +2734,27 @@ Title · Category · Category Color · Start Time · End Time · Duration Minute
 - 批次内时间重叠（非精确重复）不单独标记
 
 **推荐下一步**：阶段 6 — `ImportBatch` + 导入历史 + 回滚。
+
+## 53. Phase 53 — 日历重叠 TimeBlock 并排布局（已完成）
+
+### 53.1 问题
+
+重叠 TimeBlock 允许存在，但相同起止时间的块在日历中曾共用同一份水平布局（按可见时间段匹配），导致块叠在一起难以点击。
+
+### 53.2 修复
+
+- `layoutBlocksInDay` 输入携带 `id`（及可选 `title` 排序），输出 `DayBlockLayoutWithId`
+- `mapBlocksForDay`（`/calendar`）按 **block id** 关联布局，不再仅按可见起止时间匹配
+- `assignOverlapColumns` 对重叠簇分配水平列；`calendarBlockPositionStyle` 应用 `leftPercent` / `widthPercent` 与小间隙
+- 日视图与周视图共用 `calendar-day-column.tsx`
+
+### 53.3 产品规则（不变）
+
+- **允许** TimeBlock 时间重叠（含 ICS 导入冲突后用户选择写入）
+- ICS 导入**不覆盖**已有块；冲突检测仅提示，不强制替换
+- 相邻（端点相接）块仍占满列宽，不拆分
+
+### 53.4 测试
+
+- `src/lib/calendar.test.ts` — 同时间两块、三块重叠、相邻块全宽
 

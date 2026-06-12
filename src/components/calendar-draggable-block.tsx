@@ -238,6 +238,12 @@ export function CalendarDraggableBlock({
       ? `calc(${layout.heightPercent}% + ${resizeOffsetPx}px)`
       : position.height,
     transform: dragOffsetPx ? `translateY(${dragOffsetPx}px)` : undefined,
+    zIndex:
+      isDragging || isResizing || isSaving
+        ? 20
+        : isSelected
+          ? 10
+          : layout.columnIndex + 1,
   };
 
   return (
@@ -300,8 +306,6 @@ export function CalendarDraggableBlock({
         clearBodyDragStyles();
       }}
       className={`absolute overflow-hidden border-0 bg-transparent p-0 text-left touch-none ${
-        isDragging || isResizing || isSaving ? "z-20" : isSelected ? "z-10" : "z-[1]"
-      } ${
         isDragging
           ? "cursor-grabbing"
           : isResizing

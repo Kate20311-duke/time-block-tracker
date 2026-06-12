@@ -16,9 +16,9 @@ import {
   getDayQueryRange,
   getWeekDays,
   getWeekQueryRange,
-  getVisibleSegmentInDay,
   layoutBlocksInDay,
   layoutBlockInDay,
+  toDayBlockLayout,
   parseCalendarDateParam,
   parseCalendarViewParam,
   startOfWeekMonday,
@@ -103,32 +103,26 @@ function mapBlocksForDay(
   day: Date,
   timeZone: string,
 ): CalendarColumnBlock[] {
-  const dayLayouts = layoutBlocksInDay(
-    timeBlocks.map((block) => ({
-      startTime: block.startTime,
-      endTime: block.endTime,
-    })),
-    day,
-    timeZone,
+  const layoutByBlockId = new Map(
+    layoutBlocksInDay(
+      timeBlocks.map((block) => ({
+        id: block.id,
+        title: block.title,
+        startTime: block.startTime,
+        endTime: block.endTime,
+      })),
+      day,
+      timeZone,
+    ).map((layout) => [layout.id, layout]),
   );
+
+  const dayKey = formatCalendarDateParam(day, timeZone);
 
   return timeBlocks
     .map((block) => {
-      const segment = getVisibleSegmentInDay(
-        { startTime: block.startTime, endTime: block.endTime },
-        day,
-        timeZone,
-      );
-      if (!segment) return null;
+      const layoutWithId = layoutByBlockId.get(block.id);
+      if (!layoutWithId) return null;
 
-      const layout = dayLayouts.find(
-        (l) =>
-          l.visibleStart.getTime() === segment.visibleStart.getTime() &&
-          l.visibleEnd.getTime() === segment.visibleEnd.getTime(),
-      );
-      if (!layout) return null;
-
-      const dayKey = formatCalendarDateParam(day, timeZone);
       return {
         id: `${block.id}-${dayKey}`,
         blockId: block.id,
@@ -137,7 +131,7 @@ function mapBlocksForDay(
         color: block.category.color,
         status: block.status,
         completionLevel: block.completionLevel,
-        layout,
+        layout: toDayBlockLayout(layoutWithId),
         startTimeIso: block.startTime.toISOString(),
         endTimeIso: block.endTime.toISOString(),
       };

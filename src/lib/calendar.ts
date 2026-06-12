@@ -407,6 +407,26 @@ export type DayBlockLayout = VisibleSegment & {
   widthPercent: number;
 };
 
+/** Input for per-day overlap layout; `id` ties layout back to a TimeBlock. */
+export type TimedBlockLayoutInput = TimeRange & {
+  id: string;
+  title?: string;
+};
+
+export type DayBlockLayoutWithId = DayBlockLayout & {
+  id: string;
+};
+
+/** Drop layout-only `id` / sort `title` before passing to calendar UI components. */
+export function toDayBlockLayout(layout: DayBlockLayoutWithId): DayBlockLayout {
+  const { id, title, ...dayLayout } = layout as DayBlockLayoutWithId & {
+    title?: string;
+  };
+  void id;
+  void title;
+  return dayLayout;
+}
+
 /** True when visible intervals overlap (touching endpoints do not overlap). */
 export function visibleIntervalsOverlap(
   a: VisibleSegment,
@@ -451,7 +471,11 @@ export function layoutBlockInDay(
   day: Date,
   timeZone: string = getCalendarTimeZone(),
 ): DayBlockLayout | null {
-  const layouts = layoutBlocksInDay([block], day, timeZone);
+  const layouts = layoutBlocksInDay(
+    [{ ...block, id: "__single__" }],
+    day,
+    timeZone,
+  );
   return layouts[0] ?? null;
 }
 
@@ -479,22 +503,32 @@ function layoutBaseFromSegment(
   };
 }
 
+type LayoutBaseWithId = Omit<
+  DayBlockLayout,
+  "columnIndex" | "columnsInGroup" | "leftPercent" | "widthPercent"
+> & {
+  id: string;
+  title: string;
+};
+
+function compareLayoutInputs(a: LayoutBaseWithId, b: LayoutBaseWithId): number {
+  return (
+    a.visibleStart.getTime() - b.visibleStart.getTime() ||
+    a.visibleEnd.getTime() - b.visibleEnd.getTime() ||
+    (a.title ?? "").localeCompare(b.title ?? "") ||
+    a.id.localeCompare(b.id)
+  );
+}
+
 /** Assign side-by-side columns for overlapping visible segments. */
 export function assignOverlapColumns(
-  layouts: Omit<
-    DayBlockLayout,
-    "columnIndex" | "columnsInGroup" | "leftPercent" | "widthPercent"
-  >[],
-): DayBlockLayout[] {
+  layouts: LayoutBaseWithId[],
+): DayBlockLayoutWithId[] {
   if (layouts.length === 0) {
     return [];
   }
 
-  const sorted = [...layouts].sort(
-    (a, b) =>
-      a.visibleStart.getTime() - b.visibleStart.getTime() ||
-      a.visibleEnd.getTime() - b.visibleEnd.getTime(),
-  );
+  const sorted = [...layouts].sort(compareLayoutInputs);
 
   const columnEnds: number[] = [];
   const withIndex = sorted.map((layout) => {
@@ -532,17 +566,21 @@ export function assignOverlapColumns(
  * Layout multiple blocks for one calendar day using visible segments and overlap columns.
  */
 export function layoutBlocksInDay(
-  blocks: TimeRange[],
+  blocks: TimedBlockLayoutInput[],
   day: Date,
   timeZone: string = getCalendarTimeZone(),
-): DayBlockLayout[] {
+): DayBlockLayoutWithId[] {
   const baseLayouts = blocks
     .map((block) => {
       const segment = getVisibleSegmentInDay(block, day, timeZone);
       if (!segment) return null;
-      return layoutBaseFromSegment(segment, day, timeZone);
+      return {
+        id: block.id,
+        title: block.title ?? "",
+        ...layoutBaseFromSegment(segment, day, timeZone),
+      } satisfies LayoutBaseWithId;
     })
-    .filter((layout): layout is NonNullable<typeof layout> => layout !== null);
+    .filter((layout): layout is LayoutBaseWithId => layout !== null);
 
   return assignOverlapColumns(baseLayouts);
 }

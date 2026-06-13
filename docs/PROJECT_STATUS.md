@@ -6,6 +6,8 @@
 
 ## 2. 当前阶段
 
+**Phase 13：分段专注会话（已完成）** — 秒表暂停上限 + FocusSegment → 多块 TimeBlock，详见 §54
+
 **TZ-1：用户本地时区** — 浏览器 cookie + `getUserCalendarTimeZone()`，详见 §28  
 **TZ-2：表单 UTC ISO** — `datetime-local` 在浏览器转 ISO 提交，详见 §29  
 **TZ-3：日历用户时区** — 日/周查询、布局、标签，详见 §30  
@@ -65,7 +67,7 @@
 
 **下一步（推荐）**：`ImportBatch` + 导入历史 + 回滚（阶段 6，见 §47）
 
-**当前验证（2026-06-12）**：`pnpm test` → **303+** 项通过（历史小节中的较低测试数仅为当时快照；合并 Phase 48 后见最新 `pnpm test` 输出）
+**当前验证（2026-06-13）**：`pnpm test` → **367+** 项通过（含 Phase 13 分段专注测试）
 
 - **Phase 9（已完成）正计时秒表**
   - `FocusSession.mode`：`pomodoro` | `stopwatch`（默认 `pomodoro`）
@@ -2757,4 +2759,76 @@ Title · Category · Category Color · Start Time · End Time · Duration Minute
 ### 53.4 测试
 
 - `src/lib/calendar.test.ts` — 同时间两块、三块重叠、相邻块全宽
+
+## 54. Phase 13 — 分段专注会话（秒表暂停上限 + 多块 TimeBlock）（已完成）
+
+### 54.1 目标
+
+正计时（秒表）暂停后完成时，按**真实墙钟时间段**写入多个 TimeBlock；暂停间隙在日历上保持空白。每会话最多 **2 次**暂停；第 3 次暂停尝试将会话标为 `failed`，不创建 TimeBlock。
+
+**未改：** 番茄钟（客户端暂停、单块转换逻辑不变）。
+
+### 54.2 数据模型
+
+| 模型 / 字段 | 说明 |
+|-------------|------|
+| `FocusSegment` | `focusSessionId`、`userId`（直接归属 User）、`categoryId`、`startTime`、`endTime?`、`durationMinutes?` |
+| `FocusSession.pauseCount` | 默认 `0`；每次成功暂停 +1 |
+| `FocusSession.status` | 新增 `failed`（暂停超限） |
+| `TimeBlock.focusSegmentId` | 可选唯一外键 → `FocusSegment` |
+| `FocusSession.timeBlockId` | **仅向后兼容**：完成时指向**第一条**生成的 TimeBlock。查询该会话的全部块请用 `FocusSegment` / `TimeBlock.focusSegmentId`，勿仅依赖此字段 |
+
+迁移：`20260613120000_add_focus_segments`
+
+### 54.3 业务规则
+
+| 操作 | 行为 |
+|------|------|
+| `startStopwatch` | 事务：创建 `running` 会话 + 首个 `FocusSegment`（`endTime=null`） |
+| `pauseStopwatch` | 事务：关闭当前段；`pauseCount<2` → `paused` + 警告文案；`pauseCount>=2` → `failed`，无 TimeBlock |
+| `resumeStopwatch` | 事务：`running` + 新 `FocusSegment`；不重置 `pauseCount` |
+| `completeStopwatchAndCreateTimeBlock` | 有 segment → **每段一块**（墙钟 `startTime`/`endTime`）；无 segment → 旧版压缩单块 fallback；`failed`/`abandoned` 拒绝 |
+| `cancelStopwatch` | 关闭开放段；`abandoned`；无 TimeBlock |
+
+**暂停文案（服务端返回 warning）：**
+
+- 第 1 次暂停后：`还剩一次暂停机会`
+- 第 2 次暂停后：`这是最后一次暂停机会`
+- 第 3 次暂停：`暂停次数超过限制，本次专注失败`
+
+**时长：** `FocusSegment.durationMinutes` = 该段墙钟起止的 `durationMinutes()` 四舍五入；`FocusSession.actualDurationMinutes` = 各段之和。TimeBlock 使用墙钟起止（非压缩有效时长）。
+
+### 54.4 实现文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/lib/focus-segments.ts` | 分段事务：暂停/恢复/完成/取消/开始 |
+| `src/lib/actions/focus-sessions.ts` | Server Actions 接入分段逻辑 |
+| `src/lib/actions/focus-shared.ts` | `completeStopwatchInTransaction` 路由 segment vs legacy |
+| `src/components/stopwatch-timer.tsx` | 暂停计数、警告、失败状态 UI |
+| `src/lib/focus-segments.test.ts` | 分段规则单元测试 |
+
+### 54.5 手动验证
+
+1. 开始秒表 → 暂停 → 继续 → 再暂停 → 继续 → 结束并保存。
+2. 日历应显示 **2 条** TimeBlock，中间暂停间隙空白。
+3. 第 1/2 次暂停后分别看到剩余暂停提示。
+4. 用完 2 次暂停后再点暂停 → 会话 `failed`，无「结束并保存」，可重新开始。
+5. `failed` 会话调用 complete action → 拒绝，无 TimeBlock。
+6. Dashboard 记录时长仅来自 TimeBlock，不与 FocusSession 双计。
+
+### 54.6 已知限制
+
+- 旧秒表会话（迁移前、无 `FocusSegment`）完成时仍用压缩单块语义。
+- `FocusSession.timeBlockId` 仅指向第一块；历史列表「已转换」链接可能只对应第一块。
+- 番茄钟不支持分段与暂停上限。
+- `failed` 会话仍阻挡分类删除（与 `completed` 同类）。
+
+### 54.7 验证命令
+
+```bash
+pnpm exec prisma migrate deploy   # 或 migrate dev
+pnpm prisma generate
+pnpm typecheck && pnpm lint && pnpm test
+```
 

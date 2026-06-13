@@ -50,6 +50,7 @@ export default async function FocusPage() {
           startTime: activeSession.startTime.toISOString(),
           pausedAt: activeSession.pausedAt?.toISOString() ?? null,
           pausedTotalSeconds: activeSession.pausedTotalSeconds,
+          pauseCount: activeSession.pauseCount,
           category: {
             id: activeSession.category.id,
             name: activeSession.category.name,

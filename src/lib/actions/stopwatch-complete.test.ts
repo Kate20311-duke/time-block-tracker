@@ -50,6 +50,14 @@ function createMockTx(options?: {
       updateMany: focusUpdateMany,
       update: focusUpdate,
     },
+    focusSegment: {
+      count: vi.fn().mockResolvedValue(0),
+    },
+  } as StopwatchCompleteTransactionClient & {
+    timeBlockCreate: ReturnType<typeof vi.fn>;
+    focusUpdateMany: ReturnType<typeof vi.fn>;
+    focusUpdate: ReturnType<typeof vi.fn>;
+    focusSegment: { count: ReturnType<typeof vi.fn> };
   };
 }
 

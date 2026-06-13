@@ -10,15 +10,16 @@ datasource db {
 
 // Auth.js Prisma Adapter (https://authjs.dev/getting-started/adapters/prisma)
 model User {
-  id            String     @id @default(cuid())
+  id            String         @id @default(cuid())
   name          String?
-  email         String?    @unique
+  email         String?        @unique
   emailVerified DateTime?
   image         String?
   accounts      Account[]
   sessions      Session[]
   categories    Category[]
   routines      Routine[]
+  focusSegments FocusSegment[]
 
   @@schema("app")
 }
@@ -73,6 +74,7 @@ model Category {
   updatedAt     DateTime       @updatedAt
   timeBlocks    TimeBlock[]
   focusSessions FocusSession[]
+  focusSegments FocusSegment[]
   routines      Routine[]
 
   @@index([userId])
@@ -116,6 +118,8 @@ model TimeBlock {
   categoryId      String
   category        Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   focusSession    FocusSession?
+  focusSegmentId  String?       @unique
+  focusSegment    FocusSegment? @relation(fields: [focusSegmentId], references: [id], onDelete: SetNull)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
@@ -123,24 +127,47 @@ model TimeBlock {
 }
 
 model FocusSession {
-  id                     String     @id @default(cuid())
+  id                     String         @id @default(cuid())
   title                  String?
   note                   String?
-  mode                   String     @default("pomodoro")
+  mode                   String         @default("pomodoro")
   categoryId             String
-  category               Category   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  category               Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   startTime              DateTime
   endTime                DateTime?
   plannedDurationMinutes Int
   actualDurationMinutes  Int?
-  status                 String     @default("planned")
-  convertedToTimeBlock   Boolean    @default(false)
-  timeBlockId            String?    @unique
-  timeBlock              TimeBlock? @relation(fields: [timeBlockId], references: [id], onDelete: SetNull)
+  status                 String         @default("planned")
+  convertedToTimeBlock   Boolean        @default(false)
+  timeBlockId            String?        @unique
+  timeBlock              TimeBlock?     @relation(fields: [timeBlockId], references: [id], onDelete: SetNull)
+  pauseCount             Int            @default(0)
   pausedAt               DateTime?
-  pausedTotalSeconds     Int        @default(0)
-  createdAt              DateTime   @default(now())
-  updatedAt              DateTime   @updatedAt
+  pausedTotalSeconds     Int            @default(0)
+  segments               FocusSegment[]
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
 
+  @@schema("app")
+}
+
+model FocusSegment {
+  id              String       @id @default(cuid())
+  focusSessionId  String
+  focusSession    FocusSession @relation(fields: [focusSessionId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId      String
+  category        Category     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  startTime       DateTime
+  endTime         DateTime?
+  durationMinutes Int?
+  timeBlock       TimeBlock?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([focusSessionId])
+  @@index([userId])
+  @@index([categoryId])
   @@schema("app")
 }

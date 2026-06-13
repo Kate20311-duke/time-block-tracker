@@ -156,6 +156,12 @@ export type Dictionary = {
     stopwatchPaused: string;
     stopwatchResumed: string;
     stopwatchPausedLabel: string;
+    stopwatchPauseCountLabel: string;
+    stopwatchPauseRemainingOne: string;
+    stopwatchPauseFinalWarning: string;
+    stopwatchPauseLimitExceeded: string;
+    stopwatchFailedLabel: string;
+    stopwatchFailedHint: string;
     stopwatchCompleteDialogTitle: string;
     stopwatchCompleteDialogDescription: string;
     instantRecordTitle: string;
@@ -195,6 +201,7 @@ export type Dictionary = {
       completed: string;
       abandoned: string;
       converted: string;
+      failed: string;
     };
     errors: {
       missingFields: string;
@@ -208,6 +215,7 @@ export type Dictionary = {
       convertFailed: string;
       alreadyConverted: string;
       sessionAlreadyRunning: string;
+      pauseLimitExceeded: string;
       invalidCompletion: string;
       generic: string;
     };

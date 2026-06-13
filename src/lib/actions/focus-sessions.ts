@@ -4,13 +4,11 @@ import { revalidatePath } from "next/cache";
 import type { FocusSession } from "@/generated/prisma";
 import {
   buildFocusSessionEndUpdate,
-  buildStopwatchAbandonUpdate,
   canAbandonFocusSession,
   canCompleteFocusSession,
-  canCompleteStopwatch,
+  canCompleteStopwatchSession,
   canConvertFocusSession,
   completeStopwatchInTransaction,
-  computeResumeStopwatchUpdate,
   convertFocusSessionInTransaction,
   defaultStopwatchTitle,
   defaultTimeBlockTitleFromFocus,
@@ -23,6 +21,12 @@ import {
   type FocusSessionActionError,
 } from "@/lib/actions/focus-shared";
 import {
+  cancelStopwatchSegmentsInTransaction,
+  pauseStopwatchSegmentsInTransaction,
+  resumeStopwatchSegmentsInTransaction,
+  startStopwatchWithSegmentInTransaction,
+} from "@/lib/focus-segments";
+import {
   activeFocusSessionForUser,
   assertCategoryOwned,
   assertFocusSessionOwned,
@@ -33,7 +37,7 @@ import { requireUser } from "@/lib/session";
 import { getValidTimeBlockRange } from "@/lib/validation";
 
 export type FocusSessionResult<T extends { id: string } = { id: string }> =
-  | { ok: true; data: T }
+  | { ok: true; data: T; warning?: import("@/lib/focus-segments").PauseStopwatchWarning }
   | { ok: false; error: FocusSessionActionError };
 
 function revalidateFocusRelatedPaths(): void {
@@ -328,17 +332,23 @@ export async function startStopwatch(input: {
   }
 
   try {
-    const session = await prisma.focusSession.create({
-      data: {
-        title: fields.title,
-        note: fields.note,
-        categoryId: fields.categoryId,
-        startTime: fields.startTime,
-        plannedDurationMinutes: fields.plannedDurationMinutes,
-        status: fields.status,
-        mode: fields.mode,
-      },
-    });
+    const session = await prisma.$transaction(async (tx) =>
+      startStopwatchWithSegmentInTransaction(
+        {
+          title: fields.title,
+          note: fields.note,
+          categoryId: fields.categoryId,
+          startTime: fields.startTime,
+          plannedDurationMinutes: fields.plannedDurationMinutes,
+          status: fields.status,
+          mode: fields.mode,
+          pauseCount: 0,
+          pausedTotalSeconds: 0,
+        },
+        user.id,
+        tx,
+      ),
+    );
     revalidateFocusRelatedPaths();
     return { ok: true, data: { id: session.id } };
   } catch {
@@ -363,24 +373,30 @@ export async function pauseStopwatch(input: {
   const pausedAt = new Date();
 
   try {
-    const updated = await prisma.focusSession.updateMany({
-      where: {
-        id: session.id,
-        status: "running",
-        mode: "stopwatch",
-        category: { userId: user.id },
-      },
-      data: {
-        status: "paused",
+    const pauseResult = await prisma.$transaction(async (tx) =>
+      pauseStopwatchSegmentsInTransaction(
+        { id: session.id, pauseCount: session.pauseCount },
         pausedAt,
-      },
-    });
-    if (updated.count === 0) {
+        user.id,
+        tx,
+      ),
+    );
+
+    if (!pauseResult.ok) {
+      revalidateFocusRelatedPaths();
+      return { ok: false, error: "pause_limit_exceeded" };
+    }
+
+    revalidateFocusRelatedPaths();
+    return {
+      ok: true,
+      data: { id: session.id },
+      warning: pauseResult.warning,
+    };
+  } catch (err) {
+    if (err instanceof FocusConvertTransactionError) {
       return { ok: false, error: "invalid_state" };
     }
-    revalidateFocusRelatedPaths();
-    return { ok: true, data: { id: session.id } };
-  } catch {
     return { ok: false, error: "update_failed" };
   }
 }
@@ -400,24 +416,30 @@ export async function resumeStopwatch(input: {
   }
 
   const now = new Date();
-  const resumeUpdate = computeResumeStopwatchUpdate(session, now);
 
   try {
-    const updated = await prisma.focusSession.updateMany({
-      where: {
-        id: session.id,
-        status: "paused",
-        mode: "stopwatch",
-        category: { userId: user.id },
-      },
-      data: resumeUpdate,
-    });
-    if (updated.count === 0) {
-      return { ok: false, error: "invalid_state" };
-    }
+    await prisma.$transaction(async (tx) =>
+      resumeStopwatchSegmentsInTransaction(
+        {
+          id: session.id,
+          categoryId: session.categoryId,
+          userId: user.id,
+          startTime: session.startTime,
+          status: session.status,
+          pausedAt: session.pausedAt,
+          pausedTotalSeconds: session.pausedTotalSeconds,
+        },
+        now,
+        user.id,
+        tx,
+      ),
+    );
     revalidateFocusRelatedPaths();
     return { ok: true, data: { id: session.id } };
-  } catch {
+  } catch (err) {
+    if (err instanceof FocusConvertTransactionError) {
+      return { ok: false, error: "invalid_state" };
+    }
     return { ok: false, error: "update_failed" };
   }
 }
@@ -456,9 +478,12 @@ export async function completeStopwatchAndCreateTimeBlock(input: {
   if (session.mode !== "stopwatch") {
     return { ok: false, error: "invalid_state" };
   }
-  if (!canCompleteStopwatch(session.status) || session.convertedToTimeBlock) {
+  if (!canCompleteStopwatchSession(session)) {
     if (session.convertedToTimeBlock) {
       return { ok: false, error: "already_converted" };
+    }
+    if (session.status === "failed") {
+      return { ok: false, error: "invalid_state" };
     }
     return { ok: false, error: "invalid_state" };
   }
@@ -524,39 +549,34 @@ export async function cancelStopwatch(input: {
   const { session } = lookup;
   if (
     session.mode !== "stopwatch" ||
-    !canCompleteStopwatch(session.status)
+    !canCompleteStopwatchSession(session)
   ) {
     return { ok: false, error: "invalid_state" };
   }
 
   const wallClockEndTime = new Date();
-  const endUpdate = buildStopwatchAbandonUpdate(session, wallClockEndTime);
-  if (typeof endUpdate === "string") {
-    return { ok: false, error: endUpdate };
-  }
 
   try {
-    const updated = await prisma.focusSession.updateMany({
-      where: {
-        id: session.id,
-        status: { in: ["running", "paused"] },
-        mode: "stopwatch",
-        category: { userId: user.id },
-      },
-      data: {
-        status: "abandoned",
-        endTime: endUpdate.endTime,
-        actualDurationMinutes: endUpdate.actualDurationMinutes,
-        pausedAt: endUpdate.pausedAt,
-        pausedTotalSeconds: endUpdate.pausedTotalSeconds,
-      },
-    });
-    if (updated.count === 0) {
-      return { ok: false, error: "invalid_state" };
-    }
+    await prisma.$transaction(async (tx) =>
+      cancelStopwatchSegmentsInTransaction(
+        {
+          id: session.id,
+          status: session.status,
+          startTime: session.startTime,
+          pausedAt: session.pausedAt,
+          pausedTotalSeconds: session.pausedTotalSeconds,
+        },
+        wallClockEndTime,
+        user.id,
+        tx,
+      ),
+    );
     revalidateFocusRelatedPaths();
     return { ok: true, data: { id: session.id } };
-  } catch {
+  } catch (err) {
+    if (err instanceof FocusConvertTransactionError) {
+      return { ok: false, error: "invalid_state" };
+    }
     return { ok: false, error: "update_failed" };
   }
 }

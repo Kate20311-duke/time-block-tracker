@@ -187,6 +187,12 @@ export const zh: Dictionary = {
     stopwatchPaused: "计时已暂停",
     stopwatchResumed: "计时已继续",
     stopwatchPausedLabel: "正计时已暂停",
+    stopwatchPauseCountLabel: "暂停次数",
+    stopwatchPauseRemainingOne: "还剩一次暂停机会",
+    stopwatchPauseFinalWarning: "这是最后一次暂停机会",
+    stopwatchPauseLimitExceeded: "暂停次数超过限制，本次专注失败",
+    stopwatchFailedLabel: "专注失败",
+    stopwatchFailedHint: "本次专注因暂停次数超限已失败，未创建时间块。可开始新的专注。",
     stopwatchCompleteDialogTitle: "保存为时间块",
     stopwatchCompleteDialogDescription:
       "结束前可编辑标题、备注、状态与完成度。",
@@ -230,6 +236,7 @@ export const zh: Dictionary = {
       completed: "已完成",
       abandoned: "已放弃",
       converted: "已转换",
+      failed: "已失败",
     },
     errors: {
       missingFields: "请填写必填项。",
@@ -243,6 +250,7 @@ export const zh: Dictionary = {
       convertFailed: "转换为时间块失败。",
       alreadyConverted: "该专注会话已转换过。",
       sessionAlreadyRunning: "已有进行中的专注会话，请先结束当前会话。",
+      pauseLimitExceeded: "暂停次数超过限制，本次专注失败",
       invalidCompletion: "完成度必须在 0 到 100 之间",
       generic: "操作失败，请重试。",
     },

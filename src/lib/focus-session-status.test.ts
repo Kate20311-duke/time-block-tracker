@@ -3,6 +3,7 @@ import {
   blocksCategoryDeletionFocusStatus,
   isFocusSessionAbandoned,
   isFocusSessionActive,
+  isFocusSessionFailed,
   isFocusSessionPaused,
   isFocusSessionRunning,
 } from "./focus-session-status";
@@ -26,5 +27,8 @@ describe("focus-session-status", () => {
     expect(blocksCategoryDeletionFocusStatus("running")).toBe(true);
     expect(blocksCategoryDeletionFocusStatus("completed")).toBe(true);
     expect(blocksCategoryDeletionFocusStatus("converted")).toBe(true);
+    expect(blocksCategoryDeletionFocusStatus("failed")).toBe(true);
+    expect(isFocusSessionFailed("failed")).toBe(true);
+    expect(isFocusSessionActive("failed")).toBe(false);
   });
 });

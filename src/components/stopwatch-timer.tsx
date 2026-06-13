@@ -35,6 +35,8 @@ import {
   startStopwatch,
 } from "@/lib/actions/focus-sessions";
 import type { FocusSessionActionError } from "@/lib/actions/focus-shared";
+import type { PauseStopwatchWarning } from "@/lib/focus-segments";
+import { MAX_FOCUS_PAUSES } from "@/lib/constants";
 import type { FocusCategoryOption } from "@/components/focus-timer";
 import type { Dictionary, Locale } from "@/lib/i18n/types";
 import { formatDateTime } from "@/lib/time";
@@ -47,6 +49,7 @@ export type RunningStopwatchSession = {
   startTime: string;
   pausedAt: string | null;
   pausedTotalSeconds: number;
+  pauseCount: number;
   category: { id: string; name: string; color: string };
 };
 
@@ -81,8 +84,19 @@ function resolveFocusError(
     update_failed: labels.errors.updateFailed,
     convert_failed: labels.errors.convertFailed,
     already_converted: labels.errors.alreadyConverted,
+    pause_limit_exceeded: labels.errors.pauseLimitExceeded,
   };
   return map[error] ?? labels.errors.generic;
+}
+
+function pauseWarningMessage(
+  warning: PauseStopwatchWarning,
+  labels: Dictionary["focus"],
+): string {
+  if (warning === "pause_remaining_one") {
+    return labels.stopwatchPauseRemainingOne;
+  }
+  return labels.stopwatchPauseFinalWarning;
 }
 
 function labelWhenBusy(
@@ -205,6 +219,7 @@ export function StopwatchTimer({
       startTime: new Date().toISOString(),
       pausedAt: null,
       pausedTotalSeconds: 0,
+      pauseCount: 0,
       category: { id: category.id, name: category.name, color: category.color },
     });
     toast.success(labels.stopwatchStart);
@@ -227,15 +242,26 @@ export function StopwatchTimer({
       const message = resolveFocusError(result.error, labels);
       setErrorMessage(message);
       toast.error(message);
+      if (result.error === "pause_limit_exceeded") {
+        setRunningSession(null);
+        setStatusMessage(labels.stopwatchPauseLimitExceeded);
+      }
+      router.refresh();
       return;
     }
+
+    const warningMessage = result.warning
+      ? pauseWarningMessage(result.warning, labels)
+      : labels.stopwatchPaused;
 
     setRunningSession({
       ...runningSession,
       status: "paused",
       pausedAt: new Date().toISOString(),
+      pauseCount: runningSession.pauseCount + 1,
     });
-    toast.success(labels.stopwatchPaused);
+    setStatusMessage(warningMessage);
+    toast.warning(warningMessage);
     router.refresh();
   };
 
@@ -435,6 +461,10 @@ export function StopwatchTimer({
             />
             <p className="text-sm text-muted-foreground">
               {runningSession.title?.trim() || labels.stopwatchUntitled}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {labels.stopwatchPauseCountLabel}: {runningSession.pauseCount} /{" "}
+              {MAX_FOCUS_PAUSES}
             </p>
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               {isPaused ? (

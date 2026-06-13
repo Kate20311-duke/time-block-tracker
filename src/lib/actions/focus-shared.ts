@@ -35,6 +35,7 @@ export type FocusSessionActionError =
   | "invalid_state"
   | "already_converted"
   | "session_already_running"
+  | "pause_limit_exceeded"
   | "update_failed"
   | "convert_failed";
 
@@ -231,6 +232,16 @@ export function canCompleteStopwatch(status: string): boolean {
   return status === "running" || status === "paused";
 }
 
+export function canCompleteStopwatchSession(session: {
+  status: string;
+  convertedToTimeBlock: boolean;
+}): boolean {
+  if (session.status === "failed" || session.status === "abandoned") {
+    return false;
+  }
+  return canCompleteStopwatch(session.status) && !session.convertedToTimeBlock;
+}
+
 export function canConvertFocusSession(session: {
   status: string;
   convertedToTimeBlock: boolean;
@@ -423,88 +434,65 @@ export async function convertFocusSessionInTransaction(
 }
 
 /**
- * End a running/paused stopwatch and create its TimeBlock in one transaction.
- * TimeBlock.endTime = startTime + active duration (excludes pauses).
- * FocusSession.endTime = wall-clock completion time.
+ * End a running/paused stopwatch and create TimeBlock(s) in one transaction.
+ * When FocusSegments exist, creates one TimeBlock per segment (wall-clock times).
+ * Legacy sessions without segments use compressed active-duration single block.
+ *
+ * FocusSession.timeBlockId points at the first block for backward compatibility only.
  */
 export async function completeStopwatchInTransaction(
   session: FocusSessionPauseFields & {
     id: string;
     note: string | null;
     categoryId: string;
+    status: string;
   },
   completeInput: StopwatchCompleteInput,
   wallClockEndTime: Date,
   userId: string,
-  tx: StopwatchCompleteTransactionClient,
+  tx: StopwatchCompleteTransactionClient & {
+    focusSegment?: {
+      count(args: { where: { focusSessionId: string } }): Promise<number>;
+    };
+  },
+  options?: { segmentNoteSuffix?: string },
 ): Promise<{ timeBlockId: string; actualDurationMinutes: number }> {
-  const finalizedPausedTotal = finalizePausedTotalSeconds(session, wallClockEndTime);
-  const sessionForDuration: FocusSessionPauseFields = {
-    startTime: session.startTime,
-    status: "running",
-    pausedAt: null,
-    pausedTotalSeconds: finalizedPausedTotal,
-  };
+  const {
+    completeStopwatchWithSegmentsInTransaction,
+    completeStopwatchLegacyInTransaction,
+  } = await import("@/lib/focus-segments");
 
-  const timeBlockEndTime = computeStopwatchTimeBlockEndTime(
-    sessionForDuration,
-    wallClockEndTime,
-  );
-
-  const rangeError = validateFocusSessionTimeRange(
-    session.startTime,
-    timeBlockEndTime,
-  );
-  if (rangeError) {
+  if (session.status === "failed" || session.status === "abandoned") {
     throw new FocusConvertTransactionError("invalid_state");
   }
 
-  const actualDurationMinutes = activeDurationMinutesFromSession(
-    sessionForDuration,
-    wallClockEndTime,
-  );
+  const segmentCount =
+    tx.focusSegment !== undefined
+      ? await tx.focusSegment.count({ where: { focusSessionId: session.id } })
+      : 0;
 
-  const claimed = await tx.focusSession.updateMany({
-    where: {
-      id: session.id,
-      convertedToTimeBlock: false,
-      status: { in: ["running", "paused"] },
-      mode: "stopwatch",
-      category: { userId },
-    },
-    data: {
-      status: "completed",
-      convertedToTimeBlock: true,
-      endTime: wallClockEndTime,
-      actualDurationMinutes,
-      pausedAt: null,
-      pausedTotalSeconds: finalizedPausedTotal,
-    },
-  });
-
-  if (claimed.count === 0) {
-    throw new FocusConvertTransactionError("already_converted");
+  if (segmentCount > 0) {
+    const result = await completeStopwatchWithSegmentsInTransaction(
+      session,
+      completeInput,
+      wallClockEndTime,
+      userId,
+      tx as import("@/lib/focus-segments").FocusSegmentTransactionClient,
+      options,
+    );
+    return {
+      timeBlockId: result.timeBlockId,
+      actualDurationMinutes: result.actualDurationMinutes,
+    };
   }
 
-  const block = await tx.timeBlock.create({
-    data: {
-      title: completeInput.title,
-      note: completeInput.note,
-      categoryId: session.categoryId,
-      startTime: session.startTime,
-      endTime: timeBlockEndTime,
-      status: completeInput.status,
-      completionLevel: completeInput.completionLevel,
-      source: "stopwatch",
-    },
-  });
-
-  await tx.focusSession.update({
-    where: { id: session.id },
-    data: { timeBlockId: block.id },
-  });
-
-  return { timeBlockId: block.id, actualDurationMinutes };
+  return completeStopwatchLegacyInTransaction(
+    session,
+    completeInput,
+    wallClockEndTime,
+    userId,
+    tx as import("@/lib/focus-segments").FocusSegmentTransactionClient,
+  );
 }
 
 export function defaultTimeBlockTitleFromFocus(

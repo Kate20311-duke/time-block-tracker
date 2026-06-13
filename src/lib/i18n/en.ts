@@ -193,6 +193,13 @@ export const en: Dictionary = {
     stopwatchPaused: "Timer paused",
     stopwatchResumed: "Timer resumed",
     stopwatchPausedLabel: "Stopwatch paused",
+    stopwatchPauseCountLabel: "Pauses used",
+    stopwatchPauseRemainingOne: "One pause remaining",
+    stopwatchPauseFinalWarning: "This is your last pause",
+    stopwatchPauseLimitExceeded: "Pause limit exceeded — this focus session failed",
+    stopwatchFailedLabel: "Focus failed",
+    stopwatchFailedHint:
+      "This session failed because the pause limit was exceeded. No time blocks were created. Start a new session when ready.",
     stopwatchCompleteDialogTitle: "Save as time block",
     stopwatchCompleteDialogDescription:
       "Review the title, note, status, and completion before saving.",
@@ -240,6 +247,7 @@ export const en: Dictionary = {
       completed: "Completed",
       abandoned: "Abandoned",
       converted: "Converted",
+      failed: "Failed",
     },
     errors: {
       missingFields: "Please fill in required fields.",
@@ -254,6 +262,7 @@ export const en: Dictionary = {
       alreadyConverted: "This session was already converted.",
       sessionAlreadyRunning:
         "A focus session is already running. Finish the current session first.",
+      pauseLimitExceeded: "Pause limit exceeded — this focus session failed",
       invalidCompletion: "Completion must be between 0 and 100",
       generic: "Something went wrong. Please try again.",
     },

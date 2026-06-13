@@ -7,6 +7,7 @@ export const FOCUS_SESSION_CATEGORY_BLOCKING_STATUSES = [
   "paused",
   "completed",
   "converted",
+  "failed",
 ] as const satisfies readonly FocusSessionStatus[];
 
 export function isFocusSessionRunning(status: string): boolean {
@@ -24,6 +25,10 @@ export function isFocusSessionActive(status: string): boolean {
 
 export function isFocusSessionPlanned(status: string): boolean {
   return status === "planned";
+}
+
+export function isFocusSessionFailed(status: string): boolean {
+  return status === "failed";
 }
 
 export function isFocusSessionAbandoned(status: string): boolean {

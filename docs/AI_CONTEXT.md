@@ -39,6 +39,7 @@ Personal time-block planner + Pomodoro + **stopwatch** focus tracker. **Phase 9:
 | **ICS preview** | **Done** — `POST /api/import/ics/preview`; `ical.js`; read-only; see `PROJECT_STATUS.md` §50 |
 | **ICS import** | **Done** — `POST /api/import/ics/apply`; `source=ics_import`; see `PROJECT_STATUS.md` §51 |
 | **ICS duplicate/conflict** | **Done** — `duplicate-detection.ts`; preview `importCheck`; apply re-validates; see `PROJECT_STATUS.md` §52 |
+| **Phase 13** | **Done** — Segmented stopwatch focus (`FocusSegment`, max 2 pauses, multi TimeBlock) — see `PROJECT_STATUS.md` §54 |
 
 ## Stack
 
@@ -87,10 +88,13 @@ Browser → src/proxy.ts (auth gate) → App Router pages (requireUser + *ForUse
 
 ## Data model & ownership
 
-- **`User`** — Auth.js + `Category[]` + `Routine[]`
+- **`User`** — Auth.js + `Category[]` + `Routine[]` + `FocusSegment[]` (direct `userId` on segments)
 - **`Category.userId`** — required; root of tenant isolation for Category / TimeBlock / FocusSession
 - **`Routine.userId`** — required; **direct** user ownership (parallel to Category)
 - **`TimeBlock`**, **`FocusSession`** — no `userId`; owned via **`category.userId`**
+- **`FocusSegment`** — **`userId`** direct + `focusSessionId` + `categoryId`; one segment may link one `TimeBlock` via `focusSegmentId`
+- **`FocusSession.pauseCount`** — stopwatch pause attempts used (max `MAX_FOCUS_PAUSES` = 2); 3rd pause → `status=failed`
+- **`FocusSession.timeBlockId`** — **backward compat only** (first block id when segmented). List all blocks: `FocusSegment` → `TimeBlock.focusSegmentId`
 - **`FocusSession.mode`**: `pomodoro` | `stopwatch` (default `pomodoro`)
 - **`TimeBlock.source`**: `manual` | `pomodoro` | `stopwatch` | `ics_import` (default `manual`) — `TIME_BLOCK_SOURCES` in `src/lib/constants.ts`. Pomodoro/stopwatch have special time semantics; `ics_import` is for ICS apply only.
 - **`ImportBatch`**: **does not exist yet** — planned for import history/rollback (see §47)
@@ -166,17 +170,19 @@ Bulk apply pattern: `src/lib/assistant/tomorrow-plan-apply.ts` — interval over
 
 Duplicate TimeBlock prevention: `updateMany` claim (`convertedToTimeBlock: false`, correct `status`/`mode`) **before** `timeBlock.create` in `convertFocusSessionInTransaction` / `completeStopwatchInTransaction`.
 
-### Stopwatch TimeBlock time semantics (Feature-2)
+### Stopwatch TimeBlock time semantics (Feature-2 + Phase 13)
 
-When a stopwatch completes:
+**Phase 13 (sessions with `FocusSegment`):** each closed segment → one `TimeBlock` with **wall-clock** `startTime`/`endTime`. Pause gaps stay empty on the calendar. `FocusSession.actualDurationMinutes` = sum of segment `durationMinutes`.
 
-- `TimeBlock.startTime = FocusSession.startTime`
-- `TimeBlock.endTime = startTime + **activeDuration**` (excludes pauses — **not** wall-clock end)
-- `FocusSession.endTime = wall-clock completion instant`
+**Legacy / no segments:** when completing, `TimeBlock.endTime = startTime + activeDuration` (excludes pauses — not wall-clock end). `FocusSession.endTime` = wall-clock completion instant.
 
-Dashboard / calendar **stats use TimeBlock only**. Stopwatch blocks represent **recorded active time**, not when the user physically stopped. Pomodoro-converted and manual blocks keep wall-clock `startTime`/`endTime`.
+`FocusSession.timeBlockId` points at the **first** block for backward compatibility only. Query all blocks via `FocusSegment` / `TimeBlock.focusSegmentId`.
 
-Helpers: `src/lib/focus-session-elapsed.ts`, `completeStopwatchInTransaction` in `focus-shared.ts`.
+Dashboard / calendar **stats use TimeBlock only**. Pomodoro-converted and manual blocks keep wall-clock `startTime`/`endTime`.
+
+Helpers: `src/lib/focus-segments.ts`, `src/lib/focus-session-elapsed.ts`, `completeStopwatchInTransaction` in `focus-shared.ts`.
+
+**Stopwatch pause limit (Phase 13):** max 2 pauses per session (`MAX_FOCUS_PAUSES`); server enforces in `pauseStopwatchSegmentsInTransaction`. Warnings: `pause_remaining_one`, `pause_final`. 3rd attempt → `failed`; `completeStopwatchAndCreateTimeBlock` rejects `failed`/`abandoned`.
 
 Complete dialog fields (defaults): title (session → category → `instantRecordTitle`), note (session), status=`completed`, completionLevel=`100`. Cancel dialog → no complete, no TimeBlock.
 
@@ -269,7 +275,7 @@ Dashboard: TimeBlock totals from `stats.ts` only; FocusSession totals from `focu
 
 ### Phase 9.1 — zombie running + category delete
 
-- **Statuses:** `planned` | `running` | `paused` (stopwatch only) | `completed` | `abandoned` | `converted` — stopwatch cancel uses `abandoned` (no `canceled`).
+- **Statuses:** `planned` | `running` | `paused` (stopwatch only) | `completed` | `abandoned` | `converted` | `failed` — stopwatch cancel uses `abandoned`; 3rd pause uses `failed`
 - **FocusHistory:** always lists recent sessions; banner if `running` vs only non-completed; running rows call `abandonFocusSession` or `cancelStopwatch`.
 - **Pomodoro after refresh:** `orphanRunningPomodoro` on `/focus` → abandon via server (`focus-timer.tsx`).
 - **Category delete:** block on TimeBlocks + non-`abandoned` FocusSessions; in transaction `deleteMany` `abandoned` then delete category. Helpers: `src/lib/focus-session-status.ts`.
@@ -333,7 +339,7 @@ pnpm dev
 pnpm exec prisma generate && pnpm typecheck && pnpm lint && pnpm test && pnpm build
 ```
 
-303 tests (2026-06-12); no E2E. Timezone: `stats-list-duration.test.ts`, `calendar-redirect-timezone.test.ts`, `timezone-integration.test.ts`.
+367 tests (2026-06-13); no E2E. Segmented focus: `focus-segments.test.ts`. Timezone: `stats-list-duration.test.ts`, `calendar-redirect-timezone.test.ts`, `timezone-integration.test.ts`.
 
 **Audit rules for new code:** pages → `requireUser` + `*ForUser`; actions → `requireUser` + `assert*Owned`; never `update({ where: { id } })` on private models.
 

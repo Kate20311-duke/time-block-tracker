@@ -19,9 +19,13 @@ export const FOCUS_SESSION_STATUSES = [
   "completed",
   "abandoned",
   "converted",
+  "failed",
 ] as const;
 
 export type FocusSessionStatus = (typeof FOCUS_SESSION_STATUSES)[number];
+
+/** Maximum pause attempts per stopwatch focus session (server-enforced). */
+export const MAX_FOCUS_PAUSES = 2;
 
 export const FOCUS_SESSION_MODES = ["pomodoro", "stopwatch"] as const;
 

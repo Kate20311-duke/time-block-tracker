@@ -7,6 +7,7 @@ import {
   Settings,
   Sparkles,
   Tags,
+  Target,
   Timer,
   type LucideIcon,
 } from "lucide-react";
@@ -22,6 +23,7 @@ export type AppNavLabelKey = keyof Pick<
   | "review"
   | "assistant"
   | "routines"
+  | "goals"
   | "settings"
 >;
 
@@ -39,6 +41,7 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
   { href: "/time-blocks", labelKey: "timeBlocks", icon: Blocks },
   { href: "/categories", labelKey: "categories", icon: Tags },
   { href: "/routines", labelKey: "routines", icon: Repeat },
+  { href: "/goals", labelKey: "goals", icon: Target },
   { href: "/review", labelKey: "review", icon: BarChart3, matchPrefix: true },
   { href: "/assistant", labelKey: "assistant", icon: Sparkles },
   { href: "/settings", labelKey: "settings", icon: Settings },
@@ -47,6 +50,7 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
 export const APP_ROUTE_PREFIXES = [
   "/assistant",
   "/categories",
+  "/goals",
   "/routines",
   "/settings",
   "/time-blocks",

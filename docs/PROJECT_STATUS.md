@@ -2832,3 +2832,237 @@ pnpm prisma generate
 pnpm typecheck && pnpm lint && pnpm test
 ```
 
+## 55. Phase 55 — 目标系统 v0（已完成）
+
+### 55.1 目标
+
+实用型时长目标（非徽章/成就系统）。用户可创建一次性或循环（每日/每周）目标，进度仅来自 **TimeBlock**（`completed` + `partial`），在用户日历时区下懒生成/评估 `GoalPeriod`。
+
+### 55.2 数据模型
+
+| 模型 / 字段 | 说明 |
+|-------------|------|
+| `Goal` | `userId`、`title`、`categoryId?`、`metric=time_block_minutes`、`targetMinutes`、`goalType`（`one_time` \| `recurring`）、`period`（`once` \| `daily` \| `weekly`）、`startDate`、`endDate?`、`isActive` |
+| `GoalPeriod` | `goalId`、`userId`、`periodStart`、`periodEnd`、`targetMinutes`、`actualMinutes`、`status`（`active` \| `achieved` \| `missed`）、`evaluatedAt?` |
+
+迁移：`20260613140000_add_goals`
+
+关系：删 Goal → 级联删 GoalPeriod；删 Category → Goal.categoryId `SetNull`。
+
+### 55.3 进度规则
+
+- **数据源：** 仅 TimeBlock；`planned` / `skipped` 不计入。
+- **partial：** 按 `completionLevel` 比例计入（与 `stats.ts` 一致）。
+- **窗口：** 用 `overlapMinutes` 裁剪到周期区间；尊重 `getUserCalendarTimeZone()`。
+- **分类：** 有 `categoryId` 则只统计该分类；否则统计用户全部分类。
+- **周期：** 一次性 `once`；循环每日 `daily`；循环每周 `weekly`（周一 00:00 起，与 dashboard/calendar 一致）。
+- **评估：** 无 cron；访问 `/goals` 或 `/dashboard` 时 `ensureAndEvaluateGoalPeriodsForUser` 补全周期并更新已结束周期状态。
+- **Streak：** 循环目标支持当前连续达成与最长连续；进行中的 `active` 周期不打断 streak。
+
+### 55.4 实现文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/lib/goals.ts` | 周期生成、进度计算、streak、校验 |
+| `src/lib/goals.test.ts` | 单元测试 |
+| `src/lib/actions/goals.ts` | create / deactivate / delete / lazy evaluate |
+| `src/lib/db/scoped.ts` | `goalsForUser`、`goalPeriodsForUser`、`assertGoalOwned` |
+| `src/app/goals/page.tsx` | 目标页（表单 + 进度 + 历史） |
+| `src/components/dashboard-goals-preview.tsx` | Dashboard 最多 3 个进行中目标 |
+| `src/lib/app-nav-config.ts` | 侧栏「目标」入口 |
+
+### 55.5 已知限制
+
+- v0 仅 `metric=time_block_minutes`；无编辑目标（可 deactivate/delete 后重建）。
+- 无推送/提醒；无 cron 预生成远期周期。
+- 停用目标不再生成新周期；历史周期不自动重算 inactive 目标。
+- 一次性目标必须填写 `endDate`；循环目标可选结束日期（存储为开始日边界）。
+
+### 55.6 部署
+
+Neon / 生产需先执行：
+
+```bash
+pnpm exec prisma migrate deploy
+```
+
+### 55.7 推荐下一步
+
+- 目标编辑、归档视图过滤
+- 按目标类型的 Dashboard 排序
+- 可选 FocusSession 指标（独立 metric，避免与 TimeBlock 双计）
+
+## 55.1 Phase 55.1 — 目标系统审计与加固（已完成）
+
+### 55.1.1 审计范围
+
+对 Phase 55 的 ownership、懒生成/评估、时区、TimeBlock 语义、Dashboard 预览与 `/goals` UX 做代码审查与测试补全。**未改 Prisma schema。**
+
+### 55.1.2 已修复问题
+
+| 问题 | 修复 |
+|------|------|
+| 进行中周期把当天未来 TimeBlock 算入进度 | `calculateActualMinutesInPeriod` 增加 `progressWindowEnd`（`min(periodEnd, now)`） |
+| 创建目标日期用 `parseDateOnly`（服务器本地） | 改用 `parseGoalDateParamInTimeZone` + 用户 cookie 时区 |
+| 表单默认开始日期用服务器本地 | `todayDateInputValueInTimeZone(userTimeZone)` |
+| 停用目标历史进度不刷新 | `/goals` 加载时对 inactive 目标仅 **评估** 已有周期，不生成新周期 |
+| 一次性/已结束目标进度条显示 0 | `getDisplayGoalPeriod` 回退到最近周期用于展示 |
+| 分类删除后仍显示「全部分类」 | 新增 `categoryRemoved` 文案（`categoryId` 有值但 `category` 为 null） |
+| 懒生成 dedupe 逻辑分散 | 提取 `goalPeriodIdentityKey` / `filterNewGoalPeriodRanges` |
+| TimeBlock 查询用 `startTime < now` 过窄 | 改为与周期窗口重叠查询（`startTime < maxEnd`, `endTime > minStart`） |
+| 重复 evaluate 可能多余写库 | 保留「仅变更时 update」；移除无效的 `skipDuplicates`（无 DB unique） |
+
+### 55.1.3 审计结论（无代码变更项）
+
+- **Ownership：** `createGoal` / `deactivateGoal` / `deleteGoal` 均 `requireUser` + `userId` 条件；`categoryId` 可选时走 `assertCategoryOwned`；TimeBlock 经 `timeBlocksForUser` 仅当前用户分类。
+- **Inactive 不生成新周期：** `ensureAndEvaluateGoalPeriodsForUser` 仅 `isActive: true`；inactive 只走 `evaluatePeriodsForGoals`。
+- **Partial 语义：** 对裁剪后重叠分钟数 × `completionLevel%`（与 `stats.ts` 一致），**不是** full overlap without level。
+- **Dashboard：** 最多 3 个 active 目标预览；无 active 时简短 empty 文案。
+- **重复 ensure：** 应用层 dedupe 保证 sequential 调用 idempotent；并发双写仍可能重复（已知限制，需 unique index 才能彻底消除）。
+
+### 55.1.4 新增/加强测试
+
+`src/lib/goals.test.ts`：边界评估、dedupe、TZ 日期解析、active 窗口裁剪、cross-midnight、category null、display period、partial completionLevel。
+
+### 55.1.5 剩余已知限制
+
+- 无 GoalPeriod `(goalId, periodStart)` unique → 极高并发下仍可能重复行。
+- 无目标编辑；inactive 目标不补历史缺失周期。
+- `todayDateInputValue()`（ routines 等）仍用服务器本地，仅 goals 表单已改用用户 TZ。
+
+### 55.1.6 推荐下一步
+
+- **Goal 编辑与归档筛选**（Phase 56 候选）
+- GoalPeriod DB unique + 迁移（若生产出现重复行）
+- Dashboard 目标排序（按进度/截止日期）
+
+## 56. Phase 56 — 目标编辑与列表筛选（已完成）
+
+### 56.1 目标
+
+在 Phase 55/55.1 基础上，允许编辑已有目标，并在 `/goals` 按状态筛选。保持 TimeBlock-only 进度语义与懒评估模式。
+
+### 56.2 可编辑字段
+
+| 字段 | 可编辑 | 说明 |
+|------|--------|------|
+| `title` | 是 | 必填 |
+| `description` | 是 | 可选 |
+| `categoryId` | 是 | 可选；需归属当前用户 |
+| `targetMinutes` | 是 | 必须 > 0 |
+| `endDate` | 是 | 一次性必填；循环可选 |
+| `isActive` | 是 | 可重新启用已停用目标 |
+| `goalType` / `period` / `startDate` | **否** | 创建后只读（避免周期历史错乱） |
+
+Server Action：`updateGoal`（`src/lib/actions/goals.ts`）
+
+### 56.3 编辑对 GoalPeriod 的影响
+
+| 变更 | 行为 |
+|------|------|
+| `targetMinutes` | 仅更新 **status=active** 的 `GoalPeriod.targetMinutes` |
+| `endDate`（一次性） | 更新 active 周期的 `periodEnd` |
+| `categoryId` | 下次评估时用新分类重算 **active** 周期进度 |
+| **achieved / missed** 历史周期 | **冻结** — `computePeriodUpdates` 跳过，不 rewrite 状态或 target |
+
+新 lazy 生成的未来周期使用更新后的 `goal.targetMinutes`。
+
+### 56.4 列表筛选
+
+URL 参数 `?filter=`：
+
+| 值 | 含义 |
+|----|------|
+| `active`（默认） | `isActive=true` |
+| `history` | 至少一个 `achieved` 周期 |
+| `missed` | `isActive=true` 且至少一个 `missed` 周期 |
+| `inactive` | `isActive=false` |
+| `all` | 全部 |
+
+组件：`GoalFilterTabs`；纯函数：`parseGoalListFilter` / `matchesGoalListFilter`
+
+### 56.5 Dashboard
+
+仍仅展示 **active** 目标（`ensureAndEvaluateGoalPeriodsForUser` 不变），最多 3 条。
+
+### 56.6 实现文件
+
+| 文件 | 说明 |
+|------|------|
+| `src/lib/actions/goals.ts` | `updateGoal` |
+| `src/lib/goals.ts` | `validateGoalUpdateInput`、筛选 helpers、冻结历史周期 |
+| `src/components/goals/goal-form-fields.tsx` | 创建/编辑共用表单字段 |
+| `src/components/goals/goal-row.tsx` | 内联编辑（Routine 模式） |
+| `src/components/goals/goal-filter-tabs.tsx` | 筛选 tabs |
+| `src/app/goals/page.tsx` | 筛选 + 编辑接入 |
+
+### 56.7 已知限制
+
+- 不可改 `startDate` / `goalType` / `period`；需删后重建。
+- 历史 achieved/missed 周期冻结后，若 TimeBlock 后续变更不会 retroactive 更新历史（by design）。
+- 筛选「需关注」仅看是否存在 missed 周期，不含「进度落后但未结束」的启发式。
+
+### 56.8 推荐下一步
+
+- ~~Goal 详情页与历史可视化（Phase 57）~~
+- FocusSession 独立 metric（避免与 TimeBlock 双计）
+- 目标提醒 / 通知
+- GoalPeriod `(goalId, periodStart)` unique 约束
+
+## 57. Phase 57 — 目标详情页与历史可视化（已完成）
+
+### 57.1 目标
+
+为每个目标提供独立详情页，展示当前进度、连续达成、历史 `GoalPeriod` 列表与轻量趋势图；不改变 Prisma schema，不引入 FocusSession 指标或 gamification。
+
+### 57.2 路由
+
+| 路由 | 说明 |
+|------|------|
+| `/goals/[goalId]` | 需登录；`goalsForUser` 校验归属；不存在或非本人 → `notFound()` + 专用 `not-found.tsx` |
+| 列表 → 详情 | `GoalRow`「查看详情」链接，携带 `?fromFilter=` 保留筛选 |
+| 详情 → 列表 | 返回链接恢复 `?filter=` |
+
+### 57.3 详情页内容
+
+- 标题、描述、分类 badge（无分类显示「全部分类」）
+- 目标类型（一次性 / 循环）与周期（固定范围 / 每天 / 每周）
+- 整体状态：active / achieved / missed / inactive（`deriveGoalOverallStatus`）
+- 当前或最新周期进度：`actualMinutes / targetMinutes`、百分比、剩余分钟（active 且未完成）
+- 循环目标 streak 摘要：当前连续、最佳连续、已达成/已评估周期数、达成率
+- 历史周期列表（新→旧）：日期范围、actual/target、状态 badge、`evaluatedAt`
+- 趋势图（CSS 柱状）：daily 最近 14 周期、weekly 最近 12 周期；一次性目标仅进度条
+
+### 57.4 懒评估与刷新
+
+- 进入详情页：`createMissingGoalPeriods`（仅 active 目标）+ `evaluatePeriodsForGoals`
+- 「刷新进度」按钮：`refreshGoalProgress` — 复用上述 lazy 逻辑，`revalidatePath` 后 redirect 回详情页
+- **冻结规则不变**：`isFrozenGoalPeriodStatus` 跳过 achieved/missed 周期写入
+
+### 57.5 实现文件
+
+| 文件 | 职责 |
+|------|------|
+| `src/lib/goals-detail.ts` | 详情数据 shaping、历史排序、趋势 bar、导航 helper |
+| `src/lib/goals-detail.test.ts` | 单元测试 |
+| `src/lib/actions/goals.ts` | `loadGoalDetailData`, `refreshGoalProgress` |
+| `src/app/goals/[goalId]/page.tsx` | 详情页 |
+| `src/app/goals/[goalId]/not-found.tsx` | 404 状态 |
+| `src/components/goals/goal-detail-view.tsx` | 详情 UI |
+| `src/components/goals/goal-history-bars.tsx` | 轻量 CSS 趋势图 |
+| `src/components/goals/goal-row.tsx` | 「查看详情」链接 |
+| `src/lib/i18n/*` | `goals.detail.*` 中英文 |
+
+### 57.6 已知限制
+
+- 进度仍仅基于 TimeBlock（completed + partial）；不含 FocusSession
+- 历史 achieved/missed 周期冻结，TimeBlock 后续变更不会 retroactive 更新
+- 趋势图仅展示最近 N 个周期，非完整 analytics
+- 无提醒、badge、通知、cron
+
+### 57.7 推荐下一步
+
+- FocusSession 独立 goal metric（避免与 TimeBlock 双计）
+- 目标提醒 / 通知
+- 智能目标建议
+

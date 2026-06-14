@@ -40,6 +40,10 @@ Personal time-block planner + Pomodoro + **stopwatch** focus tracker. **Phase 9:
 | **ICS import** | **Done** — `POST /api/import/ics/apply`; `source=ics_import`; see `PROJECT_STATUS.md` §51 |
 | **ICS duplicate/conflict** | **Done** — `duplicate-detection.ts`; preview `importCheck`; apply re-validates; see `PROJECT_STATUS.md` §52 |
 | **Phase 13** | **Done** — Segmented stopwatch focus (`FocusSegment`, max 2 pauses, multi TimeBlock) — see `PROJECT_STATUS.md` §54 |
+| **Phase 55** | **Done** — Goals v0 (`Goal`, `GoalPeriod`, TimeBlock-only progress) — see `PROJECT_STATUS.md` §55 |
+| **Phase 55.1** | **Done** — Goals audit/hardening (TZ dates, active window clip, inactive eval, UX) — see `PROJECT_STATUS.md` §55.1 |
+| **Phase 56** | **Done** — Goal editing + list filters — see `PROJECT_STATUS.md` §56 |
+| **Phase 57** | **Done** — Goal detail page + history visualization — see `PROJECT_STATUS.md` §57 |
 
 ## Stack
 
@@ -55,7 +59,7 @@ Browser → src/proxy.ts (auth gate) → App Router pages (requireUser + *ForUse
 ```
 
 - **Public:** `/` (landing when logged out), `/login`, `/api/auth/*`, `/manifest.webmanifest`
-- **Private:** `/categories`, `/time-blocks`, `/calendar`, `/dashboard`, `/focus`, `/review/*`, `/routines`, `/assistant`, `/settings`
+- **Private:** `/categories`, `/time-blocks`, `/calendar`, `/dashboard`, `/focus`, `/goals`, `/goals/[goalId]`, `/review/*`, `/routines`, `/assistant`, `/settings`
 - **Layout:** logged-in app routes use `AppShell` (sidebar + header); `/` (logged out) and `/login` use simplified public header (`AppLayoutController`); logged-in `/` → `/dashboard`
 - **Language:** `LanguageSwitcher` — `variant="inline"` (landing/public header); `variant="sidebar"` (AppSidebar footer dropdown, `side="top"` to avoid covering main content)
 - **CRUD writes:** Server Actions (categories, time-blocks, calendar, focus, routines)
@@ -88,9 +92,11 @@ Browser → src/proxy.ts (auth gate) → App Router pages (requireUser + *ForUse
 
 ## Data model & ownership
 
-- **`User`** — Auth.js + `Category[]` + `Routine[]` + `FocusSegment[]` (direct `userId` on segments)
+- **`User`** — Auth.js + `Category[]` + `Routine[]` + `FocusSegment[]` + `Goal[]` + `GoalPeriod[]`
 - **`Category.userId`** — required; root of tenant isolation for Category / TimeBlock / FocusSession
 - **`Routine.userId`** — required; **direct** user ownership (parallel to Category)
+- **`Goal.userId`**, **`GoalPeriod.userId`** — required; direct user ownership
+- **`Goal.categoryId`** — optional filter; `SetNull` on category delete
 - **`TimeBlock`**, **`FocusSession`** — no `userId`; owned via **`category.userId`**
 - **`FocusSegment`** — **`userId`** direct + `focusSessionId` + `categoryId`; one segment may link one `TimeBlock` via `focusSegmentId`
 - **`FocusSession.pauseCount`** — stopwatch pause attempts used (max `MAX_FOCUS_PAUSES` = 2); 3rd pause → `status=failed`
@@ -115,6 +121,9 @@ Rule: never read/write private rows with `{ id }` alone.
 | `assertTimeBlockOwned` | Before block update/delete/schedule |
 | `assertFocusSessionOwned` | Before focus update/convert |
 | `assertRoutineOwned` | Before routine update/delete/toggle |
+| `goalsForUser` | Goals list / lazy evaluation |
+| `goalPeriodsForUser` | Goal period history |
+| `assertGoalOwned` | Before goal deactivate/delete |
 
 Errors: `ScopedAccessError` / `isScopedAccessError`.
 
@@ -127,7 +136,7 @@ Errors: `ScopedAccessError` / `isScopedAccessError`.
 5. **Focus convert** → `assertFocusSessionOwned` + transaction claim `category: { userId }`.
 6. **One active focus session per user** — `startStopwatch` / `createFocusSession` call `activeFocusSessionForUser` first (`running` or `paused`).
 
-Action files: `categories.ts`, `time-blocks.ts`, `calendar-time-blocks.ts`, `focus-sessions.ts`, `focus-shared.ts` (transaction), `routines.ts`.
+Action files: `categories.ts`, `time-blocks.ts`, `calendar-time-blocks.ts`, `focus-sessions.ts`, `focus-shared.ts` (transaction), `routines.ts`, `goals.ts`.
 
 ### API Routes (non-CRUD)
 
@@ -153,6 +162,20 @@ Bulk apply pattern: `src/lib/assistant/tomorrow-plan-apply.ts` — interval over
 - **Actions:** `createRoutine`, `updateRoutine`, `toggleRoutineActive`, `deleteRoutine`
 - **UI:** `src/app/routines/page.tsx`, `src/components/routines/*`
 - **Generate:** client calls `POST /api/routines/generate` with date range → preview only
+
+### Goals (`/goals`, `/goals/[goalId]`) — Phase 55–57
+
+- **Models:** `Goal`, `GoalPeriod` — direct `userId`; optional `categoryId` filter
+- **Metric (v0):** `time_block_minutes` only — completed + partial TimeBlocks, clipped to period window
+- **Types:** `one_time`+`once`; `recurring`+`daily`|`weekly` (Monday week start, user TZ)
+- **Actions:** `createGoal`, `updateGoal`, `deactivateGoal`, `deleteGoal`, `ensureAndEvaluateGoalPeriodsForUser`, `loadGoalDetailData`, `refreshGoalProgress` (lazy, no cron)
+- **UI:** `src/app/goals/page.tsx`, `src/app/goals/[goalId]/page.tsx`, `src/components/goals/*`, dashboard preview card (max 3 active)
+- **Edit (Phase 56):** title, description, categoryId, targetMinutes, endDate, isActive — not startDate/type/period. Active periods pick up new target; achieved/missed frozen.
+- **Filters:** `?filter=active|history|missed|inactive|all` via `GoalFilterTabs`; detail preserves filter via `fromFilter` query
+- **Detail (Phase 57):** progress, streak stats, period history list, CSS bar trend (daily 14 / weekly 12); `src/lib/goals-detail.ts` helpers
+- **Not implemented:** badges, FocusSession metric, reminders
+
+**Phase 55.1 audit fixes:** active-period progress clips at `now`; goal dates parsed in user TZ; inactive goals re-evaluated (no new periods); deleted category shows `categoryRemoved`; dedupe via `goalPeriodIdentityKey`. See `PROJECT_STATUS.md` §55.1.
 
 ### Assistant (`/assistant`)
 
@@ -196,7 +219,7 @@ Dashboard quick start: in-page `startStopwatch` with category name as title; blo
 - **Docs**: `README.md`, `docs/DEPLOYMENT.md` (index), `docs/SCREENSHOTS.md`. Demo URL placeholder in README.
 - **No** shared production demo account.
 
-Dashboard: TimeBlock totals from `stats.ts` only; FocusSession totals from `focus-stats.ts` only — do not merge the two headline numbers.
+Dashboard: TimeBlock totals from `stats.ts` only; FocusSession totals from `focus-stats.ts` only — do not merge the two headline numbers. **Goal progress** uses TimeBlock completed/partial minutes only (`src/lib/goals.ts`); do not add FocusSession to goal totals.
 
 ### Timezone model (TZ-1–TZ-5)
 

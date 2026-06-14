@@ -12,6 +12,7 @@
 import type {
   Category,
   FocusSession,
+  Goal,
   Prisma,
   Routine,
   TimeBlock,
@@ -42,12 +43,23 @@ type RoutineFindManyArgs = Omit<Prisma.RoutineFindManyArgs, "where"> & {
   where?: Prisma.RoutineWhereInput;
 };
 
+type GoalFindManyArgs = Omit<Prisma.GoalFindManyArgs, "where"> & {
+  where?: Prisma.GoalWhereInput;
+};
+
+type GoalPeriodFindManyArgs = Omit<Prisma.GoalPeriodFindManyArgs, "where"> & {
+  where?: Prisma.GoalPeriodWhereInput;
+};
+
 type CategoryPayload<T extends CategoryFindManyArgs> = Prisma.CategoryGetPayload<T>;
 type TimeBlockPayload<T extends TimeBlockFindManyArgs> =
   Prisma.TimeBlockGetPayload<T>;
 type FocusSessionPayload<T extends FocusSessionFindManyArgs> =
   Prisma.FocusSessionGetPayload<T>;
 type RoutinePayload<T extends RoutineFindManyArgs> = Prisma.RoutineGetPayload<T>;
+type GoalPayload<T extends GoalFindManyArgs> = Prisma.GoalGetPayload<T>;
+type GoalPeriodPayload<T extends GoalPeriodFindManyArgs> =
+  Prisma.GoalPeriodGetPayload<T>;
 
 export {
   categoryScopeWhere,
@@ -101,6 +113,51 @@ export async function routinesForUser<T extends RoutineFindManyArgs>(
     ...rest,
     where: { userId, ...where },
   }) as Promise<RoutinePayload<T>[]>;
+}
+
+/** List goals owned by `userId`. */
+export async function goalsForUser<T extends GoalFindManyArgs>(
+  userId: string,
+  options?: T,
+): Promise<GoalPayload<T>[]> {
+  const { where, ...rest } = options ?? ({} as T);
+  return prisma.goal.findMany({
+    ...rest,
+    where: { userId, ...where },
+  }) as Promise<GoalPayload<T>[]>;
+}
+
+/** List goal periods owned by `userId`. */
+export async function goalPeriodsForUser<T extends GoalPeriodFindManyArgs>(
+  userId: string,
+  options?: T,
+): Promise<GoalPeriodPayload<T>[]> {
+  const { where, ...rest } = options ?? ({} as T);
+  return prisma.goalPeriod.findMany({
+    ...rest,
+    where: { userId, ...where },
+  }) as Promise<GoalPeriodPayload<T>[]>;
+}
+
+/** Ensure `goalId` exists and belongs to `userId`; returns the goal row. */
+export async function assertGoalOwned(
+  userId: string,
+  goalId: string,
+): Promise<Goal> {
+  const trimmedId = goalId.trim();
+  if (!trimmedId) {
+    throw new ScopedAccessError();
+  }
+
+  const goal = await prisma.goal.findFirst({
+    where: { id: trimmedId, userId },
+  });
+
+  if (!goal) {
+    throw new ScopedAccessError();
+  }
+
+  return goal;
 }
 
 /** Ensure `categoryId` exists and belongs to `userId`; returns the category row. */

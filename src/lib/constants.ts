@@ -43,6 +43,22 @@ export const TIME_BLOCK_SOURCES = [
 
 export type TimeBlockSource = (typeof TIME_BLOCK_SOURCES)[number];
 
+export const GOAL_METRICS = ["time_block_minutes"] as const;
+
+export type GoalMetric = (typeof GOAL_METRICS)[number];
+
+export const GOAL_TYPES = ["one_time", "recurring"] as const;
+
+export type GoalType = (typeof GOAL_TYPES)[number];
+
+export const GOAL_PERIODS = ["once", "daily", "weekly"] as const;
+
+export type GoalPeriodKind = (typeof GOAL_PERIODS)[number];
+
+export const GOAL_PERIOD_STATUSES = ["active", "achieved", "missed"] as const;
+
+export type GoalPeriodStatus = (typeof GOAL_PERIOD_STATUSES)[number];
+
 export const NAV_ROUTES = [
   { href: "/" },
   { href: "/categories" },

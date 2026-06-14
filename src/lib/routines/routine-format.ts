@@ -1,4 +1,5 @@
 import type { Locale } from "@/lib/i18n/types";
+import { formatCalendarDateParamInTimeZone } from "@/lib/calendar-timezone";
 import { EVERYDAY_DAYS, WEEKDAY_DAYS, normalizeDaysOfWeek } from "./routine-validation";
 
 const DAY_LABELS_ZH = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"] as const;
@@ -80,4 +81,9 @@ export function toDateInputValue(date: Date): string {
 
 export function todayDateInputValue(): string {
   return toDateInputValue(new Date());
+}
+
+/** Today as `YYYY-MM-DD` in the user's calendar timezone. */
+export function todayDateInputValueInTimeZone(timeZone: string): string {
+  return formatCalendarDateParamInTimeZone(new Date(), timeZone);
 }

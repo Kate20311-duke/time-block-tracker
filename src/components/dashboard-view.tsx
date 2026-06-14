@@ -11,6 +11,7 @@ import {
   DashboardActiveTimer,
   type DashboardRunningSession,
 } from "@/components/dashboard-active-timer";
+import { DashboardGoalsPreview, type DashboardGoalPreviewItem } from "@/components/dashboard-goals-preview";
 import { DashboardCharts } from "@/components/dashboard-charts";
 import { DashboardOnboardingCard } from "@/components/dashboard-onboarding-card";
 import { DashboardQuickStart, type QuickStartCategory } from "@/components/dashboard-quick-start";
@@ -95,6 +96,7 @@ export type DashboardViewProps = {
     step2Done: boolean;
     step3Done: boolean;
   };
+  goalPreviewItems: DashboardGoalPreviewItem[];
 };
 
 const statIcons = [Clock, CalendarIcon, Timer, CheckCircle2] as const;
@@ -121,6 +123,7 @@ export function DashboardView({
   recentBlocks,
   showOnboarding,
   onboardingSteps,
+  goalPreviewItems,
 }: DashboardViewProps) {
   const statCards = [
     {
@@ -231,6 +234,20 @@ export function DashboardView({
           }}
         />
       </div>
+
+      <DashboardGoalsPreview
+        locale={locale}
+        items={goalPreviewItems}
+        labels={{
+          title: t.dashboard.goalsPreviewTitle,
+          description: t.dashboard.goalsPreviewDescription,
+          empty: t.dashboard.goalsPreviewEmpty,
+          emptyHint: t.goals.previewEmptyHint,
+          viewAll: t.dashboard.goalsPreviewViewAll,
+          progressOf: t.goals.progressOf,
+          streak: t.dashboard.goalsPreviewStreak,
+        }}
+      />
 
       <DashboardCharts
         dailyBars={dailyBars}

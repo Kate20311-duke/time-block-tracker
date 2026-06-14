@@ -1,4 +1,5 @@
 import { DashboardView } from "@/components/dashboard-view";
+import type { DashboardGoalPreviewItem } from "@/components/dashboard-goals-preview";
 import type { DashboardRunningSession } from "@/components/dashboard-active-timer";
 import {
   categoriesForUser,
@@ -6,6 +7,7 @@ import {
   activeFocusSessionForUser,
   timeBlocksForUser,
 } from "@/lib/db/scoped";
+import { ensureAndEvaluateGoalPeriodsForUser } from "@/lib/actions/goals";
 import { getDashboardDateRanges } from "@/lib/dashboard-ranges";
 import { getDictionary, formatMessage } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n/server";
@@ -45,7 +47,7 @@ export default async function DashboardPage() {
     userTimeZone,
   );
 
-  const [categories, todayBlocks, weekBlocks, weekFocusSessions, activeSession, anyTimeBlock, anyFocusSession] =
+  const [categories, todayBlocks, weekBlocks, weekFocusSessions, activeSession, anyTimeBlock, anyFocusSession, evaluatedGoals] =
     await Promise.all([
       categoriesForUser(user.id, { orderBy: { name: "asc" } }),
       timeBlocksForUser(user.id, {
@@ -75,6 +77,7 @@ export default async function DashboardPage() {
       }),
       timeBlocksForUser(user.id, { take: 1, select: { id: true } }),
       focusSessionsForUser(user.id, { take: 1, select: { id: true } }),
+      ensureAndEvaluateGoalPeriodsForUser(user.id, userTimeZone),
     ]);
 
   const focusSessionsLite = weekFocusSessions.map((s) => ({
@@ -219,6 +222,14 @@ export default async function DashboardPage() {
   const hasCategories = categories.length > 0;
   const hasRecords = anyTimeBlock.length > 0 || anyFocusSession.length > 0;
 
+  const goalPreviewItems: DashboardGoalPreviewItem[] = evaluatedGoals
+    .slice(0, 3)
+    .map(({ goal, summary }) => ({
+      goalId: goal.id,
+      title: goal.title,
+      summary,
+    }));
+
   return (
     <DashboardView
       locale={locale}
@@ -250,6 +261,7 @@ export default async function DashboardPage() {
       weekFocusSummary={weekFocusSummary}
       todayFocusSummary={todayFocusSummary}
       recentBlocks={recentBlocks}
+      goalPreviewItems={goalPreviewItems}
     />
   );
 }

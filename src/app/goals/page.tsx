@@ -1,0 +1,284 @@
+import { GoalEmptyState } from "@/components/goals/goal-empty-state";
+import { GoalFilterTabs } from "@/components/goals/goal-filter-tabs";
+import { GoalFormCard } from "@/components/goals/goal-form-card";
+import { GoalRow } from "@/components/goals/goal-row";
+import { PageFeedback } from "@/components/page-feedback";
+import {
+  createGoal,
+  deactivateGoal,
+  deleteGoal,
+  loadGoalsPageData,
+  updateGoal,
+} from "@/lib/actions/goals";
+import { formatCalendarDateParamInTimeZone } from "@/lib/calendar-timezone";
+import { categoriesForUser } from "@/lib/db/scoped";
+import { buildGoalDetailHref } from "@/lib/goals-detail";
+import {
+  matchesGoalListFilter,
+  parseGoalListFilter,
+  targetMinutesToHoursInput,
+  type GoalValidationError,
+} from "@/lib/goals";
+import { getDictionary } from "@/lib/i18n";
+import { getLocale } from "@/lib/i18n/server";
+import { todayDateInputValueInTimeZone } from "@/lib/routines/routine-format";
+import { requireUser } from "@/lib/session";
+import { getUserCalendarTimeZone } from "@/lib/user-calendar-timezone.server";
+
+export const dynamic = "force-dynamic";
+
+function goalErrorMessage(
+  error: string | undefined,
+  t: ReturnType<typeof getDictionary>,
+): string | null {
+  const map: Record<GoalValidationError | "invalid_category", string> = {
+    empty_title: t.goals.errors.emptyTitle,
+    title_too_long: t.goals.errors.titleTooLong,
+    invalid_target_minutes: t.goals.errors.invalidTargetMinutes,
+    invalid_metric: t.goals.errors.invalidMetric,
+    invalid_goal_type: t.goals.errors.invalidGoalType,
+    invalid_period: t.goals.errors.invalidPeriod,
+    invalid_type_period_combo: t.goals.errors.invalidTypePeriodCombo,
+    missing_end_date: t.goals.errors.missingEndDate,
+    invalid_start_date: t.goals.errors.invalidStartDate,
+    invalid_date_range: t.goals.errors.invalidDateRange,
+    invalid_category: t.goals.errors.invalidCategory,
+  };
+
+  if (!error || !(error in map)) return null;
+  return map[error as keyof typeof map];
+}
+
+function formatPeriodLabel(
+  periodStart: Date,
+  periodEnd: Date,
+  period: string,
+  locale: "zh" | "en",
+  timeZone: string,
+): string {
+  const formatter = new Intl.DateTimeFormat(locale === "zh" ? "zh-CN" : "en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone,
+  });
+  if (period === "weekly") {
+    const weekEndDisplay = new Date(periodEnd.getTime() - 1);
+    return `${formatter.format(periodStart)} – ${formatter.format(weekEndDisplay)}`;
+  }
+  if (period === "daily") {
+    return formatter.format(periodStart);
+  }
+  const endDisplay = new Date(periodEnd.getTime() - 1);
+  return `${formatter.format(periodStart)} – ${formatter.format(endDisplay)}`;
+}
+
+export default async function GoalsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ success?: string; error?: string; filter?: string }>;
+}) {
+  const locale = await getLocale();
+  const t = getDictionary(locale);
+  const { success, error, filter: filterParam } = await searchParams;
+  const filter = parseGoalListFilter(filterParam);
+  const user = await requireUser();
+  const userTimeZone = await getUserCalendarTimeZone();
+
+  const [categories, pageData] = await Promise.all([
+    categoriesForUser(user.id, {
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, color: true },
+    }),
+    loadGoalsPageData(user.id, userTimeZone),
+  ]);
+
+  const filteredEntries = pageData.entries.filter((entry) =>
+    matchesGoalListFilter(
+      { goal: entry.goal, periods: entry.goal.goalPeriods },
+      filter,
+    ),
+  );
+
+  const errorMessage = goalErrorMessage(error, t);
+  const successMessage =
+    success === "created"
+      ? t.goals.success.created
+      : success === "updated"
+        ? t.goals.success.updated
+        : success === "deactivated"
+          ? t.goals.success.deactivated
+          : success === "deleted"
+            ? t.goals.success.deleted
+            : null;
+
+  const formLabels = {
+    title: t.goals.titleLabel,
+    titlePlaceholder: t.goals.titlePlaceholder,
+    descriptionLabel: t.goals.description,
+    descriptionPlaceholder: t.goals.descriptionPlaceholder,
+    category: t.goals.category,
+    categoryHint: t.goals.categoryHint,
+    allCategories: t.goals.allCategories,
+    noCategoriesHint: t.goals.noCategoriesHint,
+    goCreateCategory: t.goals.goCreateCategory,
+    targetHours: t.goals.targetHours,
+    targetHoursHint: t.goals.targetHoursHint,
+    goalType: t.goals.goalType,
+    goalTypeOneTime: t.goals.goalTypeOneTime,
+    goalTypeRecurring: t.goals.goalTypeRecurring,
+    period: t.goals.period,
+    periodOnce: t.goals.periodOnce,
+    periodDaily: t.goals.periodDaily,
+    periodWeekly: t.goals.periodWeekly,
+    startDate: t.goals.startDate,
+    endDate: t.goals.endDate,
+    endDateRequired: t.goals.endDateRequired,
+    endDateOptional: t.goals.endDateOptional,
+    activeLabel: t.goals.activeLabel,
+    readOnlyTypeHint: t.goals.readOnlyTypeHint,
+  };
+
+  const rowLabels = {
+    progress: t.goals.progress,
+    progressOf: t.goals.progressOf,
+    currentPeriod: t.goals.currentPeriod,
+    streak: t.goals.streak,
+    streakCurrent: t.goals.streakCurrent,
+    streakLongest: t.goals.streakLongest,
+    achievementRate: t.goals.achievementRate,
+    achievementRateValue: t.goals.achievementRateValue,
+    history: t.goals.history,
+    deactivate: t.goals.deactivate,
+    inactive: t.goals.inactive,
+    edit: t.goals.edit,
+    save: t.goals.saveChanges,
+    cancel: t.common.cancel,
+    editHeading: t.goals.editGoal,
+    viewDetails: t.goals.detail.viewDetails,
+    confirmDelete: t.goals.confirmDelete,
+    confirmDeleteTitle: t.common.confirmDeleteTitle,
+    delete: t.common.delete,
+    submitting: t.common.submitting,
+    allCategories: t.goals.allCategories,
+    categoryRemoved: t.goals.categoryRemoved,
+    periodDaily: t.goals.periodDaily,
+    periodWeekly: t.goals.periodWeekly,
+    periodOnce: t.goals.periodOnce,
+    status: t.goals.status,
+  };
+
+  const hasAnyGoals = pageData.entries.length > 0;
+
+  return (
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 sm:p-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold tracking-tight">{t.goals.title}</h1>
+        <p className="text-sm text-muted-foreground">{t.goals.pageDescription}</p>
+      </div>
+
+      <PageFeedback successMessage={successMessage} errorMessage={errorMessage} />
+
+      <GoalFormCard
+        categories={categories}
+        defaultStartDate={todayDateInputValueInTimeZone(userTimeZone)}
+        action={createGoal}
+        labels={{
+          heading: t.goals.createGoal,
+          description: t.goals.pageDescription,
+          submit: t.common.create,
+          submitting: t.common.submitting,
+          ...formLabels,
+        }}
+      />
+
+      {hasAnyGoals ? (
+        <div className="flex flex-col gap-4">
+          <GoalFilterTabs
+            current={filter}
+            labels={{
+              active: t.goals.filters.active,
+              history: t.goals.filters.history,
+              missed: t.goals.filters.missed,
+              inactive: t.goals.filters.inactive,
+              all: t.goals.filters.all,
+            }}
+          />
+
+          {filteredEntries.length > 0 ? (
+            <section className="flex flex-col gap-3">
+              {filteredEntries.map(({ goal, summary }) => {
+                const currentPeriod = summary.currentPeriod;
+                const periodLabel = currentPeriod
+                  ? formatPeriodLabel(
+                      currentPeriod.periodStart,
+                      currentPeriod.periodEnd,
+                      goal.period,
+                      locale,
+                      userTimeZone,
+                    )
+                  : "—";
+
+                return (
+                  <GoalRow
+                    key={goal.id}
+                    locale={locale}
+                    title={goal.title}
+                    description={goal.description}
+                    categoryId={goal.categoryId}
+                    category={
+                      goal.category
+                        ? { name: goal.category.name, color: goal.category.color }
+                        : null
+                    }
+                    summary={summary}
+                    historyPeriods={goal.goalPeriods}
+                    periodLabel={periodLabel}
+                    timeZone={userTimeZone}
+                    goalId={goal.id}
+                    isActive={goal.isActive}
+                    goalType={goal.goalType as "one_time" | "recurring"}
+                    period={goal.period as "once" | "daily" | "weekly"}
+                    formDefaults={{
+                      title: goal.title,
+                      description: goal.description,
+                      categoryId: goal.categoryId,
+                      targetHours: targetMinutesToHoursInput(goal.targetMinutes),
+                      startDate: formatCalendarDateParamInTimeZone(
+                        goal.startDate,
+                        userTimeZone,
+                      ),
+                      endDate: goal.endDate
+                        ? formatCalendarDateParamInTimeZone(goal.endDate, userTimeZone)
+                        : "",
+                      goalType: goal.goalType as "one_time" | "recurring",
+                      period: goal.period as "once" | "daily" | "weekly",
+                      isActive: goal.isActive,
+                    }}
+                    categories={categories}
+                    filter={filter}
+                    detailHref={buildGoalDetailHref(goal.id, filter)}
+                    updateAction={updateGoal}
+                    deactivateAction={deactivateGoal}
+                    deleteAction={deleteGoal}
+                    formLabels={formLabels}
+                    labels={rowLabels}
+                  />
+                );
+              })}
+            </section>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t.goals.filterEmpty}</p>
+          )}
+        </div>
+      ) : (
+        <GoalEmptyState
+          labels={{
+            empty: t.goals.empty,
+            emptyHint: t.goals.emptyHint,
+            goCreateCategory: t.goals.goCreateCategory,
+          }}
+        />
+      )}
+    </div>
+  );
+}

@@ -20,6 +20,8 @@ model User {
   categories    Category[]
   routines      Routine[]
   focusSegments FocusSegment[]
+  goals         Goal[]
+  goalPeriods   GoalPeriod[]
 
   @@schema("app")
 }
@@ -76,6 +78,7 @@ model Category {
   focusSessions FocusSession[]
   focusSegments FocusSegment[]
   routines      Routine[]
+  goals         Goal[]
 
   @@index([userId])
   @@schema("app")
@@ -169,5 +172,51 @@ model FocusSegment {
   @@index([focusSessionId])
   @@index([userId])
   @@index([categoryId])
+  @@schema("app")
+}
+
+model Goal {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  categoryId     String?
+  category       Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  metric         String
+  targetMinutes  Int
+  goalType       String
+  period         String
+  startDate      DateTime
+  endDate        DateTime?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  goalPeriods    GoalPeriod[]
+
+  @@index([userId])
+  @@index([userId, isActive])
+  @@index([categoryId])
+  @@schema("app")
+}
+
+model GoalPeriod {
+  id             String    @id @default(cuid())
+  goalId         String
+  goal           Goal      @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  periodStart    DateTime
+  periodEnd      DateTime
+  targetMinutes  Int
+  actualMinutes  Int       @default(0)
+  status         String    @default("active")
+  evaluatedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([goalId])
+  @@index([userId])
+  @@index([goalId, periodStart])
   @@schema("app")
 }

@@ -1,6 +1,6 @@
 import { GoalEmptyState } from "@/components/goals/goal-empty-state";
+import { GoalsCreateSection } from "@/components/goals/goals-create-section";
 import { GoalFilterTabs } from "@/components/goals/goal-filter-tabs";
-import { GoalFormCard } from "@/components/goals/goal-form-card";
 import { GoalRow } from "@/components/goals/goal-row";
 import { PageFeedback } from "@/components/page-feedback";
 import {
@@ -13,10 +13,11 @@ import {
 import { formatCalendarDateParamInTimeZone } from "@/lib/calendar-timezone";
 import { categoriesForUser } from "@/lib/db/scoped";
 import { buildGoalDetailHref } from "@/lib/goals-detail";
+import { GOAL_TEMPLATES } from "@/lib/goal-templates";
+import { formatGoalProgressValue, goalTargetToFormInput } from "@/lib/goals-metric-display";
 import {
   matchesGoalListFilter,
   parseGoalListFilter,
-  targetMinutesToHoursInput,
   type GoalValidationError,
 } from "@/lib/goals";
 import { getDictionary } from "@/lib/i18n";
@@ -72,6 +73,38 @@ function formatPeriodLabel(
   return `${formatter.format(periodStart)} – ${formatter.format(endDisplay)}`;
 }
 
+function resolveGoalTemplates(
+  locale: "zh" | "en",
+  t: ReturnType<typeof getDictionary>,
+) {
+  return GOAL_TEMPLATES.map((template) => {
+    const item = t.goals.templates.items[template.id];
+    const metricLabel =
+      template.metric === "completed_blocks_count"
+        ? t.goals.metrics.completedBlocksCount
+        : template.metric === "focus_minutes"
+          ? t.goals.metrics.focusMinutes
+          : template.metric === "focus_sessions_count"
+            ? t.goals.metrics.focusSessionsCount
+            : t.goals.metrics.timeBlockMinutes;
+    const periodLabel =
+      template.period === "daily" ? t.goals.periodDaily : t.goals.periodWeekly;
+
+    return {
+      ...template,
+      title: item.title,
+      description: item.description,
+      targetLabel: formatGoalProgressValue(
+        template.metric,
+        template.targetMinutes,
+        locale,
+      ),
+      metricLabel,
+      periodLabel,
+    };
+  });
+}
+
 export default async function GoalsPage({
   searchParams,
 }: {
@@ -123,6 +156,17 @@ export default async function GoalsPage({
     goCreateCategory: t.goals.goCreateCategory,
     targetHours: t.goals.targetHours,
     targetHoursHint: t.goals.targetHoursHint,
+    targetCount: t.goals.metrics.targetCount,
+    targetCountHint: t.goals.metrics.targetCountHint,
+    metric: t.goals.metrics.label,
+    metricHint: t.goals.metrics.hint,
+    metricSeparateWarning: t.goals.metrics.separateWarning,
+    readOnlyMetricHint: t.goals.metrics.readOnlyHint,
+    metricTimeBlockMinutes: t.goals.metrics.timeBlockMinutes,
+    metricCompletedBlocksCount: t.goals.metrics.completedBlocksCount,
+    metricFocusMinutes: t.goals.metrics.focusMinutes,
+    metricFocusMinutesHint: t.goals.metrics.focusMinutesHint,
+    metricFocusSessionsCount: t.goals.metrics.focusSessionsCount,
     goalType: t.goals.goalType,
     goalTypeOneTime: t.goals.goalTypeOneTime,
     goalTypeRecurring: t.goals.goalTypeRecurring,
@@ -141,6 +185,7 @@ export default async function GoalsPage({
   const rowLabels = {
     progress: t.goals.progress,
     progressOf: t.goals.progressOf,
+    progressCount: t.goals.metrics.progressCount,
     currentPeriod: t.goals.currentPeriod,
     streak: t.goals.streak,
     streakCurrent: t.goals.streakCurrent,
@@ -168,6 +213,8 @@ export default async function GoalsPage({
   };
 
   const hasAnyGoals = pageData.entries.length > 0;
+  const defaultStartDate = todayDateInputValueInTimeZone(userTimeZone);
+  const resolvedTemplates = resolveGoalTemplates(locale, t);
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 sm:p-6">
@@ -178,16 +225,48 @@ export default async function GoalsPage({
 
       <PageFeedback successMessage={successMessage} errorMessage={errorMessage} />
 
-      <GoalFormCard
+      <GoalsCreateSection
         categories={categories}
-        defaultStartDate={todayDateInputValueInTimeZone(userTimeZone)}
+        defaultStartDate={defaultStartDate}
+        locale={locale}
+        assistantLabels={t.assistant}
+        templates={resolvedTemplates}
         action={createGoal}
-        labels={{
+        formLabels={{
           heading: t.goals.createGoal,
           description: t.goals.pageDescription,
           submit: t.common.create,
           submitting: t.common.submitting,
           ...formLabels,
+        }}
+        templateLabels={{
+          sectionTitle: t.goals.templates.title,
+          sectionDescription: t.goals.templates.description,
+          selectedFeedback: t.goals.templates.selectedFeedback,
+          useTemplate: t.goals.templates.useTemplate,
+          groups: t.goals.templates.groups,
+        }}
+        aiSuggestionLabels={{
+          title: t.goals.aiSuggestions.title,
+          description: t.goals.aiSuggestions.description,
+          disclaimer: t.goals.aiSuggestions.disclaimer,
+          generate: t.goals.aiSuggestions.generate,
+          generating: t.goals.aiSuggestions.generating,
+          errorFailed: t.goals.aiSuggestions.errorFailed,
+          empty: t.goals.aiSuggestions.empty,
+          useSuggestion: t.goals.aiSuggestions.useSuggestion,
+          selectedFeedback: t.goals.aiSuggestions.selectedFeedback,
+          confidenceLow: t.goals.aiSuggestions.confidenceLow,
+          confidenceMedium: t.goals.aiSuggestions.confidenceMedium,
+          confidenceHigh: t.goals.aiSuggestions.confidenceHigh,
+          allCategories: t.goals.allCategories,
+          metricTimeBlockMinutes: t.goals.metrics.timeBlockMinutes,
+          metricCompletedBlocksCount: t.goals.metrics.completedBlocksCount,
+          metricFocusMinutes: t.goals.metrics.focusMinutes,
+          metricFocusSessionsCount: t.goals.metrics.focusSessionsCount,
+          periodDaily: t.goals.periodDaily,
+          periodWeekly: t.goals.periodWeekly,
+          periodOnce: t.goals.periodOnce,
         }}
       />
 
@@ -235,6 +314,7 @@ export default async function GoalsPage({
                     periodLabel={periodLabel}
                     timeZone={userTimeZone}
                     goalId={goal.id}
+                    metric={goal.metric}
                     isActive={goal.isActive}
                     goalType={goal.goalType as "one_time" | "recurring"}
                     period={goal.period as "once" | "daily" | "weekly"}
@@ -242,7 +322,7 @@ export default async function GoalsPage({
                       title: goal.title,
                       description: goal.description,
                       categoryId: goal.categoryId,
-                      targetHours: targetMinutesToHoursInput(goal.targetMinutes),
+                      targetHours: goalTargetToFormInput(goal.metric, goal.targetMinutes),
                       startDate: formatCalendarDateParamInTimeZone(
                         goal.startDate,
                         userTimeZone,

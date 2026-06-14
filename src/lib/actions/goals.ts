@@ -5,13 +5,14 @@ import { notFound, redirect } from "next/navigation";
 import {
   assertCategoryOwned,
   assertGoalOwned,
+  focusSessionsForUser,
   goalsForUser,
   timeBlocksForUser,
 } from "@/lib/db/scoped";
 import { isScopedAccessError } from "@/lib/db/scoped-errors";
 import {
   buildGoalPeriodRanges,
-  calculateActualMinutesInPeriod,
+  calculateGoalPeriodActual,
   effectiveProgressWindowEnd,
   evaluateGoalPeriodStatus,
   filterNewGoalPeriodRanges,
@@ -21,11 +22,18 @@ import {
   parseGoalDateParamInTimeZone,
   parseGoalListFilter,
   validateGoalUpdateInput,
+  type GoalFocusSegmentLike,
+  type GoalFocusSessionLike,
   type GoalProgressSummary,
   type GoalTimeBlockLike,
   type GoalValidationError,
   validateGoalInput,
 } from "@/lib/goals";
+import {
+  isGoalCountMetric,
+  isGoalFocusMetric,
+  isGoalTimeBlockMetric,
+} from "@/lib/goals-metric-display";
 import { prisma } from "@/lib/prisma";
 import type { Goal, GoalPeriod } from "@/generated/prisma";
 import { endOfDay } from "@/lib/calendar";
@@ -61,11 +69,29 @@ function parseTargetMinutes(value: FormDataEntryValue | null): number {
   return Math.round(hours * 60);
 }
 
+function parseTargetCount(value: FormDataEntryValue | null): number {
+  const raw = String(value ?? "").trim();
+  if (!raw) return Number.NaN;
+  const count = Number(raw);
+  if (!Number.isFinite(count) || count <= 0 || !Number.isInteger(count)) {
+    return Number.NaN;
+  }
+  return count;
+}
+
+function parseGoalTarget(formData: FormData, metric: string): number {
+  if (isGoalCountMetric(metric)) {
+    return parseTargetCount(formData.get("targetCount"));
+  }
+  return parseTargetMinutes(formData.get("targetHours"));
+}
+
 function parseGoalFormData(formData: FormData, timeZone: string) {
   const title = String(formData.get("title") ?? "");
   const description = parseOptionalText(formData.get("description"));
   const categoryId = parseOptionalCategoryId(formData.get("categoryId"));
-  const targetMinutes = parseTargetMinutes(formData.get("targetHours"));
+  const metric = String(formData.get("metric") ?? "time_block_minutes").trim();
+  const targetMinutes = parseGoalTarget(formData, metric);
   const goalType = String(formData.get("goalType") ?? "").trim();
   const period = String(formData.get("period") ?? "").trim();
   const startDateRaw = String(formData.get("startDate") ?? "").trim();
@@ -81,7 +107,7 @@ function parseGoalFormData(formData: FormData, timeZone: string) {
     description,
     categoryId,
     targetMinutes,
-    metric: "time_block_minutes" as const,
+    metric,
     goalType,
     period,
     startDate: startDate ?? new Date(Number.NaN),
@@ -97,12 +123,16 @@ function redirectWithValidationError(
   redirect(`/goals?error=${error}${filterParam}`);
 }
 
-function parseGoalUpdateFormData(formData: FormData, timeZone: string) {
+function parseGoalUpdateFormData(
+  formData: FormData,
+  timeZone: string,
+  metric: string,
+) {
   const id = String(formData.get("id") ?? "").trim();
   const title = String(formData.get("title") ?? "");
   const description = parseOptionalText(formData.get("description"));
   const categoryId = parseOptionalCategoryId(formData.get("categoryId"));
-  const targetMinutes = parseTargetMinutes(formData.get("targetHours"));
+  const targetMinutes = parseGoalTarget(formData, metric);
   const endDateRaw = String(formData.get("endDate") ?? "").trim();
   const isActive = String(formData.get("isActive") ?? "") === "on";
   const filter = String(formData.get("filter") ?? "active").trim();
@@ -142,10 +172,36 @@ type GoalWithCategory = Goal & {
   category: { name: string; color: string } | null;
 };
 
+type GoalEvaluationContext = {
+  blocks: readonly GoalTimeBlockLike[];
+  focusSessions: readonly GoalFocusSessionLike[];
+  segmentsBySessionId: ReadonlyMap<string, readonly GoalFocusSegmentLike[]>;
+};
+
+function computePeriodBounds(
+  periods: readonly Pick<GoalPeriod, "periodStart" | "periodEnd">[],
+  now: Date,
+): { minStart: Date; maxEnd: Date } | null {
+  if (periods.length === 0) return null;
+
+  let minStart = periods[0].periodStart;
+  let maxEnd = effectiveProgressWindowEnd(periods[0].periodEnd, now);
+  for (const period of periods) {
+    if (period.periodStart.getTime() < minStart.getTime()) {
+      minStart = period.periodStart;
+    }
+    const effectiveEnd = effectiveProgressWindowEnd(period.periodEnd, now);
+    if (effectiveEnd.getTime() > maxEnd.getTime()) {
+      maxEnd = effectiveEnd;
+    }
+  }
+  return { minStart, maxEnd };
+}
+
 function computePeriodUpdates(
   periods: GoalPeriod[],
   goalsById: Map<string, Goal>,
-  blocks: readonly GoalTimeBlockLike[],
+  context: GoalEvaluationContext,
   now: Date,
 ) {
   const updates: Array<{
@@ -164,13 +220,15 @@ function computePeriodUpdates(
     }
 
     const progressWindowEnd = effectiveProgressWindowEnd(period.periodEnd, now);
-    const actualMinutes = calculateActualMinutesInPeriod(
-      blocks,
-      period.periodStart,
-      period.periodEnd,
-      goal.categoryId,
+    const actualMinutes = calculateGoalPeriodActual(goal.metric, {
+      blocks: context.blocks,
+      focusSessions: context.focusSessions,
+      segmentsBySessionId: context.segmentsBySessionId,
+      periodStart: period.periodStart,
+      periodEnd: period.periodEnd,
+      categoryId: goal.categoryId,
       progressWindowEnd,
-    );
+    });
     const status = evaluateGoalPeriodStatus(
       period.periodEnd,
       now,
@@ -201,26 +259,16 @@ async function fetchBlocksForGoalPeriods(
   userId: string,
   periods: readonly Pick<GoalPeriod, "periodStart" | "periodEnd">[],
   now: Date,
+  includePartial: boolean,
 ): Promise<GoalTimeBlockLike[]> {
-  if (periods.length === 0) return [];
-
-  let minStart = periods[0].periodStart;
-  let maxEnd = effectiveProgressWindowEnd(periods[0].periodEnd, now);
-  for (const period of periods) {
-    if (period.periodStart.getTime() < minStart.getTime()) {
-      minStart = period.periodStart;
-    }
-    const effectiveEnd = effectiveProgressWindowEnd(period.periodEnd, now);
-    if (effectiveEnd.getTime() > maxEnd.getTime()) {
-      maxEnd = effectiveEnd;
-    }
-  }
+  const bounds = computePeriodBounds(periods, now);
+  if (!bounds) return [];
 
   return timeBlocksForUser(userId, {
     where: {
-      startTime: { lt: maxEnd },
-      endTime: { gt: minStart },
-      status: { in: ["completed", "partial"] },
+      startTime: { lt: bounds.maxEnd },
+      endTime: { gt: bounds.minStart },
+      status: { in: includePartial ? ["completed", "partial"] : ["completed"] },
     },
     select: {
       startTime: true,
@@ -230,6 +278,122 @@ async function fetchBlocksForGoalPeriods(
       completionLevel: true,
     },
   });
+}
+
+async function fetchFocusSessionsForGoalPeriods(
+  userId: string,
+  periods: readonly Pick<GoalPeriod, "periodStart" | "periodEnd">[],
+  now: Date,
+): Promise<GoalFocusSessionLike[]> {
+  const bounds = computePeriodBounds(periods, now);
+  if (!bounds) return [];
+
+  return focusSessionsForUser(userId, {
+    where: {
+      startTime: { gte: bounds.minStart, lt: bounds.maxEnd },
+      status: { in: ["completed", "converted"] },
+    },
+    select: {
+      id: true,
+      startTime: true,
+      endTime: true,
+      status: true,
+      categoryId: true,
+      actualDurationMinutes: true,
+      plannedDurationMinutes: true,
+    },
+  });
+}
+
+async function fetchFocusSegmentsForGoalPeriods(
+  userId: string,
+  periods: readonly Pick<GoalPeriod, "periodStart" | "periodEnd">[],
+  now: Date,
+  sessionIds: readonly string[],
+): Promise<GoalFocusSegmentLike[]> {
+  const bounds = computePeriodBounds(periods, now);
+  if (!bounds || sessionIds.length === 0) return [];
+
+  return prisma.focusSegment.findMany({
+    where: {
+      userId,
+      focusSessionId: { in: [...sessionIds] },
+      startTime: { gte: bounds.minStart, lt: bounds.maxEnd },
+    },
+    select: {
+      focusSessionId: true,
+      startTime: true,
+      durationMinutes: true,
+      categoryId: true,
+    },
+  });
+}
+
+function groupSegmentsBySessionId(
+  segments: readonly GoalFocusSegmentLike[],
+): Map<string, readonly GoalFocusSegmentLike[]> {
+  const map = new Map<string, GoalFocusSegmentLike[]>();
+  for (const segment of segments) {
+    const list = map.get(segment.focusSessionId) ?? [];
+    list.push(segment);
+    map.set(segment.focusSessionId, list);
+  }
+  return map;
+}
+
+function goalsNeedTimeBlockData(goals: readonly Goal[]): boolean {
+  return goals.some((goal) => isGoalTimeBlockMetric(goal.metric));
+}
+
+function goalsNeedFocusData(goals: readonly Goal[]): boolean {
+  return goals.some((goal) => isGoalFocusMetric(goal.metric));
+}
+
+function goalsNeedFocusSegments(goals: readonly Goal[]): boolean {
+  return goals.some((goal) => goal.metric === "focus_minutes");
+}
+
+function goalsNeedPartialBlocks(goals: readonly Goal[]): boolean {
+  return goals.some((goal) => goal.metric === "time_block_minutes");
+}
+
+async function buildGoalEvaluationContext(
+  userId: string,
+  goals: readonly Goal[],
+  periods: readonly GoalPeriod[],
+  now: Date,
+): Promise<GoalEvaluationContext> {
+  const activePeriods = periods.filter((p) => !isFrozenGoalPeriodStatus(p.status));
+  const scopePeriods = activePeriods.length > 0 ? activePeriods : periods;
+
+  const focusSessions = goalsNeedFocusData(goals)
+    ? await fetchFocusSessionsForGoalPeriods(userId, scopePeriods, now)
+    : [];
+
+  const [blocks, segments] = await Promise.all([
+    goalsNeedTimeBlockData(goals)
+      ? fetchBlocksForGoalPeriods(
+          userId,
+          scopePeriods,
+          now,
+          goalsNeedPartialBlocks(goals),
+        )
+      : Promise.resolve([] as GoalTimeBlockLike[]),
+    goalsNeedFocusSegments(goals)
+      ? fetchFocusSegmentsForGoalPeriods(
+          userId,
+          scopePeriods,
+          now,
+          focusSessions.map((session) => session.id),
+        )
+      : Promise.resolve([] as GoalFocusSegmentLike[]),
+  ]);
+
+  return {
+    blocks,
+    focusSessions,
+    segmentsBySessionId: groupSegmentsBySessionId(segments),
+  };
 }
 
 async function applyPeriodUpdates(
@@ -316,9 +480,9 @@ async function evaluatePeriodsForGoals(
 
   if (periods.length === 0) return;
 
-  const blocks = await fetchBlocksForGoalPeriods(userId, periods, now);
   const goalsById = new Map(goals.map((goal) => [goal.id, goal]));
-  const updates = computePeriodUpdates(periods, goalsById, blocks, now);
+  const context = await buildGoalEvaluationContext(userId, goals, periods, now);
+  const updates = computePeriodUpdates(periods, goalsById, context, now);
   await applyPeriodUpdates(userId, updates);
 }
 
@@ -401,16 +565,16 @@ export async function deleteGoal(formData: FormData): Promise<void> {
 export async function updateGoal(formData: FormData): Promise<void> {
   const user = await requireUser();
   const timeZone = await getUserCalendarTimeZone();
-  const input = parseGoalUpdateFormData(formData, timeZone);
-  const filter = parseGoalListFilter(input.filter);
+  const id = String(formData.get("id") ?? "").trim();
+  const filter = parseGoalListFilter(String(formData.get("filter") ?? "active").trim());
 
-  if (!input.id) {
+  if (!id) {
     redirect(`/goals?filter=${filter}`);
   }
 
   let existing: Goal;
   try {
-    existing = await assertGoalOwned(user.id, input.id);
+    existing = await assertGoalOwned(user.id, id);
   } catch (error) {
     if (isScopedAccessError(error)) {
       redirect(`/goals?filter=${filter}`);
@@ -418,9 +582,12 @@ export async function updateGoal(formData: FormData): Promise<void> {
     throw error;
   }
 
+  const input = parseGoalUpdateFormData(formData, timeZone, existing.metric);
+
   const validationError = validateGoalUpdateInput({
     title: input.title,
     targetMinutes: input.targetMinutes,
+    metric: existing.metric,
     goalType: existing.goalType,
     period: existing.period,
     startDate: existing.startDate,
@@ -605,7 +772,13 @@ export async function loadGoalDetailData(
   const overallStatus = deriveGoalOverallStatus(goal, displayPeriod);
   const progress = buildGoalDetailProgress(goal, displayPeriod, locale, timeZone);
   const historyPeriods = orderGoalPeriodsForHistory(goalPeriods) as GoalPeriod[];
-  const historyBars = buildGoalHistoryBars(goalPeriods, goal.period, locale, timeZone);
+  const historyBars = buildGoalHistoryBars(
+    goalPeriods,
+    goal.period,
+    goal.metric,
+    locale,
+    timeZone,
+  );
   const filter = parseGoalDetailFromFilter(fromFilter);
   const backHref =
     filter === "active" ? "/goals" : `/goals?filter=${filter}`;

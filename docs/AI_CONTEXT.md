@@ -44,6 +44,11 @@ Personal time-block planner + Pomodoro + **stopwatch** focus tracker. **Phase 9:
 | **Phase 55.1** | **Done** — Goals audit/hardening (TZ dates, active window clip, inactive eval, UX) — see `PROJECT_STATUS.md` §55.1 |
 | **Phase 56** | **Done** — Goal editing + list filters — see `PROJECT_STATUS.md` §56 |
 | **Phase 57** | **Done** — Goal detail page + history visualization — see `PROJECT_STATUS.md` §57 |
+| **Phase 58** | **Done** — Goal Metrics v1 (4 metrics) — see `PROJECT_STATUS.md` §58 |
+| **Phase 58.1** | **Done** — Goal Metrics QA / edge-case audit — see `PROJECT_STATUS.md` §58.1 |
+| **Phase 59** | **Done** — Goal templates (form prefill) — see `PROJECT_STATUS.md` §59 |
+| **Phase 60** | **Done** — AI goal suggestions (form prefill) — see `PROJECT_STATUS.md` §60 |
+| **Phase 60.1** | **Done** — AI goal suggestions QA — see `PROJECT_STATUS.md` §60.1 |
 
 ## Stack
 
@@ -146,6 +151,7 @@ Action files: `categories.ts`, `time-blocks.ts`, `calendar-time-blocks.ts`, `foc
 | `POST /api/assistant/weekly-review` | `getSessionUser` | AI weekly summary |
 | `POST /api/assistant/tomorrow-plan` | `getSessionUser` | Generate tomorrow plan drafts |
 | `POST /api/assistant/tomorrow-plan/apply` | `getSessionUser` + `ensureDbUser` | Batch create TimeBlocks with overlap checks |
+| `POST /api/assistant/goal-suggestions` | `getSessionUser` + `ensureDbUser` | AI goal drafts from recent activity (prefill only) |
 | `POST /api/routines/generate` | `getSessionUser` + `ensureDbUser` | Expand active routines to suggested blocks (no DB write) |
 | `GET /api/export/time-blocks.csv` | `getSessionUser` + `ensureDbUser` | CSV export (`?from=&to=`); see §48 |
 | `GET /api/export/time-blocks.xlsx` | `getSessionUser` + `ensureDbUser` | Excel export (`?from=&to=`); `exceljs`; see §49 |
@@ -163,17 +169,22 @@ Bulk apply pattern: `src/lib/assistant/tomorrow-plan-apply.ts` — interval over
 - **UI:** `src/app/routines/page.tsx`, `src/components/routines/*`
 - **Generate:** client calls `POST /api/routines/generate` with date range → preview only
 
-### Goals (`/goals`, `/goals/[goalId]`) — Phase 55–57
+### Goals (`/goals`, `/goals/[goalId]`) — Phase 55–58
 
 - **Models:** `Goal`, `GoalPeriod` — direct `userId`; optional `categoryId` filter
-- **Metric (v0):** `time_block_minutes` only — completed + partial TimeBlocks, clipped to period window
+- **Metrics (v1):** `time_block_minutes` | `completed_blocks_count` | `focus_minutes` | `focus_sessions_count` — stored on `Goal.metric`; count targets reuse `targetMinutes` field
+- **Sources:** TimeBlock metrics → TimeBlock only; Focus metrics → FocusSession/FocusSegment only (segments fetched only for completed/converted sessions; segment.startTime in period, no overlap clip v1)
+- **Metric edit:** read-only after creation
 - **Types:** `one_time`+`once`; `recurring`+`daily`|`weekly` (Monday week start, user TZ)
 - **Actions:** `createGoal`, `updateGoal`, `deactivateGoal`, `deleteGoal`, `ensureAndEvaluateGoalPeriodsForUser`, `loadGoalDetailData`, `refreshGoalProgress` (lazy, no cron)
 - **UI:** `src/app/goals/page.tsx`, `src/app/goals/[goalId]/page.tsx`, `src/components/goals/*`, dashboard preview card (max 3 active)
-- **Edit (Phase 56):** title, description, categoryId, targetMinutes, endDate, isActive — not startDate/type/period. Active periods pick up new target; achieved/missed frozen.
+- **Edit (Phase 56):** title, description, categoryId, targetMinutes, endDate, isActive — not startDate/type/period/metric. Active periods pick up new target; achieved/missed frozen.
 - **Filters:** `?filter=active|history|missed|inactive|all` via `GoalFilterTabs`; detail preserves filter via `fromFilter` query
 - **Detail (Phase 57):** progress, streak stats, period history list, CSS bar trend (daily 14 / weekly 12); `src/lib/goals-detail.ts` helpers
-- **Not implemented:** badges, FocusSession metric, reminders
+- **Not implemented:** badges, reminders, user-custom templates
+- **Templates (Phase 59):** hard-coded `src/lib/goal-templates.ts`; click prefills create form only (`GoalsCreateSection` on `/goals`); no DB, no auto-create
+- **AI suggestions (Phase 60):** `POST /api/assistant/goal-suggestions`; reads last 14 days (user TZ) TimeBlocks + FocusSessions + categories + active goals; validates JSON; prefills form via `suggestionToFormDefaults`; no auto-create/edit
+- **AI suggestions QA (Phase 60.1):** dedupe + active-goal filter in schema; numeric-string targets; `AssistantSourceNotice` for mock/fallback; prefill-only i18n; see `PROJECT_STATUS.md` §60.1
 
 **Phase 55.1 audit fixes:** active-period progress clips at `now`; goal dates parsed in user TZ; inactive goals re-evaluated (no new periods); deleted category shows `categoryRemoved`; dedupe via `goalPeriodIdentityKey`. See `PROJECT_STATUS.md` §55.1.
 

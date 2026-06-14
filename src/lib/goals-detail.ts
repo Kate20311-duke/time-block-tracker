@@ -7,6 +7,9 @@ import {
   type GoalPeriodLike,
   parseGoalListFilter,
 } from "@/lib/goals";
+import {
+  formatGoalProgressValue,
+} from "@/lib/goals-metric-display";
 
 export const GOAL_HISTORY_DAILY_BAR_LIMIT = 14;
 export const GOAL_HISTORY_WEEKLY_BAR_LIMIT = 12;
@@ -20,9 +23,11 @@ export type GoalHistoryBar = {
   targetMinutes: number;
   status: string;
   progressPercent: number;
+  progressLabel: string;
 };
 
 export type GoalDetailProgress = {
+  metric: string;
   actualMinutes: number;
   targetMinutes: number;
   progressPercent: number;
@@ -112,6 +117,7 @@ export function formatPeriodRangeLabel(
 export function buildGoalHistoryBars(
   periods: readonly GoalPeriodLike[],
   periodKind: string,
+  metric: string,
   locale: Locale,
   timeZone: string,
 ): GoalHistoryBar[] {
@@ -133,12 +139,18 @@ export function buildGoalHistoryBars(
       targetMinutes: period.targetMinutes,
       status: period.status,
       progressPercent,
+      progressLabel: formatGoalHistoryProgressLabel(
+        metric,
+        period.actualMinutes,
+        period.targetMinutes,
+        locale,
+      ),
     };
   });
 }
 
 export function buildGoalDetailProgress(
-  goal: Pick<GoalLike, "targetMinutes" | "period">,
+  goal: Pick<GoalLike, "metric" | "targetMinutes" | "period">,
   displayPeriod: GoalPeriodLike | null,
   locale: Locale,
   timeZone: string,
@@ -165,12 +177,24 @@ export function buildGoalDetailProgress(
     : "—";
 
   return {
+    metric: goal.metric,
     actualMinutes,
     targetMinutes,
     progressPercent,
     remainingMinutes,
     periodLabel,
   };
+}
+
+export function formatGoalHistoryProgressLabel(
+  metric: string,
+  actual: number,
+  target: number,
+  locale: Locale,
+): string {
+  const actualLabel = formatGoalProgressValue(metric, actual, locale);
+  const targetLabel = formatGoalProgressValue(metric, target, locale);
+  return `${actualLabel} / ${targetLabel}`;
 }
 
 export function buildGoalsListHref(filter?: string | null): string {

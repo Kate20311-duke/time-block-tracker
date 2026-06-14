@@ -25,7 +25,7 @@ export function GoalHistoryBars({ bars, ariaLabel }: Props) {
         <div
           key={bar.key}
           className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1"
-          title={`${bar.label}: ${bar.progressPercent}%`}
+          title={`${bar.label}: ${bar.progressLabel} (${bar.progressPercent}%)`}
         >
           <div className="flex h-24 w-full items-end justify-center">
             <div

@@ -90,7 +90,7 @@ describe("formatAchievementRatePercent", () => {
 describe("buildGoalDetailProgress", () => {
   it("uses display period for progress data", () => {
     const detail = buildGoalDetailProgress(
-      { targetMinutes: 120, period: "daily" },
+      { metric: "time_block_minutes", targetMinutes: 120, period: "daily" },
       period("2026-06-10T00:00:00Z", "active", 45, 120),
       "en",
       "UTC",
@@ -107,11 +107,24 @@ describe("buildGoalHistoryBars", () => {
     const bars = buildGoalHistoryBars(
       [period("2026-06-10T00:00:00Z", "achieved", 60, 120)],
       "daily",
+      "time_block_minutes",
       "en",
       "UTC",
     );
     expect(bars).toHaveLength(1);
     expect(bars[0].progressPercent).toBe(50);
+    expect(bars[0].progressLabel).toContain("/");
+  });
+
+  it("uses count labels for count metrics", () => {
+    const bars = buildGoalHistoryBars(
+      [period("2026-06-10T00:00:00Z", "achieved", 3, 5)],
+      "daily",
+      "completed_blocks_count",
+      "en",
+      "UTC",
+    );
+    expect(bars[0].progressLabel).toBe("3 / 5");
   });
 });
 

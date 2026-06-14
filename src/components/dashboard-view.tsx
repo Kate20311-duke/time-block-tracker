@@ -245,6 +245,7 @@ export function DashboardView({
           emptyHint: t.goals.previewEmptyHint,
           viewAll: t.dashboard.goalsPreviewViewAll,
           progressOf: t.goals.progressOf,
+          progressCount: t.goals.metrics.progressCount,
           streak: t.dashboard.goalsPreviewStreak,
         }}
       />

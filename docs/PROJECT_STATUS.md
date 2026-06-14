@@ -3062,7 +3062,248 @@ URL 参数 `?filter=`：
 
 ### 57.7 推荐下一步
 
-- FocusSession 独立 goal metric（避免与 TimeBlock 双计）
+- ~~FocusSession 独立 goal metric（Phase 58）~~
 - 目标提醒 / 通知
 - 智能目标建议
+
+## 58. Phase 58 — Goal Metrics v1（已完成）
+
+### 58.1 目标
+
+在不变更 Prisma schema 的前提下，扩展 `Goal.metric` 支持 4 种指标；TimeBlock 与 Focus 数据源严格分离；metric 创建后只读。
+
+### 58.2 支持的指标
+
+| metric | 数据源 | 统计规则 | 单位 |
+|--------|--------|----------|------|
+| `time_block_minutes` | TimeBlock | completed + partial，窗口裁剪（Phase 55 行为不变） | 分钟 |
+| `completed_blocks_count` | TimeBlock | 仅 `status=completed`，`startTime` 落在周期内 | 次数 |
+| `focus_minutes` | FocusSession / FocusSegment | 仅 completed/converted；有 segments 时按 segment.startTime 累加 durationMinutes | 分钟 |
+| `focus_sessions_count` | FocusSession | completed/converted，`startTime` 落在周期内 | 次数 |
+
+count 指标的目标值仍存 `Goal.targetMinutes` / `GoalPeriod.targetMinutes`，UI 显示为「次数」。
+
+### 58.3 双计防护
+
+- TimeBlock 指标绝不读取 FocusSession
+- Focus 指标绝不读取 TimeBlock
+- converted focus 可能同时存在 TimeBlock，但各 metric 只计各自来源
+
+### 58.4 metric 只读
+
+创建后不可修改 `Goal.metric`；编辑表单只读展示。需换 metric 时删除后重建。
+
+### 58.5 实现文件
+
+| 文件 | 职责 |
+|------|------|
+| `src/lib/constants.ts` | 扩展 `GOAL_METRICS` |
+| `src/lib/goals.ts` | 各 metric 计算器 + `calculateGoalPeriodActual` |
+| `src/lib/goals-metric-display.ts` | 进度/目标格式化 helpers |
+| `src/lib/goals-metric.test.ts` | 新 metric 单元测试 |
+| `src/lib/actions/goals.ts` | 分 metric 抓取数据 + 评估 |
+| `src/components/goals/*` | 表单 metric 选择、只读展示、单位切换 |
+| `src/lib/i18n/*` | `goals.metrics.*` |
+
+### 58.6 已知限制
+
+- FocusSegment 窗口：v1 按 `segment.startTime` 落入周期计数，非精确 overlap 裁剪
+- count 字段名仍为 `targetMinutes` / `actualMinutes`（DB 未改名）
+- 无提醒、模板、AI 建议
+
+### 58.7 推荐下一步
+
+- ~~Goal Metrics QA（Phase 58.1）~~
+- 目标模板
+- AI 目标建议
+- 目标提醒 / 通知
+
+## 58.1 Phase 58.1 — Goal Metrics QA 与 UX 小修（已完成）
+
+### 58.1.1 审计结论
+
+| 检查项 | 结果 |
+|--------|------|
+| A. Metric 语义 | 通过；`time_block_minutes` 行为未改 |
+| B. 单位展示 | 通过；count 指标不使用 duration 格式化 |
+| C. 编辑行为 | 通过；metric 只读、不提交；按 metric 切换 target 输入 |
+| D. 历史冻结 | 通过；`isFrozenGoalPeriodStatus` 仍在评估循环中跳过 |
+| E. FocusSegment | 文档与 UI 已明确 startTime 归因、无 overlap 裁剪 |
+| F. 时区 | 通过；周期生成仍用用户 TZ |
+| G. 用户隔离 | 通过；scoped 查询；FocusSegment 仅拉取 completed/converted 会话 ID |
+
+### 58.1.2 修复项
+
+1. **i18n**：`/goals` 页面描述更新为支持多 metric；`readOnlyTypeHint` 含 metric
+2. **FocusSegment 查询**：仅拉取 completed/converted 会话的 segments（避免无关 segment 进入上下文）
+3. **TimeBlock 查询**：无 `time_block_minutes` 目标时只拉 `completed`（count 目标不需要 partial）
+4. **count 目标校验**：`targetCount` 必须为正整数（拒绝 2.5 等小数）
+5. **趋势图 tooltip**：按 metric 显示 `actual / target`（count 或 duration）
+6. **列表 metric badge**：GoalRow 显示当前 metric 名称
+7. **创建表单**：`focus_minutes` 附加 segment.startTime 说明文案
+
+### 58.1.3 测试补充
+
+- failed 会话的 segments 不计入 focus_minutes
+- count 格式化不含 duration 文本
+- `formatGoalHistoryProgressLabel` count/duration 分支
+- metric 创建校验与 count 整数 update 校验
+
+### 58.1.4 剩余已知限制
+
+- FocusSegment v1 仍按 `segment.startTime` 落入周期，非 overlap 裁剪
+- DB 字段名 `targetMinutes` / `actualMinutes` 未改
+- 无模板、提醒、AI 建议
+
+### 58.1.5 推荐下一步
+
+- ~~目标模板（Phase 59）~~
+- AI 目标建议
+- 目标提醒 / 通知
+
+## 59. Phase 59 — 目标模板（已完成）
+
+### 59.1 目标
+
+通过硬编码模板预填现有创建表单，降低 metric / 周期 / 目标单位的选择成本。不写入数据库、不自动创建目标。
+
+### 59.2 模板定义
+
+| 模块 | `src/lib/goal-templates.ts` |
+|------|------------------------------|
+| 分组 | time / completion / focus |
+| 数量 | 8 个 recurring 模板（4 时长 + 2 完成数 + 2 专注） |
+| 校验 | `validateGoalTemplate` / `assertAllGoalTemplatesValid` |
+
+### 59.3 UI
+
+- `/goals` 创建区上方：`GoalTemplatesPicker` + 现有 `GoalFormCard`（`GoalsCreateSection`）
+- 点击模板 → 预填 metric、type、period、target、title、description、startDate（用户 TZ 今日）
+- **不**自动提交；分类仍由用户手动选择（可为 null）
+- metric 创建后仍只读
+
+### 59.4 实现文件
+
+| 文件 | 职责 |
+|------|------|
+| `src/lib/goal-templates.ts` | 模板常量 + `templateToFormDefaults` |
+| `src/lib/goal-templates.test.ts` | 校验与 form defaults 测试 |
+| `src/components/goals/goal-templates-picker.tsx` | 分组模板卡片 |
+| `src/components/goals/goals-create-section.tsx` | 模板 + 表单联动 |
+| `src/components/goals/goal-form-card.tsx` | 支持外部 state + `formRevision` 重挂载 |
+| `src/lib/i18n/*` | `goals.templates.*` |
+
+### 59.5 已知限制
+
+- 仅内置模板，无用户自定义、无 DB 持久化
+- 无一次性模板
+- 不自动匹配分类名称
+- 无 AI 建议、无提醒
+
+### 59.6 推荐下一步
+
+- ~~AI 目标建议（Phase 60）~~
+- 用户自定义模板
+- 目标提醒 / 通知
+
+## 60. Phase 60 — AI 目标建议（已完成）
+
+### 60.1 目标
+
+基于用户近期 TimeBlock、FocusSession、现有目标与分类，由 AI（或规则 fallback）生成 2–4 条可审阅的目标草稿，预填现有创建表单。**不**自动创建或编辑目标；**无** schema 变更。
+
+### 60.2 API
+
+| 路由 | `POST /api/assistant/goal-suggestions` |
+|------|----------------------------------------|
+| 鉴权 | 登录 + `ensureDbUser` |
+| 限流 | `goal-suggestions`：8 次 / 10 分钟 |
+| 数据窗口 | 默认近 **14 天**（用户 `getUserCalendarTimeZone()`） |
+| 读取 | categories、TimeBlocks、FocusSessions、active Goals（scoped） |
+| 输出 | 校验后的 `suggestions[]` + `source` + `dataScopeNote` |
+| Fallback | 无 API Key → mock；DeepSeek 失败/校验失败 → 规则 fallback |
+
+### 60.3 建议字段
+
+每条建议：`id`、`title`、`description`、`reason`、`metric`、`goalType`、`period`、`targetValue`（→ `targetMinutes`）、可选 `categoryId`、`confidence`。
+
+- v1 优先 `recurring` + `daily`/`weekly`
+- `categoryId` 必须为 null 或当前用户分类 id
+- count 指标 `targetValue` 须为正整数
+
+### 60.4 UI
+
+- `/goals` 创建区：`GoalTemplatesPicker` 下方新增 `GoalAiSuggestions`
+- 「生成建议」→ 卡片展示 → 「使用建议」预填 `GoalsCreateSection` 表单（与模板共用 `goalPrefillToFormDefaults` / `suggestionToFormDefaults`）
+- **不**自动提交
+
+### 60.5 实现文件
+
+| 文件 | 职责 |
+|------|------|
+| `src/lib/goal-prefill.ts` | 模板 / AI 共用 form defaults |
+| `src/lib/assistant/goal-suggestions-*.ts` | context、prompt、schema、mock、generate、handler |
+| `src/app/api/assistant/goal-suggestions/route.ts` | API 路由 |
+| `src/components/goals/goal-ai-suggestions.tsx` | 客户端 UI |
+| `src/components/goals/goals-create-section.tsx` | 模板 + AI + 表单联动 |
+| `src/lib/i18n/*` | `goals.aiSuggestions.*` |
+| `*.test.ts` | schema 校验、prefill、fallback |
+
+### 60.6 已知限制
+
+- 不自动创建/编辑目标；无提醒、无用户自定义模板
+- AI 可能仍建议偏 ambitious 的目标（已 prompt + 校验 + fallback 约束）
+- 一次性目标仅在 AI 返回且通过校验时可能出现；v1 以 recurring 为主
+- 不分析 GoalPeriod 历史趋势（仅用 active goals 去重）
+
+### 60.7 推荐下一步
+
+- ~~AI 目标建议 QA（Phase 60.1）~~
+- 用户自定义模板
+- 目标提醒 / 通知
+- AI 根据未达成目标调整建议
+
+## 60.1 Phase 60.1 — AI 目标建议 QA（已完成）
+
+### 60.1.1 审计范围
+
+校验、fallback 质量、UI 清晰度、i18n、重复建议过滤、表单预填行为；**无** schema 变更、**无**自动创建/编辑。
+
+### 60.1.2 修复项
+
+| 问题 | 修复 |
+|------|------|
+| AI 可能返回字符串 `targetValue` | schema 接受有限 numeric string |
+| 同批/与 active goal 重复建议 | `dedupeGoalSuggestions` + active overlap 过滤 |
+| 重复 suggestion id | `ensureUniqueSuggestionIds` |
+| mock/fallback 批次内重复 | `pushSuggestion` 使用 identity key 去重 |
+| UI 未区分 mock/fallback/AI | 复用 `AssistantSourceNotice` 展示 `source` |
+| 重新生成时残留旧卡片/选中态 | 生成开始清空结果；清除 `selectedSuggestionId` |
+| 文案暗示自动创建 | i18n 改为「预填表单 / 点击创建」 |
+| 按钮文案不一致 | `useSuggestion` → 与模板一致的「预填表单」 |
+
+### 60.1.3 验证行为（加固后）
+
+- invalid metric / period / goalType → 丢弃单项
+- `targetValue` 须为正；count 指标须整数
+- unknown `categoryId` → 丢弃整条
+- 去重后不足 2 条 → 抛校验错误 → generate 走 rule fallback
+- 最终输出 2–4 条
+
+### 60.1.4 测试补充
+
+- `goal-suggestions-utils.test.ts` — identity key、active overlap、id 去重
+- `goal-suggestions-schema.test.ts` — goalType、字符串 target、去重、cap、finalize 下限
+- `goal-prefill.test.ts` — 各 metric 预填、无 submit 字段、fallback 无重复卡片
+
+### 60.1.5 已知限制
+
+- 生产环境 mock/fallback 仅显示通用 assistant 提示，不区分规则 vs AI 失败原因
+- 去重按 metric+period+categoryId+targetValue，不同 target 的同类目标仍可能出现
+- 仍不分析 GoalPeriod 历史
+
+### 60.1.6 推荐下一步
+
+- 用户自定义模板
+- 目标提醒 / 通知
 

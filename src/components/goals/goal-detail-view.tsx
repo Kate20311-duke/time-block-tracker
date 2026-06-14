@@ -13,17 +13,22 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import type { GoalDetailData } from "@/lib/actions/goals";
-import { formatAchievementRatePercent, formatPeriodRangeLabel } from "@/lib/goals-detail";
+import { formatAchievementRatePercent, formatGoalHistoryProgressLabel, formatPeriodRangeLabel } from "@/lib/goals-detail";
+import {
+  formatGoalProgressPair,
+  formatGoalRemaining,
+} from "@/lib/goals-metric-display";
 import { formatMessage } from "@/lib/i18n";
 import type { Locale } from "@/lib/i18n/types";
-import { formatDurationMinutes } from "@/lib/time";
 
 type Labels = {
   backToGoals: string;
   currentProgress: string;
   progress: string;
   progressOf: string;
+  progressCount: string;
   remaining: string;
+  remainingCount: string;
   streakSummary: string;
   streakCurrent: string;
   streakLongest: string;
@@ -114,8 +119,18 @@ export function GoalDetailView({
     timeZone,
   });
 
-  const actualLabel = formatDurationMinutes(progress.actualMinutes, locale);
-  const targetLabel = formatDurationMinutes(progress.targetMinutes, locale);
+  const progressLabel = formatGoalProgressPair(
+    progress.metric,
+    progress.actualMinutes,
+    progress.targetMinutes,
+    locale,
+    {
+      progressOf: labels.progressOf,
+      progressCount: labels.progressCount,
+      remaining: labels.remaining,
+      remainingCount: labels.remainingCount,
+    },
+  );
   const isRecurring = goal.period !== "once";
 
   return (
@@ -169,18 +184,14 @@ export function GoalDetailView({
         <CardContent className="flex flex-col gap-3">
           <div className="flex items-center justify-between text-sm">
             <span className="font-medium">{labels.progress}</span>
-            <span className="text-muted-foreground">
-              {formatMessage(labels.progressOf, {
-                actual: actualLabel,
-                target: targetLabel,
-              })}
-            </span>
+            <span className="text-muted-foreground">{progressLabel}</span>
           </div>
           <Progress value={progress.progressPercent} />
           {progress.remainingMinutes !== null ? (
             <p className="text-sm text-muted-foreground">
-              {formatMessage(labels.remaining, {
-                minutes: formatDurationMinutes(progress.remainingMinutes, locale),
+              {formatGoalRemaining(progress.metric, progress.remainingMinutes, locale, {
+                remaining: labels.remaining,
+                remainingCount: labels.remainingCount,
               })}
             </p>
           ) : null}
@@ -279,8 +290,12 @@ export function GoalDetailView({
                   </div>
                   <div className="flex items-center gap-2">
                     <span>
-                      {formatDurationMinutes(period.actualMinutes, locale)} /{" "}
-                      {formatDurationMinutes(period.targetMinutes, locale)}
+                      {formatGoalHistoryProgressLabel(
+                        goal.metric,
+                        period.actualMinutes,
+                        period.targetMinutes,
+                        locale,
+                      )}
                     </span>
                     <Badge variant={periodStatusVariant(period.status)}>
                       {periodStatusLabel(period.status, labels)}

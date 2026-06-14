@@ -457,14 +457,14 @@ export const zh: Dictionary = {
   goals: {
     title: "目标",
     pageDescription:
-      "设定基于 TimeBlock 的时长目标。进度仅统计已完成和部分完成的时间块。",
+      "设定基于 TimeBlock 或 Focus 会话的目标。创建时选择指标 — 各指标只统计各自的数据来源。",
     createGoal: "创建目标",
     editGoal: "编辑目标",
     saveChanges: "保存更改",
     edit: "编辑",
     activeLabel: "目标处于启用状态",
     endDateOptional: "可选 — 留空表示无结束日期",
-    readOnlyTypeHint: "创建后不可更改开始日期、类型和周期。",
+    readOnlyTypeHint: "创建后不可更改开始日期、类型、周期和指标。",
     filterEmpty: "当前筛选下没有匹配的目标。",
     allGoals: "全部目标",
     activeGoals: "进行中的目标",
@@ -543,6 +543,23 @@ export const zh: Dictionary = {
       achieved: "已达成",
       missed: "未达成",
     },
+    metrics: {
+      label: "指标",
+      hint: "选择目标追踪的内容。TimeBlock 与 Focus 指标相互独立，不会重复计算。",
+      separateWarning:
+        "TimeBlock 目标与 Focus 目标衡量不同数据源。已转换的专注会话可能也会写入 TimeBlock，但各指标只统计各自来源。",
+      readOnlyHint: "创建后不可更改指标。如需更换，请删除后重新创建目标。",
+      timeBlockMinutes: "记录时长（TimeBlock）",
+      completedBlocksCount: "完成的时间块数量",
+      focusMinutes: "专注时长（会话）",
+      focusMinutesHint:
+        "仅统计 FocusSession 时长。分段会话按 segment.startTime 落入周期计数（v1 不做 overlap 裁剪）。",
+      focusSessionsCount: "专注会话次数",
+      targetCount: "目标（次数）",
+      targetCountHint: "整数 — 需要完成的块数或会话数",
+      progressCount: "{actual} / {target}",
+      remainingCount: "剩余 {count}",
+    },
     detail: {
       pageTitle: "目标详情",
       backToGoals: "返回目标列表",
@@ -560,6 +577,100 @@ export const zh: Dictionary = {
       evaluatedAt: "评估于 {date}",
       notFound: "未找到目标",
       notFoundHint: "该目标不存在或您无权访问。",
+    },
+    templates: {
+      title: "快速开始模板",
+      description: "选择模板可预填下方表单。提交前仍可修改标题、分类和目标值。",
+      selectedFeedback: "已应用模板：「{title}」。请检查下方表单，确认后创建。",
+      useTemplate: "点击预填表单",
+      groups: {
+        time: "时长",
+        completion: "完成数",
+        focus: "专注",
+      },
+      items: {
+        dailyStudy2h: {
+          title: "每日学习 2 小时",
+          description: "按 TimeBlock 统计每日已完成与部分完成的时长。",
+        },
+        weeklyWork30h: {
+          title: "每周工作 30 小时",
+          description: "适合工作或深度工作的每周 TimeBlock 时长目标。",
+        },
+        weeklyExercise3h: {
+          title: "每周运动 3 小时",
+          description: "通过 TimeBlock 追踪每周运动或锻炼时间。",
+        },
+        dailyRest1h: {
+          title: "每日休息 1 小时",
+          description: "为每日休息或恢复留出时间块。",
+        },
+        dailyComplete3Blocks: {
+          title: "每日完成 3 个时间块",
+          description: "统计每天 status 为 completed 的时间块数量。",
+        },
+        weeklyComplete15Blocks: {
+          title: "每周完成 15 个时间块",
+          description: "每周统计 completed 状态的时间块，不含 partial。",
+        },
+        dailyFocus60m: {
+          title: "每日专注 60 分钟",
+          description: "统计 completed 或 converted 的 Focus 会话时长。",
+        },
+        weeklyFocus10Sessions: {
+          title: "每周专注 10 次",
+          description: "每周统计 completed 或 converted 的 Focus 会话次数。",
+        },
+      },
+    },
+    aiSuggestions: {
+      title: "目标建议",
+      description:
+        "根据近期 TimeBlock、专注会话与活跃目标生成草稿，可预填下方表单——不会自动创建目标。",
+      disclaimer:
+        "建议基于近期记录，创建前可自由修改。点击创建按钮前不会写入任何目标。",
+      generate: "生成建议",
+      generating: "生成中…",
+      errorFailed: "无法生成建议，请稍后再试。",
+      empty: "点击「生成建议」查看 2–4 条可审阅并预填的草稿。",
+      useSuggestion: "点击预填表单",
+      selectedFeedback: "已从「{title}」预填表单。请检查下方表单，确认后点击创建。",
+      confidenceLow: "置信度：低",
+      confidenceMedium: "置信度：中",
+      confidenceHigh: "置信度：高",
+      dataScopeNote: "基于日历时区近 {days} 天数据（{start} – {end}）。",
+      fallback: {
+        dailyCategoryTimeTitle: "每日 {category} 时长",
+        dailyCategoryTimeDescription: "按 TimeBlock 统计 {category} 的每日时长。",
+        dailyCategoryTimeReason:
+          "近 {days} 天 {category} 日均约 {avg} 分钟。",
+        dailyOverallTimeTitle: "每日记录时长",
+        dailyOverallTimeDescription: "全部类别的 TimeBlock 每日时长。",
+        dailyOverallTimeReason: "近 {days} 天 TimeBlock 日均约 {avg} 分钟。",
+        dailyCompletedBlocksTitle: "每日完成时间块",
+        dailyCompletedBlocksDescription: "统计每日 status=completed 的时间块数量。",
+        dailyCompletedBlocksReason: "近 {days} 天日均完成约 {avg} 个时间块。",
+        dailyFocusMinutesTitle: "每日 {category} 专注",
+        dailyFocusMinutesDescription: "统计 {category} 的每日 Focus 时长。",
+        dailyFocusMinutesReason:
+          "近 {days} 天 {category} Focus 日均约 {avg} 分钟。",
+        dailyFocusOverallTitle: "每日专注时长",
+        dailyFocusOverallDescription: "全部类别的 Focus 每日时长。",
+        dailyFocusOverallReason: "近 {days} 天 Focus 日均约 {avg} 分钟。",
+        weeklyFocusSessionsTitle: "每周专注次数",
+        weeklyFocusSessionsDescription:
+          "统计每周 completed 或 converted 的 Focus 会话次数。",
+        weeklyFocusSessionsReason: "近 {days} 天共完成 {count} 次 Focus 会话。",
+        weeklyOverallTimeTitle: "每周记录时长",
+        weeklyOverallTimeDescription: "全部类别的 TimeBlock 每周时长。",
+        weeklyOverallTimeReason: "近 {days} 天 TimeBlock 共记录 {minutes} 分钟。",
+        starterDailyFocusTitle: "每日专注 30 分钟",
+        starterDailyFocusDescription: "较温和的每日 Focus 时长目标。",
+        starterDailyFocusReason: "近期 Focus 数据较少，建议从较小的每日目标开始。",
+        starterDailyBlocksTitle: "每日完成 1 个时间块",
+        starterDailyBlocksDescription: "每天完成 1 个 status=completed 的时间块。",
+        starterDailyBlocksReason: "近期完成数据较少，建议从每天 1 个开始。",
+      },
     },
   },
   timeBlocks: {

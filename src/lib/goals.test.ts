@@ -388,6 +388,7 @@ describe("validateGoalUpdateInput", () => {
       validateGoalUpdateInput({
         title: "",
         targetMinutes: 60,
+        metric: "time_block_minutes",
         goalType: "recurring",
         period: "weekly",
         startDate,
@@ -398,6 +399,7 @@ describe("validateGoalUpdateInput", () => {
       validateGoalUpdateInput({
         title: "Work",
         targetMinutes: 0,
+        metric: "time_block_minutes",
         goalType: "recurring",
         period: "weekly",
         startDate,
@@ -411,6 +413,7 @@ describe("validateGoalUpdateInput", () => {
       validateGoalUpdateInput({
         title: "Deadline",
         targetMinutes: 120,
+        metric: "time_block_minutes",
         goalType: "one_time",
         period: "once",
         startDate,
@@ -424,6 +427,7 @@ describe("validateGoalUpdateInput", () => {
       validateGoalUpdateInput({
         title: "Deadline",
         targetMinutes: 120,
+        metric: "time_block_minutes",
         goalType: "one_time",
         period: "once",
         startDate,

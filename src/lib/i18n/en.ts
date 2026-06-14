@@ -480,14 +480,14 @@ export const en: Dictionary = {
   goals: {
     title: "Goals",
     pageDescription:
-      "Set time-based targets tracked from your TimeBlocks. Progress counts completed and partial blocks only.",
+      "Set targets tracked from TimeBlocks or Focus sessions. Choose a metric when creating a goal — each metric counts only its own data source.",
     createGoal: "Create goal",
     editGoal: "Edit goal",
     saveChanges: "Save changes",
     edit: "Edit",
     activeLabel: "Goal is active",
     endDateOptional: "Optional — leave empty for no end date",
-    readOnlyTypeHint: "Start date, type, and period cannot be changed after creation.",
+    readOnlyTypeHint: "Start date, type, period, and metric cannot be changed after creation.",
     filterEmpty: "No goals match this filter.",
     allGoals: "All goals",
     activeGoals: "Active goals",
@@ -566,6 +566,23 @@ export const en: Dictionary = {
       achieved: "Achieved",
       missed: "Missed",
     },
+    metrics: {
+      label: "Metric",
+      hint: "Choose what this goal tracks. TimeBlock and Focus metrics are separate — they do not double-count.",
+      separateWarning:
+        "TimeBlock goals and Focus goals measure different data. A converted focus session may also appear as a TimeBlock, but each metric only counts its own source.",
+      readOnlyHint: "Metric cannot be changed after creation. Delete and recreate the goal to use a different metric.",
+      timeBlockMinutes: "Record time (TimeBlocks)",
+      completedBlocksCount: "Completed time blocks",
+      focusMinutes: "Focus time (sessions)",
+      focusMinutesHint:
+        "Uses FocusSession duration only. Segments are counted when segment.startTime falls in the period (not overlap-clipped in v1).",
+      focusSessionsCount: "Focus sessions",
+      targetCount: "Target (count)",
+      targetCountHint: "Whole number — how many blocks or sessions to reach",
+      progressCount: "{actual} / {target}",
+      remainingCount: "{count} remaining",
+    },
     detail: {
       pageTitle: "Goal details",
       backToGoals: "Back to goals",
@@ -583,6 +600,113 @@ export const en: Dictionary = {
       evaluatedAt: "Evaluated {date}",
       notFound: "Goal not found",
       notFoundHint: "This goal does not exist or you do not have access to it.",
+    },
+    templates: {
+      title: "Quick start templates",
+      description:
+        "Pick a template to prefill the form below. You can still edit title, category, and target before creating.",
+      selectedFeedback: 'Template applied: "{title}". Review the form below and submit when ready.',
+      useTemplate: "Click to prefill form",
+      groups: {
+        time: "Time",
+        completion: "Completion",
+        focus: "Focus",
+      },
+      items: {
+        dailyStudy2h: {
+          title: "Daily study 2 hours",
+          description: "Track completed and partial TimeBlock minutes each day.",
+        },
+        weeklyWork30h: {
+          title: "Weekly work 30 hours",
+          description: "A weekly TimeBlock time target for work or deep work.",
+        },
+        weeklyExercise3h: {
+          title: "Weekly exercise 3 hours",
+          description: "Weekly movement or workout time from TimeBlocks.",
+        },
+        dailyRest1h: {
+          title: "Daily rest 1 hour",
+          description: "Protect daily rest or recovery time in your calendar.",
+        },
+        dailyComplete3Blocks: {
+          title: "Daily complete 3 blocks",
+          description: "Count fully completed TimeBlocks each day.",
+        },
+        weeklyComplete15Blocks: {
+          title: "Weekly complete 15 blocks",
+          description: "Weekly count of completed TimeBlocks only.",
+        },
+        dailyFocus60m: {
+          title: "Daily focus 60 minutes",
+          description: "Focus session minutes (completed or converted only).",
+        },
+        weeklyFocus10Sessions: {
+          title: "Weekly focus 10 sessions",
+          description: "Count completed or converted focus sessions each week.",
+        },
+      },
+    },
+    aiSuggestions: {
+      title: "Goal suggestions",
+      description:
+        "Generate goal drafts from your recent TimeBlocks, focus sessions, and active goals. Review and prefill the form below — nothing is created automatically.",
+      disclaimer:
+        "Suggestions are based on recent records and can be edited before creation. Nothing is saved until you submit the create form.",
+      generate: "Generate suggestions",
+      generating: "Generating…",
+      errorFailed: "Could not generate suggestions. Please try again later.",
+      empty: "Click generate to see 2–4 draft goals you can review and prefill.",
+      useSuggestion: "Prefill form",
+      selectedFeedback:
+        'Form prefilled from "{title}". Review the form below and click Create when ready.',
+      confidenceLow: "Low confidence",
+      confidenceMedium: "Medium confidence",
+      confidenceHigh: "High confidence",
+      dataScopeNote:
+        "Based on the last {days} days ({start} – {end}) in your calendar timezone.",
+      fallback: {
+        dailyCategoryTimeTitle: "Daily {category} time",
+        dailyCategoryTimeDescription:
+          "Recurring daily TimeBlock minutes for {category}.",
+        dailyCategoryTimeReason:
+          "You averaged about {avg} min/day on {category} in the last {days} days.",
+        dailyOverallTimeTitle: "Daily recorded time",
+        dailyOverallTimeDescription: "Recurring daily TimeBlock minutes (all categories).",
+        dailyOverallTimeReason:
+          "You averaged about {avg} min/day on TimeBlocks in the last {days} days.",
+        dailyCompletedBlocksTitle: "Daily completed blocks",
+        dailyCompletedBlocksDescription:
+          "Count fully completed TimeBlocks each day.",
+        dailyCompletedBlocksReason:
+          "You completed about {avg} blocks/day in the last {days} days.",
+        dailyFocusMinutesTitle: "Daily {category} focus",
+        dailyFocusMinutesDescription:
+          "Recurring daily focus minutes for {category}.",
+        dailyFocusMinutesReason:
+          "You averaged about {avg} min/day of focus on {category} in the last {days} days.",
+        dailyFocusOverallTitle: "Daily focus time",
+        dailyFocusOverallDescription: "Recurring daily focus minutes (all categories).",
+        dailyFocusOverallReason:
+          "You averaged about {avg} min/day of focus in the last {days} days.",
+        weeklyFocusSessionsTitle: "Weekly focus sessions",
+        weeklyFocusSessionsDescription:
+          "Count completed or converted focus sessions each week.",
+        weeklyFocusSessionsReason:
+          "You completed {count} focus sessions in the last {days} days.",
+        weeklyOverallTimeTitle: "Weekly recorded time",
+        weeklyOverallTimeDescription: "Recurring weekly TimeBlock minutes.",
+        weeklyOverallTimeReason:
+          "You recorded {minutes} minutes on TimeBlocks in the last {days} days.",
+        starterDailyFocusTitle: "Daily focus 30 minutes",
+        starterDailyFocusDescription: "A gentle daily focus minutes target.",
+        starterDailyFocusReason:
+          "Limited recent focus data — start with a modest daily target.",
+        starterDailyBlocksTitle: "Daily complete 1 block",
+        starterDailyBlocksDescription: "Count one completed TimeBlock per day.",
+        starterDailyBlocksReason:
+          "Limited recent completion data — start with one block per day.",
+      },
     },
   },
   timeBlocks: {

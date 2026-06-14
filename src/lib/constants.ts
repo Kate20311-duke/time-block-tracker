@@ -43,7 +43,12 @@ export const TIME_BLOCK_SOURCES = [
 
 export type TimeBlockSource = (typeof TIME_BLOCK_SOURCES)[number];
 
-export const GOAL_METRICS = ["time_block_minutes"] as const;
+export const GOAL_METRICS = [
+  "time_block_minutes",
+  "completed_blocks_count",
+  "focus_minutes",
+  "focus_sessions_count",
+] as const;
 
 export type GoalMetric = (typeof GOAL_METRICS)[number];
 

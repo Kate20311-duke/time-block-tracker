@@ -20,7 +20,8 @@ import { Separator } from "@/components/ui/separator";
 import { formatMessage } from "@/lib/i18n";
 import type { GoalListFilter } from "@/lib/goals";
 import type { GoalProgressSummary } from "@/lib/goals";
-import { formatDurationMinutes } from "@/lib/time";
+import { formatGoalProgressPair } from "@/lib/goals-metric-display";
+import { formatGoalHistoryProgressLabel } from "@/lib/goals-detail";
 import type { Locale } from "@/lib/i18n/types";
 
 type CategoryOption = {
@@ -68,6 +69,17 @@ type FormLabels = {
   endDateOptional: string;
   activeLabel: string;
   readOnlyTypeHint: string;
+  metric: string;
+  metricHint: string;
+  metricSeparateWarning: string;
+  readOnlyMetricHint: string;
+  metricTimeBlockMinutes: string;
+  metricCompletedBlocksCount: string;
+  metricFocusMinutes: string;
+  metricFocusMinutesHint: string;
+  metricFocusSessionsCount: string;
+  targetCount: string;
+  targetCountHint: string;
 };
 
 type Props = {
@@ -81,6 +93,7 @@ type Props = {
   periodLabel: string;
   timeZone: string;
   goalId: string;
+  metric: string;
   isActive: boolean;
   goalType: "one_time" | "recurring";
   period: "once" | "daily" | "weekly";
@@ -95,6 +108,7 @@ type Props = {
   labels: {
     progress: string;
     progressOf: string;
+    progressCount: string;
     currentPeriod: string;
     streak: string;
     streakCurrent: string;
@@ -126,6 +140,19 @@ type Props = {
   };
 };
 
+function metricBadgeLabel(metric: string, formLabels: FormLabels): string {
+  switch (metric) {
+    case "completed_blocks_count":
+      return formLabels.metricCompletedBlocksCount;
+    case "focus_minutes":
+      return formLabels.metricFocusMinutes;
+    case "focus_sessions_count":
+      return formLabels.metricFocusSessionsCount;
+    default:
+      return formLabels.metricTimeBlockMinutes;
+  }
+}
+
 function periodKindLabel(period: string, labels: Props["labels"]): string {
   if (period === "daily") return labels.periodDaily;
   if (period === "weekly") return labels.periodWeekly;
@@ -155,6 +182,7 @@ export function GoalRow({
   periodLabel,
   timeZone,
   goalId,
+  metric,
   isActive,
   goalType,
   period,
@@ -178,8 +206,13 @@ export function GoalRow({
 
   const actual = summary.currentPeriod?.actualMinutes ?? 0;
   const target = summary.currentPeriod?.targetMinutes ?? summary.targetMinutes;
-  const actualLabel = formatDurationMinutes(actual, locale);
-  const targetLabel = formatDurationMinutes(target, locale);
+  const progressLabel = formatGoalProgressPair(
+    summary.metric,
+    actual,
+    target,
+    locale,
+    { progressOf: labels.progressOf, progressCount: labels.progressCount, remaining: "", remainingCount: "" },
+  );
   const evaluatedHistory = historyPeriods.filter((p) => p.status !== "active");
 
   if (editing) {
@@ -195,6 +228,7 @@ export function GoalRow({
             <GoalFormFields
               mode="edit"
               categories={categories}
+              metric={metric as import("@/lib/constants").GoalMetric}
               defaults={formDefaults}
               goalType={goalType}
               period={period}
@@ -228,6 +262,7 @@ export function GoalRow({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {!isActive ? <Badge variant="outline">{labels.inactive}</Badge> : null}
+            <Badge variant="outline">{metricBadgeLabel(metric, formLabels)}</Badge>
             <Badge variant="secondary">{periodKindLabel(summary.period, labels)}</Badge>
             {category ? (
               <Badge
@@ -248,12 +283,7 @@ export function GoalRow({
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between text-sm">
             <span className="font-medium">{labels.progress}</span>
-            <span className="text-muted-foreground">
-              {formatMessage(labels.progressOf, {
-                actual: actualLabel,
-                target: targetLabel,
-              })}
-            </span>
+            <span className="text-muted-foreground">{progressLabel}</span>
           </div>
           <Progress value={summary.progressPercent} />
           <p className="text-xs text-muted-foreground">
@@ -300,8 +330,12 @@ export function GoalRow({
                   </span>
                   <div className="flex items-center gap-2">
                     <span>
-                      {formatDurationMinutes(historyPeriod.actualMinutes, locale)} /{" "}
-                      {formatDurationMinutes(historyPeriod.targetMinutes, locale)}
+                      {formatGoalHistoryProgressLabel(
+                        summary.metric,
+                        historyPeriod.actualMinutes,
+                        historyPeriod.targetMinutes,
+                        locale,
+                      )}
                     </span>
                     <Badge variant={statusVariant(historyPeriod.status)}>
                       {statusLabel(historyPeriod.status, labels)}

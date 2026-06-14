@@ -11,6 +11,7 @@ export const ASSISTANT_RATE_LIMITS = {
   "weekly-review": { limit: 10, windowMs: 10 * 60_000 },
   "tomorrow-plan": { limit: 8, windowMs: 10 * 60_000 },
   "tomorrow-plan/apply": { limit: 20, windowMs: 10 * 60_000 },
+  "goal-suggestions": { limit: 8, windowMs: 10 * 60_000 },
 } as const;
 
 export type AssistantRouteName = keyof typeof ASSISTANT_RATE_LIMITS;

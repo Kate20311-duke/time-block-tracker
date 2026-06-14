@@ -14,10 +14,13 @@ import {
   GOAL_PERIOD_STATUSES,
   GOAL_PERIODS,
   GOAL_TYPES,
+  type GoalMetric,
   type GoalPeriodKind,
   type GoalPeriodStatus,
   type GoalType,
 } from "@/lib/constants";
+import { focusSessionDisplayMinutes } from "@/lib/focus";
+import { isGoalCountMetric } from "@/lib/goals-metric-display";
 import { overlapMinutes } from "@/lib/stats";
 import { isNonEmptyTrimmed } from "@/lib/validation";
 
@@ -56,6 +59,33 @@ export type GoalTimeBlockLike = {
   completionLevel?: number | null;
 };
 
+export type GoalFocusSessionLike = {
+  id: string;
+  startTime: Date;
+  endTime: Date | null;
+  status: string;
+  categoryId: string;
+  actualDurationMinutes: number | null;
+  plannedDurationMinutes: number;
+};
+
+export type GoalFocusSegmentLike = {
+  focusSessionId: string;
+  startTime: Date;
+  durationMinutes: number | null;
+  categoryId: string;
+};
+
+export type GoalPeriodActualContext = {
+  blocks?: readonly GoalTimeBlockLike[];
+  focusSessions?: readonly GoalFocusSessionLike[];
+  segmentsBySessionId?: ReadonlyMap<string, readonly GoalFocusSegmentLike[]>;
+  periodStart: Date;
+  periodEnd: Date;
+  categoryId?: string | null;
+  progressWindowEnd?: Date;
+};
+
 export type GoalPeriodRange = {
   periodStart: Date;
   periodEnd: Date;
@@ -77,6 +107,7 @@ export type GoalValidationError =
 export type GoalProgressSummary = {
   goalId: string;
   title: string;
+  metric: string;
   categoryId: string | null;
   goalType: string;
   period: string;
@@ -182,6 +213,159 @@ export function calculateActualMinutesInPeriod(
     total += completedMinutesForClippedBlock(block, clipped);
   }
   return total;
+}
+
+const GOAL_FOCUS_COUNTABLE_STATUSES = new Set(["completed", "converted"]);
+
+export function isGoalFocusCountableStatus(status: string): boolean {
+  return GOAL_FOCUS_COUNTABLE_STATUSES.has(String(status ?? "").trim());
+}
+
+function effectivePeriodWindowEnd(
+  periodEnd: Date,
+  progressWindowEnd: Date,
+): Date {
+  return progressWindowEnd.getTime() < periodEnd.getTime()
+    ? progressWindowEnd
+    : periodEnd;
+}
+
+/** Count completed TimeBlocks whose startTime falls in the period window. */
+export function calculateCompletedBlocksCountInPeriod(
+  blocks: readonly GoalTimeBlockLike[],
+  periodStart: Date,
+  periodEnd: Date,
+  categoryId?: string | null,
+  progressWindowEnd: Date = periodEnd,
+): number {
+  const windowEnd = effectivePeriodWindowEnd(periodEnd, progressWindowEnd);
+  if (windowEnd.getTime() <= periodStart.getTime()) return 0;
+
+  let count = 0;
+  for (const block of blocks) {
+    if (String(block.status ?? "").trim() !== "completed") continue;
+    if (categoryId && block.categoryId !== categoryId) continue;
+    if (
+      block.startTime.getTime() >= periodStart.getTime() &&
+      block.startTime.getTime() < windowEnd.getTime()
+    ) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/** Sum focus minutes from completed/converted sessions (FocusSession-based only). */
+export function calculateFocusMinutesInPeriod(
+  sessions: readonly GoalFocusSessionLike[],
+  segmentsBySessionId: ReadonlyMap<string, readonly GoalFocusSegmentLike[]>,
+  periodStart: Date,
+  periodEnd: Date,
+  categoryId?: string | null,
+  progressWindowEnd: Date = periodEnd,
+): number {
+  const windowEnd = effectivePeriodWindowEnd(periodEnd, progressWindowEnd);
+  if (windowEnd.getTime() <= periodStart.getTime()) return 0;
+
+  let total = 0;
+  for (const session of sessions) {
+    if (!isGoalFocusCountableStatus(session.status)) continue;
+
+    const segments = segmentsBySessionId.get(session.id);
+    if (segments && segments.length > 0) {
+      for (const segment of segments) {
+        if (categoryId && segment.categoryId !== categoryId) continue;
+        if (
+          segment.startTime.getTime() >= periodStart.getTime() &&
+          segment.startTime.getTime() < windowEnd.getTime()
+        ) {
+          total += segment.durationMinutes ?? 0;
+        }
+      }
+      continue;
+    }
+
+    if (categoryId && session.categoryId !== categoryId) continue;
+    if (
+      session.startTime.getTime() >= periodStart.getTime() &&
+      session.startTime.getTime() < windowEnd.getTime()
+    ) {
+      total += focusSessionDisplayMinutes(session);
+    }
+  }
+  return total;
+}
+
+/** Count completed/converted focus sessions whose startTime falls in the period window. */
+export function calculateFocusSessionsCountInPeriod(
+  sessions: readonly GoalFocusSessionLike[],
+  periodStart: Date,
+  periodEnd: Date,
+  categoryId?: string | null,
+  progressWindowEnd: Date = periodEnd,
+): number {
+  const windowEnd = effectivePeriodWindowEnd(periodEnd, progressWindowEnd);
+  if (windowEnd.getTime() <= periodStart.getTime()) return 0;
+
+  let count = 0;
+  for (const session of sessions) {
+    if (!isGoalFocusCountableStatus(session.status)) continue;
+    if (categoryId && session.categoryId !== categoryId) continue;
+    if (
+      session.startTime.getTime() >= periodStart.getTime() &&
+      session.startTime.getTime() < windowEnd.getTime()
+    ) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/** Dispatch period progress calculation by goal metric. */
+export function calculateGoalPeriodActual(
+  metric: string,
+  context: GoalPeriodActualContext,
+): number {
+  const progressWindowEnd =
+    context.progressWindowEnd ?? context.periodEnd;
+
+  switch (metric as GoalMetric) {
+    case "time_block_minutes":
+      return calculateActualMinutesInPeriod(
+        context.blocks ?? [],
+        context.periodStart,
+        context.periodEnd,
+        context.categoryId,
+        progressWindowEnd,
+      );
+    case "completed_blocks_count":
+      return calculateCompletedBlocksCountInPeriod(
+        context.blocks ?? [],
+        context.periodStart,
+        context.periodEnd,
+        context.categoryId,
+        progressWindowEnd,
+      );
+    case "focus_minutes":
+      return calculateFocusMinutesInPeriod(
+        context.focusSessions ?? [],
+        context.segmentsBySessionId ?? new Map(),
+        context.periodStart,
+        context.periodEnd,
+        context.categoryId,
+        progressWindowEnd,
+      );
+    case "focus_sessions_count":
+      return calculateFocusSessionsCountInPeriod(
+        context.focusSessions ?? [],
+        context.periodStart,
+        context.periodEnd,
+        context.categoryId,
+        progressWindowEnd,
+      );
+    default:
+      return 0;
+  }
 }
 
 /** Evaluate period status from elapsed time and progress. */
@@ -335,6 +519,7 @@ export function validateGoalInput(input: {
 export function validateGoalUpdateInput(input: {
   title: string;
   targetMinutes: number;
+  metric: string;
   goalType: string;
   period: string;
   startDate: Date;
@@ -343,6 +528,7 @@ export function validateGoalUpdateInput(input: {
   return validateGoalFields({
     title: input.title,
     targetMinutes: input.targetMinutes,
+    metric: input.metric,
     goalType: input.goalType,
     period: input.period,
     startDate: input.startDate,
@@ -368,6 +554,13 @@ function validateGoalFields(input: {
     return "title_too_long";
   }
   if (!Number.isFinite(input.targetMinutes) || input.targetMinutes <= 0) {
+    return "invalid_target_minutes";
+  }
+  if (
+    input.metric &&
+    isGoalCountMetric(input.metric) &&
+    !Number.isInteger(input.targetMinutes)
+  ) {
     return "invalid_target_minutes";
   }
   if (
@@ -497,6 +690,7 @@ export function formatGoalProgressSummary(
   return {
     goalId: goal.id,
     title: goal.title,
+    metric: goal.metric,
     categoryId: goal.categoryId ?? null,
     goalType: goal.goalType,
     period: goal.period,

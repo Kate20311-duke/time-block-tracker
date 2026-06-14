@@ -490,6 +490,21 @@ export type Dictionary = {
       achieved: string;
       missed: string;
     };
+    metrics: {
+      label: string;
+      hint: string;
+      separateWarning: string;
+      readOnlyHint: string;
+      timeBlockMinutes: string;
+      completedBlocksCount: string;
+      focusMinutes: string;
+      focusMinutesHint: string;
+      focusSessionsCount: string;
+      targetCount: string;
+      targetCountHint: string;
+      progressCount: string;
+      remainingCount: string;
+    };
     detail: {
       pageTitle: string;
       backToGoals: string;
@@ -507,6 +522,71 @@ export type Dictionary = {
       evaluatedAt: string;
       notFound: string;
       notFoundHint: string;
+    };
+    templates: {
+      title: string;
+      description: string;
+      selectedFeedback: string;
+      useTemplate: string;
+      groups: {
+        time: string;
+        completion: string;
+        focus: string;
+      };
+      items: {
+        dailyStudy2h: { title: string; description: string };
+        weeklyWork30h: { title: string; description: string };
+        weeklyExercise3h: { title: string; description: string };
+        dailyRest1h: { title: string; description: string };
+        dailyComplete3Blocks: { title: string; description: string };
+        weeklyComplete15Blocks: { title: string; description: string };
+        dailyFocus60m: { title: string; description: string };
+        weeklyFocus10Sessions: { title: string; description: string };
+      };
+    };
+    aiSuggestions: {
+      title: string;
+      description: string;
+      disclaimer: string;
+      generate: string;
+      generating: string;
+      errorFailed: string;
+      empty: string;
+      useSuggestion: string;
+      selectedFeedback: string;
+      confidenceLow: string;
+      confidenceMedium: string;
+      confidenceHigh: string;
+      dataScopeNote: string;
+      fallback: {
+        dailyCategoryTimeTitle: string;
+        dailyCategoryTimeDescription: string;
+        dailyCategoryTimeReason: string;
+        dailyOverallTimeTitle: string;
+        dailyOverallTimeDescription: string;
+        dailyOverallTimeReason: string;
+        dailyCompletedBlocksTitle: string;
+        dailyCompletedBlocksDescription: string;
+        dailyCompletedBlocksReason: string;
+        dailyFocusMinutesTitle: string;
+        dailyFocusMinutesDescription: string;
+        dailyFocusMinutesReason: string;
+        dailyFocusOverallTitle: string;
+        dailyFocusOverallDescription: string;
+        dailyFocusOverallReason: string;
+        weeklyFocusSessionsTitle: string;
+        weeklyFocusSessionsDescription: string;
+        weeklyFocusSessionsReason: string;
+        weeklyOverallTimeTitle: string;
+        weeklyOverallTimeDescription: string;
+        weeklyOverallTimeReason: string;
+        starterDailyFocusTitle: string;
+        starterDailyFocusDescription: string;
+        starterDailyFocusReason: string;
+        starterDailyBlocksTitle: string;
+        starterDailyBlocksDescription: string;
+        starterDailyBlocksReason: string;
+      };
     };
   };
   timeBlocks: {

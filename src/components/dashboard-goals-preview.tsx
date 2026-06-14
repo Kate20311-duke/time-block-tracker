@@ -12,7 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { formatMessage } from "@/lib/i18n";
 import type { GoalProgressSummary } from "@/lib/goals";
-import { formatDurationMinutes } from "@/lib/time";
+import { formatGoalProgressPair } from "@/lib/goals-metric-display";
 import type { Locale } from "@/lib/i18n/types";
 
 export type DashboardGoalPreviewItem = {
@@ -31,6 +31,7 @@ type Props = {
     emptyHint: string;
     viewAll: string;
     progressOf: string;
+    progressCount: string;
     streak: string;
   };
 };
@@ -75,10 +76,18 @@ export function DashboardGoalsPreview({ locale, items, labels }: Props) {
                 </div>
                 <Progress value={item.summary.progressPercent} />
                 <p className="text-xs text-muted-foreground">
-                  {formatMessage(labels.progressOf, {
-                    actual: formatDurationMinutes(actual, locale),
-                    target: formatDurationMinutes(target, locale),
-                  })}
+                  {formatGoalProgressPair(
+                    item.summary.metric,
+                    actual,
+                    target,
+                    locale,
+                    {
+                      progressOf: labels.progressOf,
+                      progressCount: labels.progressCount,
+                      remaining: "",
+                      remainingCount: "",
+                    },
+                  )}
                 </p>
               </div>
             );

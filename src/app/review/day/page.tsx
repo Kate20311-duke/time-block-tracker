@@ -150,7 +150,7 @@ export default async function ReviewDayPage({
             title={t.review.categoryBreakdown}
             description={t.review.categoryShareHint}
             rows={categoryRows}
-            formatDuration={formatDuration}
+            locale={locale}
             uncategorizedLabel={t.dashboard.uncategorized}
           />
 

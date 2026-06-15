@@ -17,12 +17,10 @@ import {
 } from "@/components/ui/chart";
 import { Progress } from "@/components/ui/progress";
 import type { Locale } from "@/lib/i18n/types";
-import type { CategoryTimeMinutes } from "@/lib/stats";
+import type { ReviewCategoryRow } from "@/lib/review-category";
 import { formatDurationMinutes } from "@/lib/time";
 
-type Row = CategoryTimeMinutes & {
-  percent: number;
-};
+type Row = ReviewCategoryRow;
 
 type Props = {
   title: string;
@@ -144,17 +142,4 @@ export function ReviewCategoryBreakdown({
       </CardContent>
     </Card>
   );
-}
-
-export function mapCategoryBreakdownRows(
-  rows: CategoryTimeMinutes[],
-  totalMinutes: number,
-): Row[] {
-  return rows.map((row) => ({
-    ...row,
-    percent:
-      totalMinutes > 0
-        ? Math.round((row.totalMinutes / totalMinutes) * 100)
-        : 0,
-  }));
 }

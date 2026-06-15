@@ -1,4 +1,4 @@
-import { ReviewCategoryBreakdown, mapCategoryBreakdownRows } from "@/components/review/review-category-breakdown";
+import { ReviewCategoryBreakdown } from "@/components/review/review-category-breakdown";
 import { ReviewDateControls } from "@/components/review/review-date-controls";
 import { ReviewEmptyState } from "@/components/review/review-empty-state";
 import { ReviewModeNav } from "@/components/review/review-mode-nav";
@@ -21,6 +21,7 @@ import {
   clipBlocksToRange,
   summarizeCompletionQuality,
 } from "@/lib/stats";
+import { mapCategoryBreakdownRows } from "@/lib/review-category";
 import {
   countCompletedBlocks,
   mapReviewTimeBlockListItems,

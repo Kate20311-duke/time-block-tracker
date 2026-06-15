@@ -1,7 +1,4 @@
-import {
-  ReviewCategoryBreakdown,
-  mapCategoryBreakdownRows,
-} from "@/components/review/review-category-breakdown";
+import { ReviewCategoryBreakdown } from "@/components/review/review-category-breakdown";
 import {
   ReviewDailyBreakdown,
   mapDailyBreakdownRows,
@@ -29,6 +26,7 @@ import {
   dailyCompletionQualityForSelectedWeek,
   summarizeCompletionQuality,
 } from "@/lib/stats";
+import { mapCategoryBreakdownRows } from "@/lib/review-category";
 import {
   countCompletedBlocks,
   mapReviewTimeBlockListItems,

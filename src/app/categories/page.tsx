@@ -4,6 +4,7 @@ import { CategoryFormCard } from "@/components/categories/category-form-card";
 import { CategoryPageHeader } from "@/components/categories/category-page-header";
 import { PageFeedback } from "@/components/page-feedback";
 import { createCategory } from "@/lib/actions/categories";
+import { loadCategoryTimeBlockDurationMinutesByCategoryId } from "@/lib/category-time-block-duration";
 import { formatMessage, getDictionary } from "@/lib/i18n";
 import { categoriesForUser } from "@/lib/db/scoped";
 import {
@@ -12,6 +13,7 @@ import {
 } from "@/lib/focus-session-status";
 import { getLocale } from "@/lib/i18n/server";
 import { requireUser } from "@/lib/session";
+import { formatDurationMinutes } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +44,11 @@ export default async function CategoriesPage({
       },
     },
   });
+  const durationByCategoryId =
+    await loadCategoryTimeBlockDurationMinutesByCategoryId(
+      user.id,
+      categories.map((category) => category.id),
+    );
 
   const successMessage =
     success === "created"
@@ -121,6 +128,20 @@ export default async function CategoriesPage({
           <div className="space-y-3">
             {categories.map((category) => {
               const timeBlockCount = category._count.timeBlocks;
+              const totalDurationMinutes =
+                durationByCategoryId.get(category.id) ?? 0;
+              const timeBlockCountFormatted =
+                timeBlockCount === 0
+                  ? formatMessage(t.categories.timeBlockCount, {
+                      count: timeBlockCount,
+                    })
+                  : formatMessage(t.categories.timeBlockCountWithDuration, {
+                      count: timeBlockCount,
+                      duration: formatDurationMinutes(
+                        totalDurationMinutes,
+                        locale,
+                      ),
+                    });
               const focusSessionCount = category._count.focusSessions;
               const blockingFocusSessions = category.focusSessions;
               const activeFocusCount = blockingFocusSessions.filter(
@@ -158,14 +179,14 @@ export default async function CategoriesPage({
                     timeBlockCount,
                     focusSessionCount,
                   }}
+                  otherCategories={categories
+                    .filter((item) => item.id !== category.id)
+                    .map((item) => ({ id: item.id, name: item.name }))}
                   labels={{
                     name: t.categories.name,
                     color: t.categories.color,
                     descriptionOptional: t.categories.descriptionOptional,
-                    timeBlockCountFormatted: formatMessage(
-                      t.categories.timeBlockCount,
-                      { count: timeBlockCount },
-                    ),
+                    timeBlockCountFormatted,
                     focusSessionCountFormatted: formatMessage(
                       t.categories.focusSessionCount,
                       { count: focusSessionCount },
@@ -182,6 +203,59 @@ export default async function CategoriesPage({
                     cancel: t.common.cancel,
                     delete: t.common.delete,
                     submitting: t.common.submitting,
+                    showTimeBlocks: t.categories.timeBlockList.show,
+                    hideTimeBlocks: t.categories.timeBlockList.hide,
+                    timeBlocksHeading: t.categories.timeBlockList.heading,
+                    timeBlocksEmpty: t.categories.timeBlockList.empty,
+                    timeBlocksShowingCount:
+                      t.categories.timeBlockList.showingCount,
+                    timeBlocksLoadMore: t.categories.timeBlockList.loadMore,
+                    timeBlocksLoadingMore:
+                      t.categories.timeBlockList.loadingMore,
+                    timeBlocksLoading: t.categories.timeBlockList.loading,
+                    timeBlocksLoadFailed: t.categories.timeBlockList.loadFailed,
+                    timeBlocksRetry: t.categories.timeBlockList.retry,
+                    timeBlocksBulkSelectionLimit:
+                      t.categories.timeBlockList.bulkSelectionLimit,
+                    timeBlocksSelectedCount:
+                      t.categories.timeBlockList.selectedCount,
+                    timeBlocksSelectVisible:
+                      t.categories.timeBlockList.selectVisible,
+                    timeBlocksDeselectVisible:
+                      t.categories.timeBlockList.deselectVisible,
+                    timeBlocksClearSelection:
+                      t.categories.timeBlockList.clearSelection,
+                    timeBlocksMoveSelected:
+                      t.categories.timeBlockList.moveSelected,
+                    timeBlocksMoveTitle: t.categories.timeBlockList.moveTitle,
+                    timeBlocksMoveTargetCategory:
+                      t.categories.timeBlockList.moveTargetCategory,
+                    timeBlocksMoveSelectTarget:
+                      t.categories.timeBlockList.moveSelectTarget,
+                    timeBlocksMoveDescription:
+                      t.categories.timeBlockList.moveDescription,
+                    timeBlocksMoveConfirm:
+                      t.categories.timeBlockList.moveConfirm,
+                    timeBlocksMoving: t.categories.timeBlockList.moving,
+                    timeBlocksMoveSuccess:
+                      t.categories.timeBlockList.moveSuccess,
+                    timeBlocksMoveFailed:
+                      t.categories.timeBlockList.moveFailed,
+                    timeBlocksNoOtherCategories:
+                      t.categories.timeBlockList.noOtherCategories,
+                    timeBlocksDeleteSelected:
+                      t.categories.timeBlockList.deleteSelected,
+                    timeBlocksDeleteTitle:
+                      t.categories.timeBlockList.deleteTitle,
+                    timeBlocksDeleteDescription:
+                      t.categories.timeBlockList.deleteDescription,
+                    timeBlocksDeleteConfirm:
+                      t.categories.timeBlockList.deleteConfirm,
+                    timeBlocksDeleting: t.categories.timeBlockList.deleting,
+                    timeBlocksDeleteSuccess:
+                      t.categories.timeBlockList.deleteSuccess,
+                    timeBlocksDeleteFailed:
+                      t.categories.timeBlockList.deleteFailed,
                   }}
                 />
               );

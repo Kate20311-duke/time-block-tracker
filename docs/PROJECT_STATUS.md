@@ -3304,6 +3304,125 @@ count 指标的目标值仍存 `Goal.targetMinutes` / `GoalPeriod.targetMinutes`
 
 ### 60.1.6 推荐下一步
 
+- ~~Category TimeBlock 只读展开（Phase 61.2）~~
+- ~~Category TimeBlock 多选（Phase 61.3）~~
+- ~~Category TimeBlock 批量移动（Phase 61.4）~~
+- ~~Category TimeBlock 批量删除（Phase 61.5）~~
+- ~~Category TimeBlock Load More / 总时长（Phase 61.6）~~
+- Category TimeBlock search / date filter（可选）
 - 用户自定义模板
 - 目标提醒 / 通知
+
+## 61. Phase 61 — Category TimeBlock Management
+
+在 `/categories` 展开分类，查看并（后续）批量管理该分类下的 TimeBlock。不改 Prisma schema。
+
+### 61.1 Audit（已完成，无代码）
+
+确认：`TimeBlock.categoryId` 必填；所有权经 `category.userId`；复用 `timeBlocksForUser`；分类删除语义不变。
+
+### 61.2 Category TimeBlock Read-only List（已完成）
+
+**目标：** 每个分类可展开，lazy 读取最近 20 条 TimeBlock。只读，无多选 / 移动 / 删除。
+
+**行为：**
+
+- `/categories` 首屏仍只加载 Category summary（含 `_count.timeBlocks`）
+- 点击「查看时间块」后，Server Action `listCategoryTimeBlocks` → `requireUser` + `assertCategoryOwned` + `timeBlocksForUser`（`categoryId`、`startTime desc`、`take: 21` 用于 hasMore）
+- 日期时间按用户 calendar TZ 在 server 格式化
+- 展开结果缓存在该行 Client state；收起再展开不重复请求
+- empty / loading / inline error+retry；失败不搞崩整页
+- 超过 20 条只提示「显示最近 20 个」，无 Load More
+
+**无：** checkbox、批量操作、schema/migration、Category 删除语义变更
+
+**文件：** `src/lib/category-time-blocks.ts`、`src/lib/actions/category-time-blocks.ts`、`src/components/categories/category-time-block-list.tsx`、`category-row.tsx`、i18n、`category-time-blocks.test.ts`
+
+**验证：** `pnpm test` 464 passed（含 8 条 61.2）；`pnpm typecheck`；`pnpm lint`
+
+### 61.3 Category TimeBlock Multi-selection（已完成）
+
+**目标：** 对当前分类已加载的 TimeBlock 多选。纯 Client state + UI，无数据库写操作。
+
+**行为：**
+
+- 每个 `CategoryRow` 独立 `selectedIds`（`Set<string>`，key = TimeBlock.id）
+- 原生 checkbox；紧凑 row：title + duration，日期·时间为 secondary
+- `selectedIds.size > 0` 时显示：已选数量、「全选当前显示 / 取消全选」、「取消选择」
+- 「全选当前显示」只覆盖当前已加载列表（最多 20），不是分类下全部历史
+- 收起分类或进入编辑时清空 selection；retry 也会清空
+- TimeBlock 列表仍 lazy load、缓存、最多 20 条
+
+**无：** 批量移动、批量删除、跨分类选择、schema/migration
+
+**文件：** `src/lib/category-time-block-selection.ts`、`*.test.ts`、`category-time-block-list.tsx`、`category-row.tsx`、i18n
+
+**验证：** `pnpm test` 472 passed（含 8 条 selection helper）；`pnpm typecheck`；`pnpm lint`
+
+### 61.4 Bulk Move TimeBlocks（已完成）
+
+**目标：** 将当前分类已选 TimeBlock 批量移动到当前用户的另一个 Category。只改 `TimeBlock.categoryId`。
+
+**安全：**
+
+- `requireUser` + `assertCategoryOwned(target)`（不存在/他人同一 `move_failed`）
+- sanitize：trim / 去空 / 去重 / max 100
+- 空列表 no-op，不写库
+- transaction 内 `count` 必须等于 unique IDs，否则整批失败
+- `updateMany` 仍带 `category: { userId }`；`updated.count !== uniqueIds.length` 视为失败
+- 同分类：owned check 后 no-op（`unchanged: true`）
+- 不区分「分类不存在」与「属于他人」
+
+**Cache：** `router.refresh()` 不够，因为 `CategoryRow` 有 client cache。用 Server `_count.timeBlocks` 变化作为 invalidation：清 cache、清 selection；若仍展开则重新 lazy load。
+
+**Revalidate：** `/categories` `/calendar` `/time-blocks` `/dashboard` `/goals` `/review/day` `/review/week`
+
+**无：** bulk delete、FocusSession/FocusSegment 同步、Goal 公式/ICS 变更、schema
+
+**验证：** `pnpm test` 485 passed（含 move helper）；`pnpm typecheck`；`pnpm lint`
+
+### 61.5 Bulk Delete TimeBlocks（已完成）
+
+**目标：** 对当前分类已选 TimeBlock 二次确认后批量永久删除。只删 TimeBlock，不删 FocusSession / FocusSegment，不改 Category 删除规则。
+
+**确认：** selection toolbar「删除」只打开 Dialog；真正 mutation 仅在点击「删除 N 个时间块」后调用 `deleteTimeBlocksBulk`。
+
+**安全：**
+
+- sanitize 复用 `sanitizeTimeBlockIds` / `MAX_BULK_TIME_BLOCKS = 100`（trim / 去空 / 去重）
+- 空列表 no-op（`deletedCount: 0`, `unchanged: true`），不写库
+- transaction 内 ownership `count` 必须等于 unique IDs，否则 throw → rollback
+- `deleteMany` 仍带 `category: { userId }`；`deleted.count !== uniqueIds.length` 同样 throw rollback
+- mixed ownership / 不存在 ID：整批失败，0 条删除；generic `delete_failed`，不泄露哪个 ID
+- 只删 `selectedIds`，禁止按 categoryId 清空整个分类历史
+
+**FocusSession：** schema 仍是 `onDelete: SetNull`；业务代码不 delete / update FocusSession 或 FocusSegment。
+
+**Cache：** 复用 61.4 的 `timeBlockCount` invalidation（`router.refresh()` → count 变化 → 清 cache；展开则重新 lazy load）。删光后走 61.2 empty state。
+
+**Revalidate：** `/categories` `/calendar` `/time-blocks` `/dashboard` `/goals` `/review/day` `/review/week`
+
+**无：** pagination / load more、按分类全量删除、Undo、自动删 Category、Goal evaluate、schema/migration
+
+**文件：** `src/lib/category-time-block-delete.ts`、`*.test.ts`、`category-time-block-bulk.ts`、`delete-time-blocks-dialog.tsx`、`category-time-blocks.ts` actions、`category-row.tsx`、i18n
+
+**验证：** `pnpm test` 494 passed（含 delete helper）；`pnpm typecheck`；`pnpm lint`
+
+### 61.6 Category TimeBlock History Polish（已完成）
+
+**目标：** Load More 分页 + Category 全部 TimeBlock 总时长。无 search / 日期筛选 / 全选全部历史 / schema 变更。
+
+**Pagination：** PAGE_SIZE = 20；`startTime DESC, id DESC` keyset（非 skip/offset）。cursor `{ startTime, id }` server 校验；malformed → `load_failed`。`take + 1` 判断 hasMore。不把 take 暴露给 client。
+
+**Load More：** append + 按 id 去重；独立 pending；失败保留已加载列表和 selection。全选当前显示覆盖已加载页。selected > 100 时 Move/Delete disabled（不偷偷截断）。
+
+**Duration：** TimeBlock 无 duration 字段，用 `endTime - startTime` 在 DB 一次 `GROUP BY categoryId`（join `Category.userId`）。完整 block duration，不按日裁剪。0 条只显示「0 个时间块」。
+
+**Cache：** 仍用 `timeBlockCount` 变化清 items/cursor/hasMore/selection，展开则从第一页 reload。Move/Delete 的 revalidate + refresh 会同时更新 count 和总时长。
+
+**验证：** `pnpm test` 513 passed；`pnpm typecheck`；`pnpm lint`
+
+### 后续建议
+
+search / date filter；列表变慢时再考虑 `@@index([categoryId, startTime])`（需明确批准）。
 

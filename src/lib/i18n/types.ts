@@ -278,6 +278,7 @@ export type Dictionary = {
     namePlaceholder: string;
     descriptionPlaceholder: string;
     timeBlockCount: string;
+    timeBlockCountWithDuration: string;
     focusSessionCount: string;
     cannotDelete: string;
     cannotDeleteRecords: string;
@@ -295,6 +296,40 @@ export type Dictionary = {
     cannotDeleteTimeBlocks: string;
     cannotDeleteActiveFocus: string;
     cannotDeleteCompletedFocus: string;
+    timeBlockList: {
+      show: string;
+      hide: string;
+      heading: string;
+      empty: string;
+      showingCount: string;
+      loadMore: string;
+      loadingMore: string;
+      loading: string;
+      loadFailed: string;
+      retry: string;
+      bulkSelectionLimit: string;
+      selectedCount: string;
+      selectVisible: string;
+      deselectVisible: string;
+      clearSelection: string;
+      moveSelected: string;
+      moveTitle: string;
+      moveTargetCategory: string;
+      moveSelectTarget: string;
+      moveDescription: string;
+      moveConfirm: string;
+      moving: string;
+      moveSuccess: string;
+      moveFailed: string;
+      noOtherCategories: string;
+      deleteSelected: string;
+      deleteTitle: string;
+      deleteDescription: string;
+      deleteConfirm: string;
+      deleting: string;
+      deleteSuccess: string;
+      deleteFailed: string;
+    };
   };
   routines: {
     title: string;

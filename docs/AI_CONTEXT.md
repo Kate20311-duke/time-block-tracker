@@ -49,6 +49,12 @@ Personal time-block planner + Pomodoro + **stopwatch** focus tracker. **Phase 9:
 | **Phase 59** | **Done** — Goal templates (form prefill) — see `PROJECT_STATUS.md` §59 |
 | **Phase 60** | **Done** — AI goal suggestions (form prefill) — see `PROJECT_STATUS.md` §60 |
 | **Phase 60.1** | **Done** — AI goal suggestions QA — see `PROJECT_STATUS.md` §60.1 |
+| **Phase 61.1** | **Done** (audit only) — Category TimeBlock management plan |
+| **Phase 61.2** | **Done** — Category lazy read-only TimeBlock list (recent 20) — see `PROJECT_STATUS.md` §61.2 |
+| **Phase 61.3** | **Done** — Category TimeBlock multi-select (client-only) — see `PROJECT_STATUS.md` §61.3 |
+| **Phase 61.4** | **Done** — Bulk move TimeBlocks between owned categories — see `PROJECT_STATUS.md` §61.4 |
+| **Phase 61.5** | **Done** — Bulk delete selected TimeBlocks (confirm dialog, all-or-nothing) — see `PROJECT_STATUS.md` §61.5 |
+| **Phase 61.6** | **Done** — Category TimeBlock load more + duration summary — see `PROJECT_STATUS.md` §61.6 |
 
 ## Stack
 
@@ -141,7 +147,7 @@ Errors: `ScopedAccessError` / `isScopedAccessError`.
 5. **Focus convert** → `assertFocusSessionOwned` + transaction claim `category: { userId }`.
 6. **One active focus session per user** — `startStopwatch` / `createFocusSession` call `activeFocusSessionForUser` first (`running` or `paused`).
 
-Action files: `categories.ts`, `time-blocks.ts`, `calendar-time-blocks.ts`, `focus-sessions.ts`, `focus-shared.ts` (transaction), `routines.ts`, `goals.ts`.
+Action files: `categories.ts`, `category-time-blocks.ts` (lazy list), `time-blocks.ts`, `calendar-time-blocks.ts`, `focus-sessions.ts`, `focus-shared.ts` (transaction), `routines.ts`, `goals.ts`.
 
 ### API Routes (non-CRUD)
 
@@ -415,9 +421,10 @@ Teams · sharing · invites · payments · password login · dev Credentials in 
 
 ## Next likely tasks
 
-1. **Import/export** — `ImportBatch` + rollback (Phase 6) → ICS export (CSV + Excel + ICS import + duplicate/conflict done, §48–§52)
-2. **Settings page** — extend with timezone, locale, profile (data export entry exists at `/settings`)
-3. **Google login** — second OAuth provider alongside GitHub
-4. Pomodoro refresh recovery (localStorage) — optional
+1. **Search / date filter** on category TimeBlock history (optional); `@@index([categoryId, startTime])` only with explicit schema approval
+2. **Import/export** — `ImportBatch` + rollback (Phase 6) → ICS export (CSV + Excel + ICS import + duplicate/conflict done, §48–§52)
+3. **Settings page** — extend with timezone, locale, profile (data export entry exists at `/settings`)
+4. **Google login** — second OAuth provider alongside GitHub
+5. Pomodoro refresh recovery (localStorage) — optional
 
-Full status: `docs/PROJECT_STATUS.md` §21、§34–§52
+Full status: `docs/PROJECT_STATUS.md` §21、§34–§52、§61.2–§61.6

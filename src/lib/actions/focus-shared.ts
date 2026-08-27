@@ -9,6 +9,7 @@ import {
   type FocusSessionPauseFields,
 } from "@/lib/focus-session-elapsed";
 import { durationMinutes } from "@/lib/time";
+import { hasFocusCategoryId } from "@/lib/focus-category-display";
 import {
   completionLevelFromStatus,
   isValidFocusSessionStatus,
@@ -21,7 +22,8 @@ import {
 export type FocusSessionFields = {
   title: string | null;
   note: string | null;
-  categoryId: string;
+  /** Persisted sessions may be null after Category delete; create still requires a category. */
+  categoryId: string | null;
   startTime: Date;
   endTime: Date | null;
   plannedDurationMinutes: number;
@@ -37,7 +39,8 @@ export type FocusSessionActionError =
   | "session_already_running"
   | "pause_limit_exceeded"
   | "update_failed"
-  | "convert_failed";
+  | "convert_failed"
+  | "needs_category";
 
 function parseOptionalText(value: string | null | undefined): string | null {
   const text = String(value ?? "").trim();
@@ -310,12 +313,76 @@ export function defaultStopwatchTitle(
 }
 
 export class FocusConvertTransactionError extends Error {
-  readonly code: "already_converted" | "invalid_state";
+  readonly code:
+    | "already_converted"
+    | "invalid_state"
+    | "invalid_category"
+    | "needs_category";
 
-  constructor(code: "already_converted" | "invalid_state") {
+  constructor(
+    code:
+      | "already_converted"
+      | "invalid_state"
+      | "invalid_category"
+      | "needs_category",
+  ) {
     super(code);
     this.code = code;
   }
+}
+
+/**
+ * Decide which Category the new TimeBlock should use.
+ *
+ * - Session still has a category → always use it (ignore targetCategoryId).
+ * - Orphan session + explicit target → use target.
+ * - Orphan session without target → needs_category.
+ *
+ * Does not write FocusSession.categoryId. Ownership is checked by the caller.
+ */
+export function resolveTimeBlockCategoryId(input: {
+  sessionCategoryId: string | null | undefined;
+  targetCategoryId?: string | null;
+}): { ok: true; categoryId: string } | { ok: false; error: "needs_category" } {
+  if (hasFocusCategoryId(input.sessionCategoryId)) {
+    return { ok: true, categoryId: input.sessionCategoryId.trim() };
+  }
+  const target = String(input.targetCategoryId ?? "").trim();
+  if (!target) {
+    return { ok: false, error: "needs_category" };
+  }
+  return { ok: true, categoryId: target };
+}
+
+/**
+ * Ownership layer on top of {@link resolveTimeBlockCategoryId}.
+ * Missing and other-user Category both map to `invalid_category` (no existence leak).
+ */
+export function withOwnedTimeBlockCategory(
+  resolved:
+    | { ok: true; categoryId: string }
+    | { ok: false; error: "needs_category" },
+  owned: boolean,
+):
+  | { ok: true; categoryId: string }
+  | { ok: false; error: "needs_category" | "invalid_category" } {
+  if (!resolved.ok) {
+    return resolved;
+  }
+  if (!owned) {
+    return { ok: false, error: "invalid_category" };
+  }
+  return resolved;
+}
+
+/** TimeBlock.categoryId is still required. Refuse before any irreversible writes. */
+export function requireFocusCategoryIdForTimeBlock(
+  categoryId: string | null | undefined,
+): string {
+  if (!hasFocusCategoryId(categoryId)) {
+    throw new FocusConvertTransactionError("needs_category");
+  }
+  return categoryId;
 }
 
 export type FocusConvertTransactionClient = {
@@ -325,7 +392,7 @@ export type FocusConvertTransactionClient = {
         id: string;
         convertedToTimeBlock: boolean;
         status: string;
-        category: { userId: string };
+        userId: string;
       };
       data: {
         status: string;
@@ -362,7 +429,7 @@ export type StopwatchCompleteTransactionClient = FocusConvertTransactionClient &
         convertedToTimeBlock: boolean;
         status: { in: string[] };
         mode: string;
-        category: { userId: string };
+        userId: string;
       };
       data: {
         status: string;
@@ -381,26 +448,36 @@ export type StopwatchCompleteTransactionClient = FocusConvertTransactionClient &
  * Claim a completed FocusSession, then create its TimeBlock.
  * Claim runs before create so a failed/racing conversion cannot leave orphan blocks.
  *
- * `userId` on the claim ensures the session (and its category) belong to the
- * current user, so the created TimeBlock cannot be linked to another user's category.
+ * `userId` on the claim ensures the session belongs to the current user.
+ * Category ownership is still checked separately before creating the TimeBlock.
  */
 export async function convertFocusSessionInTransaction(
   session: {
     id: string;
     note: string | null;
-    categoryId: string;
+    categoryId: string | null;
   },
   title: string,
   range: { start: Date; end: Date },
   userId: string,
   tx: FocusConvertTransactionClient,
+  timeBlockCategoryId?: string,
 ): Promise<{ timeBlockId: string }> {
+  const resolved = resolveTimeBlockCategoryId({
+    sessionCategoryId: session.categoryId,
+    targetCategoryId: timeBlockCategoryId,
+  });
+  if (!resolved.ok) {
+    throw new FocusConvertTransactionError(resolved.error);
+  }
+  const categoryId = resolved.categoryId;
+
   const claimed = await tx.focusSession.updateMany({
     where: {
       id: session.id,
       convertedToTimeBlock: false,
       status: "completed",
-      category: { userId },
+      userId,
     },
     data: {
       status: "converted",
@@ -416,7 +493,7 @@ export async function convertFocusSessionInTransaction(
     data: {
       title,
       note: session.note,
-      categoryId: session.categoryId,
+      categoryId,
       startTime: range.start,
       endTime: range.end,
       status: "completed",
@@ -444,7 +521,7 @@ export async function completeStopwatchInTransaction(
   session: FocusSessionPauseFields & {
     id: string;
     note: string | null;
-    categoryId: string;
+    categoryId: string | null;
     status: string;
   },
   completeInput: StopwatchCompleteInput,
@@ -455,7 +532,7 @@ export async function completeStopwatchInTransaction(
       count(args: { where: { focusSessionId: string } }): Promise<number>;
     };
   },
-  options?: { segmentNoteSuffix?: string },
+  options?: { segmentNoteSuffix?: string; timeBlockCategoryId?: string },
 ): Promise<{ timeBlockId: string; actualDurationMinutes: number }> {
   const {
     completeStopwatchWithSegmentsInTransaction,
@@ -466,6 +543,16 @@ export async function completeStopwatchInTransaction(
     throw new FocusConvertTransactionError("invalid_state");
   }
 
+  const resolved = resolveTimeBlockCategoryId({
+    sessionCategoryId: session.categoryId,
+    targetCategoryId: options?.timeBlockCategoryId,
+  });
+  if (!resolved.ok) {
+    throw new FocusConvertTransactionError(resolved.error);
+  }
+  const categoryId = resolved.categoryId;
+  const sessionWithCategory = { ...session, categoryId };
+
   const segmentCount =
     tx.focusSegment !== undefined
       ? await tx.focusSegment.count({ where: { focusSessionId: session.id } })
@@ -473,7 +560,7 @@ export async function completeStopwatchInTransaction(
 
   if (segmentCount > 0) {
     const result = await completeStopwatchWithSegmentsInTransaction(
-      session,
+      sessionWithCategory,
       completeInput,
       wallClockEndTime,
       userId,
@@ -487,7 +574,7 @@ export async function completeStopwatchInTransaction(
   }
 
   return completeStopwatchLegacyInTransaction(
-    session,
+    sessionWithCategory,
     completeInput,
     wallClockEndTime,
     userId,

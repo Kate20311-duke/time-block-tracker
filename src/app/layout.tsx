@@ -7,6 +7,7 @@ import { Providers } from "@/components/providers";
 import { TimezoneInitializer } from "@/components/timezone-initializer";
 import { signOutAction } from "@/lib/actions/auth";
 import { activeFocusSessionForUser, categoriesForUser } from "@/lib/db/scoped";
+import { focusCategoryDisplay } from "@/lib/focus-category-display";
 import { getDictionary } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n/server";
 import { getSessionUser } from "@/lib/session";
@@ -80,28 +81,28 @@ export default async function RootLayout({
   if (sessionUser) {
     const active = await activeFocusSessionForUser(sessionUser.id);
     if (active) {
-      const categories = await categoriesForUser(sessionUser.id, {
-        where: { id: active.categoryId },
-        select: { name: true, color: true },
-        take: 1,
-      });
-      const category = categories[0];
-      if (category) {
-        activeFocusSession = {
-          id: active.id,
-          mode: active.mode as "stopwatch" | "pomodoro",
-          status: active.status,
-          startTimeIso: active.startTime.toISOString(),
-          pausedAtIso: active.pausedAt?.toISOString() ?? null,
-          pausedTotalSeconds: active.pausedTotalSeconds,
-          title: active.title,
-          plannedDurationMinutes: active.plannedDurationMinutes,
-          category: {
-            name: category.name,
-            color: category.color,
-          },
-        };
-      }
+      const categories = active.categoryId
+        ? await categoriesForUser(sessionUser.id, {
+            where: { id: active.categoryId },
+            select: { id: true, name: true, color: true },
+            take: 1,
+          })
+        : [];
+      const category = focusCategoryDisplay(
+        categories[0] ?? null,
+        dict.focus.categoryRemoved,
+      );
+      activeFocusSession = {
+        id: active.id,
+        mode: active.mode as "stopwatch" | "pomodoro",
+        status: active.status,
+        startTimeIso: active.startTime.toISOString(),
+        pausedAtIso: active.pausedAt?.toISOString() ?? null,
+        pausedTotalSeconds: active.pausedTotalSeconds,
+        title: active.title,
+        plannedDurationMinutes: active.plannedDurationMinutes,
+        category,
+      };
     }
   }
 

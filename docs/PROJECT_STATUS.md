@@ -6,6 +6,18 @@
 
 ## 2. 当前阶段
 
+**Phase 62：Category Deletion Semantics（已关闭）** — TimeBlock 是唯一删除 blocker；Focus 独立 `userId` + nullable SetNull；orphan 重选分类。详见 §62
+
+**Phase 62.5：Regression / Production Readiness（已完成）** — schema/migration audit、DB-first 上线顺序、完整测试与 build。**尚未**对 Neon migrate / git push。
+
+**Phase 62.3：Orphan Focus Reassignment UX（已完成）** — 无分类的 FocusSession 保存/转换须显式选择现存 Category，仅写入新 TimeBlock；FocusSession.categoryId 保持 null。详见 §62
+
+**Phase 62.2B：Nullable Focus Category Relations（已完成）** — `FocusSession` / `FocusSegment` `categoryId` 可空 + SetNull；TimeBlock 仍 Restrict；分类删除产品行为未改。详见 §62
+
+**Phase 62.2A：FocusSession 独立 ownership（已完成）** — `FocusSession.userId`。详见 §62
+
+**Phase 61：Category TimeBlock Management（已完成）** — 详见 §61
+
 **Phase 13：分段专注会话（已完成）** — 秒表暂停上限 + FocusSegment → 多块 TimeBlock，详见 §54
 
 **TZ-1：用户本地时区** — 浏览器 cookie + `getUserCalendarTimeZone()`，详见 §28  
@@ -65,9 +77,9 @@
 
 **Phase 53：日历重叠块并排布局修复（已完成）** — 见 §53
 
-**下一步（推荐）**：`ImportBatch` + 导入历史 + 回滚（阶段 6，见 §47）
+**下一步（推荐）**：确认后对 Neon `prisma migrate deploy`（先 DB 后代码），再 push / Vercel；另见 `ImportBatch`（§47）
 
-**当前验证（2026-06-13）**：`pnpm test` → **367+** 项通过（含 Phase 13 分段专注测试）
+**当前验证（2026-08-27）**：`pnpm test` → **566** 通过；`pnpm typecheck`；`pnpm lint`；`pnpm build` ✅
 
 - **Phase 9（已完成）正计时秒表**
   - `FocusSession.mode`：`pomodoro` | `stopwatch`（默认 `pomodoro`）
@@ -573,6 +585,7 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 | name, email, image | 可选 | GitHub 资料 |
 | categories | Category[] | 用户拥有的分类 |
 | routines | Routine[] | 用户拥有的重复日程 |
+| focusSessions | FocusSession[] | 用户拥有的专注会话（Phase 62.2A 起直接归属） |
 
 另：`Account`、`Session`、`VerificationToken`（Prisma Adapter 标准表）。
 
@@ -634,7 +647,7 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 
 **status 字符串值**（非 enum）：`planned` | `completed` | `partial` | `skipped`
 
-**关系**：User 1 — N Category；Category 1 — N TimeBlock。删除分类前应用层检查关联 TimeBlock **与** FocusSession（`has-records`）。
+**关系**：User 1 — N Category；Category 1 — N TimeBlock。删除分类资格 **只** 看 TimeBlock：有则禁止（应用层 + FK Restrict）；FocusSession / FocusSegment 不阻挡，删除后 SetNull 保留。
 
 ### FocusSession
 
@@ -643,7 +656,8 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 | id | String (cuid) | 主键 |
 | title | String? | 可选标题 |
 | note | String? | 可选备注 |
-| categoryId | String | 外键 → Category |
+| **userId** | String | 外键 → User（**直接归属**，Phase 62.2A） |
+| categoryId | String? | 外键 → Category（**62.2B** 可空 + `onDelete: SetNull`；创建时仍必填） |
 | startTime | DateTime | 开始时间 |
 | endTime | DateTime? | 结束时间（进行中可为空） |
 | mode | String | 默认 `pomodoro`；`pomodoro` \| `stopwatch` |
@@ -660,7 +674,8 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 
 **关系**：
 
-- Category 1 — N FocusSession（`onDelete: Restrict`）
+- User 1 — N FocusSession（`onDelete: Cascade`；**Phase 62.2A 起 ownership 走 `userId`**）
+- Category 1 — N FocusSession（`onDelete: Restrict`；**62.2A 未改为 SetNull / nullable**）
 - FocusSession 0..1 — 1 TimeBlock（`timeBlockId` 唯一；删除 TimeBlock 时 `SetNull`）
 
 **Server Actions**（`src/lib/actions/focus-sessions.ts`，返回 `{ ok, data } | { ok, error }`）：
@@ -690,6 +705,7 @@ PostgreSQL **schema `app`**（`DATABASE_URL` 须含 `?schema=app`）。
 - `20260601120000_add_focus_mode_timeblock_source`（`FocusSession.mode`、`TimeBlock.source`）
 - `20260609120000_stopwatch_pause_fields`（`pausedAt`、`pausedTotalSeconds`、`status=paused`）
 - `20260610220340_add_routines`（`Routine` 表）
+- `20260826181318_add_focus_session_user_id`（`FocusSession.userId` 直接归属；**categoryId 仍 Restrict**）
 
 ## 7. 已实现页面
 
@@ -861,7 +877,7 @@ docs/AI_CONTEXT.md
 ## 13. 全局已知限制
 
 - **认证**：仅 GitHub OAuth；无邮箱密码登录
-- **数据隔离**：每用户仅见自己的 Category / TimeBlock / FocusSession（经 `Category.userId`）
+- **数据隔离**：每用户仅见自己的 Category / TimeBlock / FocusSession。FocusSession 经 **`FocusSession.userId`**（Phase 62.2A）；TimeBlock 仍经 `category.userId`
 - **Next.js 16**：构建可能提示 `middleware` 将更名为 `proxy`（见 §18.11）
 - **日历**：无“点击创建”；周视图交互相对有限；无第三方日历库
 - **Dashboard**：
@@ -970,9 +986,10 @@ pnpm dev                          # http://localhost:3000/focus
 
 ### 18.5 用户归属模型
 
-- **直接归属**：`Category.userId` → `User`
-- **间接归属**：`TimeBlock.categoryId`、`FocusSession.categoryId` → 须 `Category.userId === 当前用户`
-- **无** `TimeBlock.userId` / `FocusSession.userId` 列（有意保持 schema 最小）
+- **直接归属**：`Category.userId`、`Routine.userId`、`Goal.userId`、`FocusSession.userId`（**Phase 62.2A**）、`FocusSegment.userId` → `User`
+- **间接归属**：`TimeBlock.categoryId` → 须 `Category.userId === 当前用户`
+- **无** `TimeBlock.userId` 列（有意保持 schema 最小）
+- **`FocusSession.categoryId` 在 62.2A 仍为必填 + Restrict**；nullable / SetNull 留给 62.2B
 
 ### 18.6 查询隔离策略（页面）
 
@@ -983,9 +1000,10 @@ pnpm dev                          # http://localhost:3000/focus
 ### 18.7 Server Action 保护策略
 
 - 每个 Action 开头 **`requireUser()`**（middleware 不够，Action 可被直接 POST）
-- 创建 TimeBlock / FocusSession：**`assertCategoryOwned`**
-- 更新/删除 TimeBlock / FocusSession：**`assert*Owned`** + **`updateMany`/`deleteMany`** 带 `category: { userId }`
-- 专注转换：转换前 `assertFocusSessionOwned` + `assertCategoryOwned`；事务 claim 含 `category: { userId }`
+- 创建 TimeBlock / FocusSession：**`assertCategoryOwned`**（FocusSession 另写 `userId: user.id`）
+- 更新/删除 TimeBlock：**`assertTimeBlockOwned`** + **`updateMany`/`deleteMany`** 带 `category: { userId }`
+- 更新 FocusSession：**`assertFocusSessionOwned`** + **`updateMany` 带 `userId`**
+- 专注转换：转换前 `assertFocusSessionOwned` + `assertCategoryOwned`；事务 claim 含 `userId`
 
 ### 18.8 迁移说明
 
@@ -1049,7 +1067,7 @@ pnpm dev
 
 **删除分类边界（单用户）**
 
-- [ ] 分类下仅有专注记录、无时间块时，删除被阻止并显示 `has-records` 类提示
+- [ ] 分类下仅有专注记录、无时间块时，**可以删除**；Focus 历史保留并显示「分类已删除」
 
 ### 18.11 已知限制
 
@@ -1308,15 +1326,17 @@ docker compose up -d
 
 ### 22.2 分类删除新规则
 
-- **阻挡**：该分类下存在 TimeBlock；或 `running` / `planned` / `completed` / `converted` 的 FocusSession
-- **不阻挡**：仅有 `abandoned` 的 FocusSession（删除分类时在事务内 `deleteMany` 清理 abandoned 后删分类）
-- **无 schema 变更**；`FocusSession.categoryId` 仍为 `onDelete: Restrict`
+- **阻挡（当时）**：该分类下存在 TimeBlock；或 `running` / `planned` / `completed` / `converted` 的 FocusSession
+- **不阻挡（当时）**：仅有 `abandoned` 的 FocusSession（删除分类时在事务内 `deleteMany` 清理 abandoned 后删分类）
+- **无 schema 变更**；当时 `FocusSession.categoryId` 仍为 `onDelete: Restrict`
+
+**已由 Phase 62.4 取代：** 删除资格只看 TimeBlock；所有 FocusSession（含 abandoned）保留，`categoryId` SetNull。不再 `deleteMany` abandoned。
 
 ### 22.3 新增/修改
 
 | 文件 | 说明 |
 |------|------|
-| `src/lib/focus-session-status.ts` | `isFocusSessionRunning`、`blocksCategoryDeletionFocusStatus` 等 |
+| `src/lib/focus-session-status.ts` | `isFocusSessionRunning` 等（`blocksCategoryDeletionFocusStatus` 已在 62.4 删除） |
 | `src/components/focus-history.tsx` | 列表常显、banner、running 操作 |
 | `src/components/focus-timer.tsx` | `orphanRunningPomodoro` 恢复放弃 |
 | `src/lib/actions/categories.ts` | 分步校验 + 事务删除 abandoned |
@@ -3425,4 +3445,173 @@ count 指标的目标值仍存 `Goal.targetMinutes` / `GoalPeriod.targetMinutes`
 ### 后续建议
 
 search / date filter；列表变慢时再考虑 `@@index([categoryId, startTime])`（需明确批准）。
+
+## 62. Phase 62 — Category Deletion Semantics
+
+目标最终是：Category 能否删除只看 TimeBlock；FocusSession 保留且 `categoryId` SetNull。**62.1 审计发现不能直接 nullable**，因为当时 FocusSession 没有 `userId`。
+
+### 62.1 Audit（已完成，无代码）
+
+确认：`FocusSession` 无 `userId`，ownership 完全依赖 `category.userId`；`FocusSegment.categoryId` 也是 Restrict；active complete 写 TimeBlock 需要 Category。**阻塞**，未改 schema。
+
+### 62.2A FocusSession Ownership Independence（已完成）
+
+**目标：** 给 FocusSession 独立、稳定的 user ownership。本阶段 **不** 把 `categoryId` 改成 nullable，**不** 改 Category 删除语义，**不** 改 `FocusSegment.categoryId`。
+
+**Schema：**
+
+| 项 | 62.2A 状态 |
+|----|------------|
+| `FocusSession.userId` | `String` NOT NULL → User，`onDelete: Cascade` |
+| `User.focusSessions` | 反向列表 |
+| `@@index([userId])` | 有 |
+| `FocusSession.categoryId` | **仍 NOT NULL + Restrict** |
+| `FocusSegment.categoryId` | **未改**（仍 NOT NULL + Restrict） |
+| TimeBlock | **未改** |
+
+**Migration：** `20260826181318_add_focus_session_user_id`
+
+1. `ADD COLUMN "userId" TEXT`（可空）
+2. `UPDATE` backfill：`FocusSession.userId = Category.userId`
+3. 若仍有 `userId IS NULL` → `RAISE EXCEPTION`（迁移失败，不留下无主记录）
+4. `SET NOT NULL` + FK + index
+5. **不** 修改现有 `categoryId`
+
+仅应用到 **localhost** Docker PostgreSQL；**未** 触碰 Neon。
+
+**Ownership：** `focusSessionScopeWhere` / `focusSessionsForUser` / `assertFocusSessionOwned` / `activeFocusSessionForUser` / `runningFocusSessionForUser` 以及 pause / resume / complete / abandon / convert 的 `updateMany` claim，一律使用 `userId`。创建路径同时写 `userId` + `categoryId`，并仍 `assertCategoryOwned`。
+
+**未改：** 分类删除逻辑（仍会因 TimeBlock / FocusSession Restrict 与应用层检查被挡住）；Focus complete/convert 产品流程；统计公式。
+
+**验证：** `pnpm test` 520 passed；`pnpm typecheck`；`pnpm lint`
+
+### 62.2B Nullable Focus Category Relations（已完成）
+
+**目标：** 数据库允许 Focus 的 Category relation 为空，应用能安全承受 `categoryId = null` 的历史会话。本阶段 **不** 放开 Category 删除，**不** 做重新选择分类 UX。
+
+**Schema：**
+
+| 项 | 62.2B 状态 |
+|----|------------|
+| `FocusSession.categoryId` | `String?` + `Category?`，`onDelete: SetNull` |
+| `FocusSegment.categoryId` | `String?` + `Category?`，`onDelete: SetNull` |
+| `FocusSession.userId` | **保持** NOT NULL；仍是 ownership 来源 |
+| `TimeBlock.categoryId` | **未改**（required + Restrict） |
+
+**Migration：** `20260826183312_make_focus_category_nullable`
+
+1. DROP 现有 FocusSession / FocusSegment Category FK
+2. `ALTER COLUMN "categoryId" DROP NOT NULL`
+3. ADD 替换 FK：`ON DELETE SET NULL ON UPDATE CASCADE`
+4. **不** `UPDATE` 任何现有 `categoryId` 为 NULL
+5. **不** 改 TimeBlock FK（仍 `ON DELETE RESTRICT`）
+
+仅应用到 **localhost** Docker PostgreSQL；**未** 触碰 Neon。
+
+**Ownership：** 仍走 `FocusSession.userId` / `FocusSegment.userId`。null category 会话仍能被 `focusSessionsForUser` / `activeFocusSessionForUser` / `assertFocusSessionOwned` 找到。新建 FocusSession / Stopwatch **仍必须选 Category**（`validateFocusSessionCreate` 未放开）。
+
+**Null-safe UI：** `category == null` 显示「分类已删除」/ `Category removed`（不是「未分类」）；颜色用中性 muted。active timer / dashboard / history 在 category 缺失时仍渲染。
+
+**TimeBlock 写入 guard：** stopwatch complete 与 convert 在 `categoryId == null` 时 **controlled failure**（`invalid_category`），且发生在任何不可逆状态修改之前。不自动选其他 Category，不把 session 改成半完成。Pomodoro session-only complete **不** 被该 guard 挡住。resume 可为 orphan session 创建 `categoryId = null` 的 Segment。
+
+**未改（当时）：** `src/lib/actions/categories.ts` 删除逻辑仍有 FocusSession 阻挡。**Phase 62.4 已改为只看 TimeBlock。** Goals 公式；Focus 统计公式（null category 进入 totals，breakdown 标为 Category removed）。
+
+**已知限制（当时留给 62.3/62.4，现已完成）：** 62.3 补了 orphan 保存/转换 UX；62.4 放开「有 FocusSession 不能删 Category」。
+
+**验证：** `pnpm test` 535 passed；`pnpm typecheck`；`pnpm lint`
+
+### 62.3 Orphan Focus Reassignment UX（已完成）
+
+**目标：** 当 FocusSession 原 Category 已不存在（`categoryId == null`）且用户要把结果保存/转换成 TimeBlock 时，必须显式选择一个自己仍拥有的现存 Category。该 Category **只** 用于新 TimeBlock；**不** 回填 `FocusSession.categoryId` / `FocusSegment.categoryId`。
+
+**正常会话（`session.categoryId != null`）：** 行为不变。Stopwatch 结束仍走原有完成对话框（标题/状态/完成度），**不** 出现分类选择。Convert 继续用原 Category。恶意传入的 `targetCategoryId` **被忽略**，TimeBlock 仍写入原 Category。
+
+**Orphan 会话：**
+
+| 操作 | 无 target | 有效自有 target |
+|------|-----------|-----------------|
+| Stopwatch complete | `needs_category`；0 TimeBlock；session 不变 | TimeBlock.categoryId = target；FocusSession.categoryId **保持 null** |
+| Convert | `needs_category`；0 TimeBlock | TimeBlock.categoryId = target；FocusSession.categoryId **保持 null**；幂等 claim 仍有效 |
+
+**Resolution：** `resolveTimeBlockCategoryId` + `withOwnedTimeBlockCategory`：
+
+1. session 仍有 category → 始终用它（忽略 target）
+2. orphan + 非空 target → 用 target（随后 `assertCategoryOwned`）
+3. orphan + 无 target → `needs_category`（客户端打开选择器，不是 generic toast）
+4. 他人 / 不存在的 target → `invalid_category`（不泄露是否存在）
+
+**UI：** Stopwatch 在现有完成 Dialog 内嵌选择器（orphan 才显示）。Convert 使用 `FocusCategoryReassignmentDialog`。无可用 Category 时引导前往 `/categories`，**不** 自动创建「未分类」。无 Category 时仍可放弃/取消进行中的会话。
+
+**未改：** Prisma schema / migration。Category 删除已在 **Phase 62.4** 放开 Focus 阻挡。
+
+**验证：** `pnpm test` 550 passed；`pnpm typecheck`；`pnpm lint`
+
+### 62.4 Category Deletion Semantics（已完成）
+
+**最终规则：**
+
+```text
+TimeBlock count > 0  → 禁止删除（应用层 has_time_blocks + DB ON DELETE RESTRICT）
+TimeBlock count = 0  → 允许删除
+
+FocusSession / FocusSegment 的任何 status 都不参与资格判断。
+删除 Category 不删除任何 Focus 行；依赖 62.2B FK SetNull。
+不再 deleteMany abandoned（或任何其他）FocusSession / FocusSegment。
+```
+
+**Server：** `deleteCategoryForUser`（`src/lib/category-delete.ts`）
+
+1. `requireUser` / `assertCategoryOwned`
+2. scoped `timeBlock.count`（`categoryId` + `category.userId`）
+3. count > 0 → `has_time_blocks`
+4. `category.deleteMany({ id, userId })`
+5. FK / 其他 DB 错误 → `delete_failed`（不泄露 Prisma）
+6. 成功 redirect `/categories?success=deleted`
+
+**UI：** `/categories` 仅当 `timeBlockCount === 0` 启用删除。Focus count 仍显示为中性 badge。可删且 `focusSessionCount > 0` 时提示「删除分类后，这些专注记录仍会保留。」确认 Dialog 说明历史会显示为「分类已删除」。有 TimeBlock 时提示先删除或移动（Phase 61 列表 / 批量移动 / 批量删除仍是清空方式）。
+
+**Active Focus：** 删除正在使用的 Category 不 pause / abandon / complete 该会话。timer 继续；`categoryId` 由 DB SetNull；complete/convert 走 62.3 重选分类。
+
+**Revalidate：** `/categories` `/focus` `/dashboard` `/goals` `/routines` `/calendar` `/time-blocks` `/review/day` `/review/week` `/assistant`
+
+**已移除：** `FOCUS_SESSION_CATEGORY_BLOCKING_STATUSES`、`blocksCategoryDeletionFocusStatus`；error `has-active-focus` / `has-completed-focus`；i18n `cannotDeleteActiveFocus` / `cannotDeleteCompletedFocus` / `hasActiveFocusDetail` / `hasCompletedFocusDetail` / `hasTimeBlocksDetail` / `hasRecords`。
+
+**未改：** Prisma schema / TimeBlock Restrict / 无 migration。
+
+**验证：** `pnpm test` 566 passed；`pnpm typecheck`；`pnpm lint`
+
+### 62.5 Regression, Production Readiness & Closeout（已完成）
+
+**结论：Phase 62 CLOSED（代码与本地 DB）。生产 Neon migrate / git push 尚未执行，等确认。**
+
+**最终规则：** Category 删除资格 **只看 TimeBlock**。`count > 0` → 禁止；`count = 0` → 允许。FocusSession / FocusSegment / Routine / Goal 不阻挡。Focus 行保留，`categoryId` SetNull。abandoned **不再**随 Category 物理删除。
+
+**Schema（已在 localhost 只读 SQL 核实）：**
+
+| Model | user ownership | categoryId | onDelete Category |
+|-------|----------------|------------|-------------------|
+| TimeBlock | via `category.userId` | required | **Restrict** |
+| FocusSession | `userId` NOT NULL | nullable | **SetNull** |
+| FocusSegment | `userId` NOT NULL | nullable | **SetNull** |
+| Routine / Goal | `userId` | nullable | SetNull（既有） |
+
+**Migrations（顺序不可交换）：**
+
+1. `20260826181318_add_focus_session_user_id` — ADD `userId` 可空 → backfill from Category.userId → 禁止残留 NULL → SET NOT NULL → index → FK User CASCADE。不 DROP/DELETE/TRUNCATE FocusSession，不改 `categoryId`。
+2. `20260826183312_make_focus_category_nullable` — FocusSession/FocusSegment `categoryId` DROP NOT NULL；FK Restrict → SetNull。不 `UPDATE ... SET categoryId = NULL`。不改 TimeBlock。
+
+**生产顺序：DB first，然后 code。** 新代码查询 `FocusSession.userId`；先 deploy 后 migrate → P2022。先 migrate 后旧 Vercel 代码：读路径大多可用，但 **创建 FocusSession 会因缺少 userId 列写入而失败**。窗口必须短；失败时优先让新代码上线，不要单独把 Vercel 回滚到旧代码。
+
+**生产命令：** `pnpm exec prisma migrate deploy`（禁止 `migrate dev` / `db push` / `migrate reset`）。项目只有 `DATABASE_URL`（无 `DIRECT_URL`）。Vercel 用 Neon Pooled；本机 `migrate deploy` 应临时 export Neon **Direct** URL + `?schema=app`。
+
+**本地：** `prisma migrate status` → Database schema is up to date；`FocusSession.userId IS NULL` = 0。
+
+**验证：** `pnpm test` 566；`typecheck`；`lint`；`pnpm build` 通过。
+
+**未执行：** Neon migrate、git commit/push、Vercel deploy。两条新 migration 目前仍是 **untracked**，上线前必须纳入 Git。
+
+**下一步：** 按 §62.5 checklist 执行生产（需你确认）。不要自动开始。
+
+
+
 

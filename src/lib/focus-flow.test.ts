@@ -37,6 +37,12 @@ describe("Phase 5 focus flow rules", () => {
     expect(canCompleteFocusSession("abandoned")).toBe(false);
   });
 
+  it("allows session-only complete and abandon without a category", () => {
+    expect(canCompleteFocusSession("running")).toBe(true);
+    expect(canAbandonFocusSession("running")).toBe(true);
+    expect(canAbandonFocusSession("paused")).toBe(true);
+  });
+
   it("does not allow converting twice (converted status or flag)", () => {
     expect(
       canConvertFocusSession({

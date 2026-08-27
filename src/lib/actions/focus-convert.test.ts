@@ -65,15 +65,21 @@ describe("convertFocusSessionInTransaction", () => {
         id: "focus_1",
         convertedToTimeBlock: false,
         status: "completed",
-        category: { userId: "user_1" },
+        userId: "user_1",
       },
       data: {
         status: "converted",
         convertedToTimeBlock: true,
       },
     });
+    expect(tx.focusUpdateMany.mock.calls[0][0].where).not.toHaveProperty(
+      "category",
+    );
     expect(tx.timeBlockCreate).toHaveBeenCalledWith({
-      data: expect.objectContaining({ source: "pomodoro" }),
+      data: expect.objectContaining({
+        source: "pomodoro",
+        categoryId: "cat_study",
+      }),
     });
     expect(tx.timeBlockCreate).toHaveBeenCalledTimes(1);
     expect(tx.focusUpdate).toHaveBeenCalledWith({
@@ -128,5 +134,105 @@ describe("convertFocusSessionInTransaction", () => {
     ).rejects.toThrow("db error");
 
     expect(tx.focusUpdate).not.toHaveBeenCalled();
+  });
+
+  it("does not keep a converted claim when linking the TimeBlock fails", async () => {
+    const tx = createMockTx();
+    tx.focusUpdate.mockRejectedValue(new Error("link failed"));
+
+    await expect(
+      convertFocusSessionInTransaction(session, "Focus", range, "user_1", tx),
+    ).rejects.toThrow("link failed");
+
+    expect(tx.timeBlockCreate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("convertFocusSessionInTransaction null category", () => {
+  it("fails before claiming or creating a TimeBlock", async () => {
+    const tx = createMockTx();
+
+    await expect(
+      convertFocusSessionInTransaction(
+        { id: "focus_1", note: null, categoryId: null },
+        "Focus",
+        range,
+        "user_1",
+        tx,
+      ),
+    ).rejects.toMatchObject({ code: "needs_category" });
+
+    expect(tx.focusUpdateMany).not.toHaveBeenCalled();
+    expect(tx.timeBlockCreate).not.toHaveBeenCalled();
+    expect(tx.focusUpdate).not.toHaveBeenCalled();
+  });
+
+  it("creates a TimeBlock on the target category and does not write session.categoryId", async () => {
+    const tx = createMockTx();
+
+    await convertFocusSessionInTransaction(
+      { id: "focus_1", note: null, categoryId: null },
+      "Focus",
+      range,
+      "user_1",
+      tx,
+      "cat_work",
+    );
+
+    expect(tx.timeBlockCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        categoryId: "cat_work",
+        source: "pomodoro",
+      }),
+    });
+    expect(tx.focusUpdateMany.mock.calls[0][0].data).not.toHaveProperty(
+      "categoryId",
+    );
+    expect(tx.focusUpdate.mock.calls[0][0].data).not.toHaveProperty("categoryId");
+  });
+
+  it("ignores a forged target when the session still has a category", async () => {
+    const tx = createMockTx();
+
+    await convertFocusSessionInTransaction(
+      session,
+      "Focus",
+      range,
+      "user_1",
+      tx,
+      "cat_other",
+    );
+
+    expect(tx.timeBlockCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ categoryId: "cat_study" }),
+    });
+  });
+
+  it("second convert of an orphan session still fails without a second TimeBlock", async () => {
+    const tx = createMockTx();
+    tx.focusUpdateMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+
+    await convertFocusSessionInTransaction(
+      { id: "focus_1", note: null, categoryId: null },
+      "Focus",
+      range,
+      "user_1",
+      tx,
+      "cat_work",
+    );
+    await expect(
+      convertFocusSessionInTransaction(
+        { id: "focus_1", note: null, categoryId: null },
+        "Focus",
+        range,
+        "user_1",
+        tx,
+        "cat_work",
+      ),
+    ).rejects.toMatchObject({ code: "already_converted" });
+
+    expect(tx.timeBlockCreate).toHaveBeenCalledTimes(1);
   });
 });

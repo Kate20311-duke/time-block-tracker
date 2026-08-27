@@ -267,6 +267,7 @@ async function main(): Promise<void> {
         data: {
           title: `${DEMO_SEED_MARKER} 专注`,
           note: `${DEMO_SEED_MARKER} 演示 FocusSession`,
+          userId: user.id,
           categoryId: category.id,
           mode: spec.mode,
           status: spec.status,

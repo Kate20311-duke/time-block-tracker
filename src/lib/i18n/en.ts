@@ -241,6 +241,22 @@ export const en: Dictionary = {
     historyNotConverted: "Not converted",
     historyDuration: "Duration",
     historyCategory: "Category",
+    categoryRemoved: "Category removed",
+    categoryRemovedSaveTitle: "Original category was removed",
+    categoryRemovedSaveDescription:
+      "Choose a category for the new time block. The focus session will still show “Category removed”.",
+    categoryRemovedConvertTitle: "Original category was removed",
+    categoryRemovedConvertDescription:
+      "Choose a category for the new time block. The focus session will still show “Category removed”.",
+    selectSaveCategory: "Save to category",
+    finishAndSave: "Finish and save",
+    convertWithCategory: "Convert to time block",
+    noAvailableCategories: "You have no categories yet.",
+    createCategoryFirst:
+      "Create a category first before saving this focus session as a time block.",
+    goToCategories: "Go to categories",
+    saving: "Saving…",
+    converting: "Converting…",
     sessionStatus: {
       planned: "Planned",
       running: "Running",
@@ -265,6 +281,7 @@ export const en: Dictionary = {
         "A focus session is already running. Finish the current session first.",
       pauseLimitExceeded: "Pause limit exceeded — this focus session failed",
       invalidCompletion: "Completion must be between 0 and 100",
+      needsCategory: "Choose a category before saving.",
       generic: "Something went wrong. Please try again.",
     },
   },
@@ -332,16 +349,14 @@ export const en: Dictionary = {
     timeBlockCount: "{count} time blocks",
     timeBlockCountWithDuration: "{count} time blocks · {duration}",
     focusSessionCount: "{count} focus sessions",
-    cannotDelete:
-      "This category still has {count} time blocks and cannot be deleted",
-    cannotDeleteRecords:
-      "This category still has related time blocks or focus sessions and cannot be deleted",
-    cannotDeleteTimeBlocks: "{count} time block(s) remain",
-    cannotDeleteActiveFocus: "{count} active focus session(s) remain",
-    cannotDeleteCompletedFocus:
-      "{count} completed or converted focus session(s) remain",
+    cannotDeleteTimeBlocks:
+      "Move or delete this category's time blocks first.",
     confirmDelete:
       'Delete category "{name}"? This action cannot be undone.',
+    confirmDeleteWithFocusHistory:
+      'Delete category "{name}"? It has {count} focus session(s). They will be kept and shown as “Category removed”. This does not delete focus history.',
+    focusHistoryPreservedOnDelete:
+      "Focus history will be kept after you delete this category.",
     success: {
       created: "Category created",
       updated: "Category updated",
@@ -349,15 +364,7 @@ export const en: Dictionary = {
     },
     errors: {
       hasTimeBlocks:
-        "Cannot delete: this category still has related time blocks",
-      hasTimeBlocksDetail:
-        "Cannot delete: {timeBlocks} time block(s) and {blockingFocus} non-abandoned focus session(s) ({activeFocus} active).",
-      hasActiveFocusDetail:
-        "Cannot delete: {activeFocus} running or planned focus session(s). End or abandon them first.",
-      hasCompletedFocusDetail:
-        "Cannot delete: {blockingFocus} completed or converted focus session(s) remain.",
-      hasRecords:
-        "Cannot delete: this category still has related time blocks or focus sessions",
+        "Cannot delete: move or delete this category's time blocks first.",
       deleteFailed: "Delete failed. Please try again later",
       emptyName: "Category name is required",
     },

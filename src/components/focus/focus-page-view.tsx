@@ -102,6 +102,7 @@ export function FocusPageView({
           title={runningStopwatch.title}
           categoryName={runningStopwatch.category.name}
           categoryColor={runningStopwatch.category.color}
+          categoryRemoved={runningStopwatch.category.removed}
           startTimeIso={runningStopwatch.startTime}
           labels={labels}
         />
@@ -113,6 +114,7 @@ export function FocusPageView({
           title={orphanRunningPomodoro.title}
           categoryName={orphanRunningPomodoro.categoryName}
           categoryColor={orphanRunningPomodoro.categoryColor}
+          categoryRemoved={orphanRunningPomodoro.categoryRemoved}
           plannedDurationMinutes={orphanRunningPomodoro.plannedDurationMinutes}
           labels={labels}
         />
@@ -149,6 +151,7 @@ export function FocusPageView({
                   anotherSessionRunning || runningStopwatch !== null
                 }
                 orphanRunningPomodoro={orphanRunningPomodoro}
+                cancelLabel={cancelLabel}
               />
             </TabsContent>
           </Tabs>
@@ -161,6 +164,7 @@ export function FocusPageView({
             locale={locale}
             cancelLabel={cancelLabel}
             confirmDeleteTitle={confirmDeleteTitle}
+            categories={categories}
           />
         </div>
       </div>

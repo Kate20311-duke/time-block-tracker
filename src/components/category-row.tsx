@@ -63,6 +63,7 @@ type Labels = {
   timeBlockCountFormatted: string;
   focusSessionCountFormatted: string;
   cannotDeleteFormatted: string | null;
+  focusHistoryPreservedHint: string | null;
   confirmDelete: string;
   confirmDeleteTitle: string;
   edit: string;
@@ -446,6 +447,10 @@ export function CategoryRow({ category, otherCategories, labels }: Props) {
                   {labels.cannotDeleteFormatted}
                 </p>
               </>
+            ) : labels.focusHistoryPreservedHint ? (
+              <p className="text-sm text-muted-foreground">
+                {labels.focusHistoryPreservedHint}
+              </p>
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">

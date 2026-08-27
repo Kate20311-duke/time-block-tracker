@@ -10,12 +10,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { Dictionary } from "@/lib/i18n/types";
+import { focusCategorySwatchProps } from "@/lib/focus-category-display";
 
 type Props = {
   mode: "stopwatch" | "pomodoro";
   title: string | null;
   categoryName: string;
   categoryColor: string;
+  categoryRemoved?: boolean;
   startTimeIso?: string;
   plannedDurationMinutes?: number;
   labels: Pick<
@@ -33,6 +35,7 @@ export function FocusRunningBanner({
   title,
   categoryName,
   categoryColor,
+  categoryRemoved = false,
   startTimeIso,
   plannedDurationMinutes,
   labels,
@@ -42,6 +45,7 @@ export function FocusRunningBanner({
     mode === "stopwatch"
       ? labels.runningBannerStopwatch
       : labels.runningBannerPomodoro;
+  const swatch = focusCategorySwatchProps(categoryRemoved, categoryColor);
 
   return (
     <Card className="border-primary/30 bg-primary/5">
@@ -56,8 +60,8 @@ export function FocusRunningBanner({
           </CardTitle>
           <Badge variant="outline" className="gap-1.5">
             <span
-              className="size-2 rounded-full"
-              style={{ backgroundColor: categoryColor }}
+              className={`size-2 rounded-full ${swatch.className}`}
+              style={swatch.style}
             />
             {categoryName}
           </Badge>

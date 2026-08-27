@@ -93,4 +93,32 @@ describe("summarizeFocusSessions", () => {
     );
     expect(inRange).toHaveLength(1);
   });
+
+  it("keeps null-category sessions in totals and labels them as removed", () => {
+    const start = new Date("2026-05-21T10:00:00");
+    const end = new Date("2026-05-21T10:25:00");
+    const summary = summarizeFocusSessions(
+      [
+        {
+          ...base,
+          categoryId: null,
+          startTime: start,
+          endTime: end,
+          status: "completed",
+        },
+      ],
+      categories,
+    );
+
+    expect(summary.totalFocusMinutes).toBe(25);
+    expect(summary.completedCount).toBe(1);
+    expect(summary.categoryBreakdown).toEqual([
+      expect.objectContaining({
+        categoryId: "__category_removed__",
+        categoryName: null,
+        totalMinutes: 25,
+        sessionCount: 1,
+      }),
+    ]);
+  });
 });

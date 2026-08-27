@@ -16,6 +16,7 @@ import {
   parsePlannedFocusMinutes,
 } from "@/lib/focus";
 import { Button } from "@/components/ui/button";
+import { FocusCategoryReassignmentDialog } from "@/components/focus/focus-category-reassignment-dialog";
 import {
   Card,
   CardContent,
@@ -55,6 +56,7 @@ export type OrphanRunningPomodoro = {
   title: string | null;
   categoryName: string;
   categoryColor: string;
+  categoryRemoved?: boolean;
   plannedDurationMinutes: number;
 };
 
@@ -65,6 +67,7 @@ type Props = {
   sessionBlocked?: boolean;
   /** Server-side running Pomodoro after refresh (no local sessionId). */
   orphanRunningPomodoro?: OrphanRunningPomodoro | null;
+  cancelLabel: string;
 };
 
 function FocusAlert({
@@ -96,8 +99,20 @@ function resolveFocusError(
   labels: Dictionary["focus"],
 ): string {
   if (!error) return labels.errors.generic;
-  const key = error as keyof Dictionary["focus"]["errors"];
-  return labels.errors[key] ?? labels.errors.generic;
+  const map: Partial<Record<FocusSessionActionError, string>> = {
+    invalid_category: labels.errors.invalidCategory,
+    invalid_status: labels.errors.invalidStatus,
+    invalid_state: labels.errors.invalidState,
+    invalid_range: labels.errors.invalidRange,
+    not_found: labels.errors.notFound,
+    update_failed: labels.errors.updateFailed,
+    convert_failed: labels.errors.convertFailed,
+    already_converted: labels.errors.alreadyConverted,
+    session_already_running: labels.errors.sessionAlreadyRunning,
+    pause_limit_exceeded: labels.errors.pauseLimitExceeded,
+    needs_category: labels.errors.needsCategory,
+  };
+  return map[error] ?? labels.errors.generic;
 }
 
 function labelWhenBusy(
@@ -115,6 +130,7 @@ export function FocusTimer({
   labels,
   sessionBlocked = false,
   orphanRunningPomodoro = null,
+  cancelLabel,
 }: Props) {
   const router = useRouter();
   const [phase, setPhase] = useState<TimerPhase>("setup");
@@ -122,6 +138,7 @@ export function FocusTimer({
   const [pendingConvertSessionId, setPendingConvertSessionId] = useState<
     string | null
   >(null);
+  const [reassignOpen, setReassignOpen] = useState(false);
   const [categoryId, setCategoryId] = useState("");
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
@@ -139,6 +156,11 @@ export function FocusTimer({
   const configLocked = phase !== "setup";
   const hasActiveSession = sessionId !== null;
   const hasCategories = categories.length > 0;
+  const canOperateWithoutCategories =
+    hasActiveSession ||
+    Boolean(orphanRunningPomodoro) ||
+    Boolean(pendingConvertSessionId) ||
+    reassignOpen;
 
   const plannedMinutes =
     durationMode === "custom"
@@ -286,7 +308,7 @@ export function FocusTimer({
     router.refresh();
   };
 
-  const handleConvert = async () => {
+  const handleConvert = async (targetCategoryId?: string) => {
     if (!pendingConvertSessionId || busy) return;
 
     setBusy(true);
@@ -296,16 +318,22 @@ export function FocusTimer({
     const result = await convertFocusSessionToTimeBlock({
       id: pendingConvertSessionId,
       defaultTitle: labels.defaultTimeBlockTitle,
+      targetCategoryId,
     });
 
     setBusy(false);
     setBusyAction(null);
 
     if (!result.ok) {
+      if (result.error === "needs_category") {
+        setReassignOpen(true);
+        return;
+      }
       setErrorMessage(resolveFocusError(result.error, labels));
       return;
     }
 
+    setReassignOpen(false);
     setPendingConvertSessionId(null);
     setStatusMessage(labels.successConverted);
     router.refresh();
@@ -345,7 +373,7 @@ export function FocusTimer({
 
   const timeIsUp = phase !== "setup" && remainingSeconds === 0;
 
-  if (!hasCategories) {
+  if (!hasCategories && !canOperateWithoutCategories) {
     return (
       <Card className="border-amber-200 bg-amber-50/50">
         <CardHeader>
@@ -469,7 +497,13 @@ export function FocusTimer({
         <FocusAlert variant="info">
           <p>{labels.convertPrompt}</p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <Button type="button" onClick={handleConvert} disabled={busy}>
+            <Button
+              type="button"
+              onClick={() => {
+                void handleConvert();
+              }}
+              disabled={busy}
+            >
               {labelWhenBusy(
                 labels.convertConfirm,
                 labels.working,
@@ -493,6 +527,34 @@ export function FocusTimer({
       {errorMessage ? (
         <FocusAlert variant="error">{errorMessage}</FocusAlert>
       ) : null}
+
+      <FocusCategoryReassignmentDialog
+        open={reassignOpen}
+        onOpenChange={setReassignOpen}
+        mode="convert"
+        categories={categories}
+        pending={busy && busyAction === "convert"}
+        labels={{
+          categoryRemovedSaveTitle: labels.categoryRemovedSaveTitle,
+          categoryRemovedSaveDescription: labels.categoryRemovedSaveDescription,
+          categoryRemovedConvertTitle: labels.categoryRemovedConvertTitle,
+          categoryRemovedConvertDescription:
+            labels.categoryRemovedConvertDescription,
+          selectSaveCategory: labels.selectSaveCategory,
+          selectCategory: labels.selectCategory,
+          finishAndSave: labels.finishAndSave,
+          convertWithCategory: labels.convertWithCategory,
+          noAvailableCategories: labels.noAvailableCategories,
+          createCategoryFirst: labels.createCategoryFirst,
+          goToCategories: labels.goToCategories,
+          saving: labels.saving,
+          converting: labels.converting,
+          cancel: cancelLabel,
+        }}
+        onConfirm={(targetCategoryId) => {
+          void handleConvert(targetCategoryId);
+        }}
+      />
 
       <Card>
         <CardHeader>
@@ -604,7 +666,8 @@ export function FocusTimer({
             configLocked ||
             plannedMinutes <= 0 ||
             sessionBlocked ||
-            orphanRunningPomodoro !== null
+            orphanRunningPomodoro !== null ||
+            !hasCategories
           }
         >
           {labelWhenBusy(labels.start, labels.working, busy, "start", busyAction)}

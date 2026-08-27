@@ -64,7 +64,7 @@ export type GoalFocusSessionLike = {
   startTime: Date;
   endTime: Date | null;
   status: string;
-  categoryId: string;
+  categoryId: string | null;
   actualDurationMinutes: number | null;
   plannedDurationMinutes: number;
 };
@@ -73,7 +73,7 @@ export type GoalFocusSegmentLike = {
   focusSessionId: string;
   startTime: Date;
   durationMinutes: number | null;
-  categoryId: string;
+  categoryId: string | null;
 };
 
 export type GoalPeriodActualContext = {

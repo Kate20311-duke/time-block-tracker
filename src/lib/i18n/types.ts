@@ -195,6 +195,19 @@ export type Dictionary = {
     historyNotConverted: string;
     historyDuration: string;
     historyCategory: string;
+    categoryRemoved: string;
+    categoryRemovedSaveTitle: string;
+    categoryRemovedSaveDescription: string;
+    categoryRemovedConvertTitle: string;
+    categoryRemovedConvertDescription: string;
+    selectSaveCategory: string;
+    finishAndSave: string;
+    convertWithCategory: string;
+    noAvailableCategories: string;
+    createCategoryFirst: string;
+    goToCategories: string;
+    saving: string;
+    converting: string;
     sessionStatus: {
       planned: string;
       running: string;
@@ -218,6 +231,7 @@ export type Dictionary = {
       sessionAlreadyRunning: string;
       pauseLimitExceeded: string;
       invalidCompletion: string;
+      needsCategory: string;
       generic: string;
     };
   };
@@ -280,22 +294,16 @@ export type Dictionary = {
     timeBlockCount: string;
     timeBlockCountWithDuration: string;
     focusSessionCount: string;
-    cannotDelete: string;
-    cannotDeleteRecords: string;
+    cannotDeleteTimeBlocks: string;
     confirmDelete: string;
+    confirmDeleteWithFocusHistory: string;
+    focusHistoryPreservedOnDelete: string;
     success: { created: string; updated: string; deleted: string };
     errors: {
       hasTimeBlocks: string;
-      hasTimeBlocksDetail: string;
-      hasActiveFocusDetail: string;
-      hasCompletedFocusDetail: string;
-      hasRecords: string;
       deleteFailed: string;
       emptyName: string;
     };
-    cannotDeleteTimeBlocks: string;
-    cannotDeleteActiveFocus: string;
-    cannotDeleteCompletedFocus: string;
     timeBlockList: {
       show: string;
       hide: string;

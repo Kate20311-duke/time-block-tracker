@@ -180,7 +180,15 @@ describe("startStopwatchWithSegmentInTransaction", () => {
     );
 
     expect(result.id).toBe("focus_new");
-    expect(focusSessionCreate).toHaveBeenCalled();
+    expect(focusSessionCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: "user_1",
+        categoryId: "cat_1",
+        title: "Study",
+        mode: "stopwatch",
+        status: "running",
+      }),
+    });
     expect(focusSegmentCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         focusSessionId: "focus_new",
@@ -214,6 +222,11 @@ describe("pauseStopwatchSegmentsInTransaction", () => {
     expect(result).toEqual({ ok: true, warning: "pause_remaining_one" });
     expect(focusSessionUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({
+          id: "focus_1",
+          userId: "user_1",
+          status: "running",
+        }),
         data: expect.objectContaining({ pauseCount: 1, status: "paused" }),
       }),
     );
@@ -290,12 +303,50 @@ describe("resumeStopwatchSegmentsInTransaction", () => {
         endTime: null,
       }),
     });
+    expect(tx.focusSession.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: "focus_1",
+          userId: "user_1",
+          status: "paused",
+        }),
+      }),
+    );
+  });
+
+  it("creates a new segment with null categoryId for an orphan paused session", async () => {
+    const { tx, focusSegmentCreate } = createSegmentTx();
+    const now = new Date("2026-06-01T13:35:00");
+
+    await resumeStopwatchSegmentsInTransaction(
+      {
+        id: "focus_orphan",
+        categoryId: null,
+        userId: "user_1",
+        startTime: new Date("2026-06-01T13:00:00"),
+        status: "paused",
+        pausedAt: new Date("2026-06-01T13:05:00"),
+        pausedTotalSeconds: 0,
+      },
+      now,
+      "user_1",
+      tx,
+    );
+
+    expect(focusSegmentCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        focusSessionId: "focus_orphan",
+        categoryId: null,
+        startTime: now,
+        endTime: null,
+      }),
+    });
   });
 });
 
 describe("completeStopwatchWithSegmentsInTransaction", () => {
   it("creates one TimeBlock per segment with wall-clock times", async () => {
-    const { tx, timeBlockCreate } = createSegmentTx({
+    const { tx, timeBlockCreate, focusSessionUpdateMany } = createSegmentTx({
       segments: [
         segment({
           id: "seg_1",
@@ -328,6 +379,14 @@ describe("completeStopwatchWithSegmentsInTransaction", () => {
     expect(result.timeBlockIds).toHaveLength(2);
     expect(result.actualDurationMinutes).toBe(60);
     expect(timeBlockCreate).toHaveBeenCalledTimes(2);
+    expect(focusSessionUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: "focus_1",
+          userId: "user_1",
+        }),
+      }),
+    );
     expect(timeBlockCreate).toHaveBeenNthCalledWith(1, {
       data: expect.objectContaining({
         startTime: new Date("2026-06-01T13:00:00"),
@@ -392,6 +451,35 @@ describe("completeStopwatchWithSegmentsInTransaction", () => {
       }),
     });
   });
+
+  it("refuses null category before closing segments or creating TimeBlocks", async () => {
+    const { tx, timeBlockCreate, focusSessionUpdateMany } = createSegmentTx({
+      openSegment: segment({
+        id: "seg_open",
+        startTime: new Date("2026-06-01T13:00:00"),
+        endTime: null as unknown as Date,
+      }),
+    });
+
+    await expect(
+      completeStopwatchWithSegmentsInTransaction(
+        {
+          id: "focus_1",
+          note: null,
+          categoryId: null,
+          status: "running",
+        },
+        completeInput,
+        new Date("2026-06-01T13:10:00"),
+        "user_1",
+        tx,
+      ),
+    ).rejects.toMatchObject({ code: "needs_category" });
+
+    expect(tx.focusSegment.updateMany).not.toHaveBeenCalled();
+    expect(timeBlockCreate).not.toHaveBeenCalled();
+    expect(focusSessionUpdateMany).not.toHaveBeenCalled();
+  });
 });
 
 describe("completeStopwatchLegacyInTransaction", () => {
@@ -442,6 +530,31 @@ describe("completeStopwatchLegacyInTransaction", () => {
       ),
     ).rejects.toBeInstanceOf(FocusConvertTransactionError);
   });
+
+  it("fails before claiming when categoryId is null", async () => {
+    const { tx, timeBlockCreate, focusSessionUpdateMany } = createSegmentTx();
+
+    await expect(
+      completeStopwatchLegacyInTransaction(
+        {
+          id: "focus_legacy",
+          note: null,
+          categoryId: null,
+          status: "running",
+          startTime: new Date("2026-06-01T10:00:00"),
+          pausedAt: null,
+          pausedTotalSeconds: 0,
+        },
+        completeInput,
+        new Date("2026-06-01T10:30:00"),
+        "user_1",
+        tx,
+      ),
+    ).rejects.toMatchObject({ code: "needs_category" });
+
+    expect(focusSessionUpdateMany).not.toHaveBeenCalled();
+    expect(timeBlockCreate).not.toHaveBeenCalled();
+  });
 });
 
 describe("cancelStopwatchSegmentsInTransaction", () => {
@@ -470,6 +583,10 @@ describe("cancelStopwatchSegmentsInTransaction", () => {
     expect(timeBlockCreate).not.toHaveBeenCalled();
     expect(focusSessionUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: expect.objectContaining({
+          id: "focus_1",
+          userId: "user_1",
+        }),
         data: expect.objectContaining({ status: "abandoned" }),
       }),
     );

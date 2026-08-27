@@ -7,6 +7,7 @@ import type { OrphanRunningPomodoro } from "@/components/focus-timer";
 import type { RunningStopwatchSession } from "@/components/stopwatch-timer";
 import { getDictionary } from "@/lib/i18n";
 import { categoriesForUser, focusSessionsForUser } from "@/lib/db/scoped";
+import { focusCategoryDisplay } from "@/lib/focus-category-display";
 import { getLocale } from "@/lib/i18n/server";
 import { requireUser } from "@/lib/session";
 
@@ -38,6 +39,7 @@ export default async function FocusPage() {
   ]);
 
   const activeSession = activeSessions[0] ?? null;
+  const removedLabel = t.focus.categoryRemoved;
 
   const runningStopwatch: RunningStopwatchSession | null =
     activeSession?.mode === "stopwatch" &&
@@ -51,24 +53,25 @@ export default async function FocusPage() {
           pausedAt: activeSession.pausedAt?.toISOString() ?? null,
           pausedTotalSeconds: activeSession.pausedTotalSeconds,
           pauseCount: activeSession.pauseCount,
-          category: {
-            id: activeSession.category.id,
-            name: activeSession.category.name,
-            color: activeSession.category.color,
-          },
+          category: focusCategoryDisplay(activeSession.category, removedLabel),
         }
       : null;
 
   const anotherSessionRunning =
     activeSession !== null && runningStopwatch === null;
 
+  const orphanPomodoroCategory = activeSession
+    ? focusCategoryDisplay(activeSession.category, removedLabel)
+    : null;
+
   const orphanRunningPomodoro: OrphanRunningPomodoro | null =
     activeSession?.mode === "pomodoro" && activeSession.status === "running"
       ? {
           id: activeSession.id,
           title: activeSession.title,
-          categoryName: activeSession.category.name,
-          categoryColor: activeSession.category.color,
+          categoryName: orphanPomodoroCategory?.name ?? removedLabel,
+          categoryColor: orphanPomodoroCategory?.color ?? "",
+          categoryRemoved: orphanPomodoroCategory?.removed ?? true,
           plannedDurationMinutes: activeSession.plannedDurationMinutes,
         }
       : null;
@@ -84,10 +87,7 @@ export default async function FocusPage() {
     timeBlockId: session.timeBlockId,
     startTime: session.startTime.toISOString(),
     endTime: session.endTime?.toISOString() ?? null,
-    category: {
-      name: session.category.name,
-      color: session.category.color,
-    },
+    category: focusCategoryDisplay(session.category, removedLabel),
   }));
 
   return (

@@ -7,7 +7,10 @@ import {
 } from "@/lib/focus-session-elapsed";
 import { durationMinutes } from "@/lib/time";
 import { validateFocusSessionTimeRange } from "@/lib/validation";
-import { FocusConvertTransactionError } from "@/lib/actions/focus-shared";
+import {
+  FocusConvertTransactionError,
+  requireFocusCategoryIdForTimeBlock,
+} from "@/lib/actions/focus-shared";
 import type { StopwatchCompleteInput } from "@/lib/actions/focus-shared";
 
 export type PauseStopwatchWarning = "pause_remaining_one" | "pause_final";
@@ -16,7 +19,7 @@ export type FocusSegmentRow = {
   id: string;
   focusSessionId: string;
   userId: string;
-  categoryId: string;
+  categoryId: string | null;
   startTime: Date;
   endTime: Date | null;
   durationMinutes: number | null;
@@ -28,7 +31,7 @@ export type FocusSegmentTransactionClient = {
       data: {
         focusSessionId: string;
         userId: string;
-        categoryId: string;
+        categoryId: string | null;
         startTime: Date;
         endTime?: Date | null;
         durationMinutes?: number | null;
@@ -124,7 +127,7 @@ export async function createFocusSegment(
   data: {
     focusSessionId: string;
     userId: string;
-    categoryId: string;
+    categoryId: string | null;
     startTime: Date;
   },
 ): Promise<{ id: string }> {
@@ -163,7 +166,7 @@ export async function pauseStopwatchSegmentsInTransaction(
         id: session.id,
         status: "running",
         mode: "stopwatch",
-        category: { userId },
+        userId,
       },
       data: {
         status: "failed",
@@ -183,7 +186,7 @@ export async function pauseStopwatchSegmentsInTransaction(
       status: "running",
       mode: "stopwatch",
       pauseCount: session.pauseCount,
-      category: { userId },
+      userId,
     },
     data: {
       status: "paused",
@@ -205,7 +208,7 @@ export async function pauseStopwatchSegmentsInTransaction(
 export async function resumeStopwatchSegmentsInTransaction(
   session: FocusSessionPauseFields & {
     id: string;
-    categoryId: string;
+    categoryId: string | null;
     userId: string;
   },
   now: Date,
@@ -225,7 +228,7 @@ export async function resumeStopwatchSegmentsInTransaction(
       id: session.id,
       status: "paused",
       mode: "stopwatch",
-      category: { userId },
+      userId,
     },
     data: {
       status: "running",
@@ -283,7 +286,7 @@ export async function completeStopwatchWithSegmentsInTransaction(
   session: {
     id: string;
     note: string | null;
-    categoryId: string;
+    categoryId: string | null;
     status: string;
   },
   completeInput: StopwatchCompleteInput,
@@ -295,6 +298,8 @@ export async function completeStopwatchWithSegmentsInTransaction(
   if (session.status === "failed" || session.status === "abandoned") {
     throw new FocusConvertTransactionError("invalid_state");
   }
+
+  const categoryId = requireFocusCategoryIdForTimeBlock(session.categoryId);
 
   if (session.status === "running") {
     await closeOpenFocusSegmentWithDuration(tx, session.id, wallClockEndTime);
@@ -341,7 +346,7 @@ export async function completeStopwatchWithSegmentsInTransaction(
           totalSegments,
           options?.segmentNoteSuffix,
         ),
-        categoryId: session.categoryId,
+        categoryId,
         startTime: segment.startTime,
         endTime: segment.endTime,
         status: completeInput.status,
@@ -363,7 +368,7 @@ export async function completeStopwatchWithSegmentsInTransaction(
       convertedToTimeBlock: false,
       status: { in: ["running", "paused"] },
       mode: "stopwatch",
-      category: { userId },
+      userId,
     },
     data: {
       status: "completed",
@@ -396,7 +401,7 @@ export async function completeStopwatchLegacyInTransaction(
   session: FocusSessionPauseFields & {
     id: string;
     note: string | null;
-    categoryId: string;
+    categoryId: string | null;
     status: string;
   },
   completeInput: StopwatchCompleteInput,
@@ -407,6 +412,8 @@ export async function completeStopwatchLegacyInTransaction(
   if (session.status === "failed" || session.status === "abandoned") {
     throw new FocusConvertTransactionError("invalid_state");
   }
+
+  const categoryId = requireFocusCategoryIdForTimeBlock(session.categoryId);
 
   const finalizedPausedTotal = finalizePausedTotalSeconds(
     session,
@@ -443,7 +450,7 @@ export async function completeStopwatchLegacyInTransaction(
       convertedToTimeBlock: false,
       status: { in: ["running", "paused"] },
       mode: "stopwatch",
-      category: { userId },
+      userId,
     },
     data: {
       status: "completed",
@@ -463,7 +470,7 @@ export async function completeStopwatchLegacyInTransaction(
     data: {
       title: completeInput.title,
       note: completeInput.note,
-      categoryId: session.categoryId,
+      categoryId,
       startTime: session.startTime,
       endTime: timeBlockEndTime,
       status: completeInput.status,
@@ -513,7 +520,7 @@ export async function cancelStopwatchSegmentsInTransaction(
       id: session.id,
       status: { in: ["running", "paused"] },
       mode: "stopwatch",
-      category: { userId },
+      userId,
     },
     data: {
       status: "abandoned",
@@ -544,7 +551,9 @@ export async function startStopwatchWithSegmentInTransaction(
   userId: string,
   tx: FocusSegmentTransactionClient,
 ): Promise<{ id: string }> {
-  const session = await tx.focusSession.create({ data: fields });
+  const session = await tx.focusSession.create({
+    data: { ...fields, userId },
+  });
 
   await createFocusSegment(tx, {
     focusSessionId: session.id,

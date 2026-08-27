@@ -2,14 +2,25 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { deleteCategoryForUser } from "@/lib/category-delete";
 import { assertCategoryOwned } from "@/lib/db/scoped";
 import { isScopedAccessError } from "@/lib/db/scoped-errors";
-import {
-  FOCUS_SESSION_CATEGORY_BLOCKING_STATUSES,
-} from "@/lib/focus-session-status";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { isNonEmptyTrimmed } from "@/lib/validation";
+
+function revalidateAfterCategoryDelete(): void {
+  revalidatePath("/categories");
+  revalidatePath("/focus");
+  revalidatePath("/dashboard");
+  revalidatePath("/goals");
+  revalidatePath("/routines");
+  revalidatePath("/calendar");
+  revalidatePath("/time-blocks");
+  revalidatePath("/review/day");
+  revalidatePath("/review/week");
+  revalidatePath("/assistant");
+}
 
 function parseOptionalDescription(value: FormDataEntryValue | null): string | null {
   const text = String(value ?? "").trim();
@@ -73,69 +84,21 @@ export async function deleteCategory(formData: FormData): Promise<void> {
     return;
   }
 
-  try {
-    await assertCategoryOwned(user.id, id);
-  } catch (error) {
-    if (isScopedAccessError(error)) {
+  const result = await deleteCategoryForUser({
+    userId: user.id,
+    categoryId: id,
+  });
+
+  if (!result.ok) {
+    if (result.error === "not_found") {
       return;
     }
-    throw error;
-  }
-
-  const categoryScope = { categoryId: id, category: { userId: user.id } };
-
-  const [timeBlockCount, activeFocusCount, remainingFocusCount] =
-    await Promise.all([
-      prisma.timeBlock.count({ where: categoryScope }),
-      prisma.focusSession.count({
-        where: { ...categoryScope, status: { in: ["running", "planned"] } },
-      }),
-      prisma.focusSession.count({
-        where: {
-          ...categoryScope,
-          status: { in: [...FOCUS_SESSION_CATEGORY_BLOCKING_STATUSES] },
-        },
-      }),
-    ]);
-
-  if (timeBlockCount > 0) {
-    redirect(
-      `/categories?error=has-time-blocks&timeBlocks=${timeBlockCount}&activeFocus=${activeFocusCount}&blockingFocus=${remainingFocusCount}`,
-    );
-  }
-
-  if (activeFocusCount > 0) {
-    redirect(
-      `/categories?error=has-active-focus&timeBlocks=0&activeFocus=${activeFocusCount}&blockingFocus=${remainingFocusCount}`,
-    );
-  }
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      await tx.focusSession.deleteMany({
-        where: { ...categoryScope, status: "abandoned" },
-      });
-
-      const remainingFocus = await tx.focusSession.count({
-        where: categoryScope,
-      });
-
-      if (remainingFocus > 0) {
-        throw new Error("HAS_REMAINING_FOCUS");
-      }
-
-      await tx.category.delete({ where: { id, userId: user.id } });
-    });
-  } catch (error) {
-    if (error instanceof Error && error.message === "HAS_REMAINING_FOCUS") {
-      redirect(
-        `/categories?error=has-completed-focus&timeBlocks=0&activeFocus=0&blockingFocus=${remainingFocusCount}`,
-      );
+    if (result.error === "has_time_blocks") {
+      redirect("/categories?error=has-time-blocks");
     }
     redirect("/categories?error=delete_failed");
   }
 
-  revalidatePath("/categories");
-  revalidatePath("/calendar");
+  revalidateAfterCategoryDelete();
   redirect("/categories?success=deleted");
 }

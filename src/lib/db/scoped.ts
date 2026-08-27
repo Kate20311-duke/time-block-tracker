@@ -5,8 +5,8 @@
  * read/write is limited to rows owned by the current user, so guessing an `id`
  * cannot access another user's Category, TimeBlock, or FocusSession (IDOR).
  *
- * TimeBlock and FocusSession have no `userId` column; ownership is enforced via
- * `category.userId`.
+ * TimeBlock has no `userId` column; ownership is enforced via `category.userId`.
+ * FocusSession has its own `userId` (Phase 62.2A); do not scope it through Category.
  */
 
 import type {
@@ -91,7 +91,7 @@ export async function timeBlocksForUser<T extends TimeBlockFindManyArgs>(
   }) as Promise<TimeBlockPayload<T>[]>;
 }
 
-/** List focus sessions whose category belongs to `userId`. */
+/** List focus sessions owned by `userId`. */
 export async function focusSessionsForUser<T extends FocusSessionFindManyArgs>(
   userId: string,
   options?: T,
@@ -223,7 +223,7 @@ export async function assertRoutineOwned(
   return routine;
 }
 
-/** Ensure `focusSessionId` exists and its category belongs to `userId`. */
+/** Ensure `focusSessionId` exists and belongs to `userId`. */
 export async function assertFocusSessionOwned(
   userId: string,
   focusSessionId: string,
@@ -234,7 +234,7 @@ export async function assertFocusSessionOwned(
   }
 
   const session = await prisma.focusSession.findFirst({
-    where: { id: trimmedId, category: { userId } },
+    where: { id: trimmedId, userId },
   });
 
   if (!session) {

@@ -7,6 +7,7 @@ import { ElapsedTimer } from "@/components/elapsed-timer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Dictionary } from "@/lib/i18n/types";
+import { focusCategorySwatchProps } from "@/lib/focus-category-display";
 
 export type GlobalActiveFocusSession = {
   id: string;
@@ -20,6 +21,7 @@ export type GlobalActiveFocusSession = {
   category: {
     name: string;
     color: string;
+    removed: boolean;
   };
 };
 
@@ -42,6 +44,10 @@ export function GlobalFocusTimerIndicator({ session, labels }: Props) {
     session.mode === "stopwatch"
       ? "/focus?mode=stopwatch"
       : "/focus?mode=pomodoro";
+  const swatch = focusCategorySwatchProps(
+    session.category.removed,
+    session.category.color,
+  );
 
   return (
     <Button variant="outline" size="sm" asChild className="hidden shrink-0 gap-2 sm:inline-flex">
@@ -64,8 +70,8 @@ export function GlobalFocusTimerIndicator({ session, labels }: Props) {
         />
         <Badge variant="secondary" className="hidden gap-1 md:inline-flex">
           <span
-            className="size-2 rounded-full"
-            style={{ backgroundColor: session.category.color }}
+            className={`size-2 rounded-full ${swatch.className}`}
+            style={swatch.style}
           />
           {session.category.name}
           {isPaused ? ` · ${labels.activeTimerPaused}` : null}

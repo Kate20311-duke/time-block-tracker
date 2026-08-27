@@ -1,12 +1,15 @@
 import { focusSessionDisplayMinutes } from "@/lib/focus";
+import {
+  FOCUS_CATEGORY_REMOVED_ID,
+  hasFocusCategoryId,
+} from "@/lib/focus-category-display";
 import type { CategoryLike } from "@/lib/stats";
-import { UNCATEGORIZED_ID } from "@/lib/stats";
 
 export type FocusSessionLike = {
   startTime: Date;
   endTime: Date | null;
   status: string;
-  categoryId: string;
+  categoryId: string | null;
   actualDurationMinutes: number | null;
   plannedDurationMinutes: number;
   convertedToTimeBlock: boolean;
@@ -109,7 +112,9 @@ export function summarizeFocusSessions(
       unconvertedFocusMinutes += minutes;
     }
 
-    const categoryId = s.categoryId?.trim() || UNCATEGORIZED_ID;
+    const categoryId = hasFocusCategoryId(s.categoryId)
+      ? s.categoryId.trim()
+      : FOCUS_CATEGORY_REMOVED_ID;
     const bucket = byCategory.get(categoryId) ?? {
       minutes: 0,
       sessions: 0,

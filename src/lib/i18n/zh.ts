@@ -230,6 +230,21 @@ export const zh: Dictionary = {
     historyNotConverted: "未转换",
     historyDuration: "时长",
     historyCategory: "分类",
+    categoryRemoved: "分类已删除",
+    categoryRemovedSaveTitle: "原分类已被删除",
+    categoryRemovedSaveDescription:
+      "请选择这个时间块要保存到的分类。原专注记录仍显示为「分类已删除」。",
+    categoryRemovedConvertTitle: "原分类已被删除",
+    categoryRemovedConvertDescription:
+      "请选择新时间块的分类。原专注记录仍显示为「分类已删除」。",
+    selectSaveCategory: "目标分类",
+    finishAndSave: "结束并保存",
+    convertWithCategory: "转换为时间块",
+    noAvailableCategories: "当前没有可用分类。",
+    createCategoryFirst: "需要先创建一个分类，才能把这次专注保存为时间块。",
+    goToCategories: "前往分类管理",
+    saving: "正在保存…",
+    converting: "正在转换…",
     sessionStatus: {
       planned: "计划中",
       running: "进行中",
@@ -253,6 +268,7 @@ export const zh: Dictionary = {
       sessionAlreadyRunning: "已有进行中的专注会话，请先结束当前会话。",
       pauseLimitExceeded: "暂停次数超过限制，本次专注失败",
       invalidCompletion: "完成度必须在 0 到 100 之间",
+      needsCategory: "请选择一个分类后再保存。",
       generic: "操作失败，请重试。",
     },
   },
@@ -316,12 +332,11 @@ export const zh: Dictionary = {
     timeBlockCount: "{count} 个时间块",
     timeBlockCountWithDuration: "{count} 个时间块 · {duration}",
     focusSessionCount: "{count} 个专注记录",
-    cannotDelete: "该分类下仍有 {count} 个时间块，无法删除",
-    cannotDeleteRecords: "该分类下仍有关联的时间块或专注记录，无法删除",
-    cannotDeleteTimeBlocks: "仍有 {count} 条时间块",
-    cannotDeleteActiveFocus: "仍有 {count} 条进行中的专注",
-    cannotDeleteCompletedFocus: "仍有 {count} 条已完成/已转换的专注",
+    cannotDeleteTimeBlocks: "请先删除或移动该分类下的时间块。",
     confirmDelete: "确定删除分类「{name}」吗？此操作不可撤销。",
+    confirmDeleteWithFocusHistory:
+      "确定删除分类「{name}」吗？该分类有 {count} 条专注记录。删除分类后，这些专注记录会保留，并显示为「分类已删除」。此操作不会删除专注历史。",
+    focusHistoryPreservedOnDelete: "删除分类后，这些专注记录仍会保留。",
     success: {
       created: "分类已创建",
       updated: "分类已更新",
@@ -329,15 +344,7 @@ export const zh: Dictionary = {
     },
     errors: {
       hasTimeBlocks:
-        "无法删除：该分类下仍有关联的时间块，请先删除或移动这些时间块",
-      hasTimeBlocksDetail:
-        "无法删除：该分类下有 {timeBlocks} 条时间块、{blockingFocus} 条未放弃的专注（进行中 {activeFocus} 条）。",
-      hasActiveFocusDetail:
-        "无法删除：该分类下有 {activeFocus} 条进行中/计划中的专注，请先结束或放弃。",
-      hasCompletedFocusDetail:
-        "无法删除：该分类下仍有 {blockingFocus} 条已完成或已转换的专注记录。",
-      hasRecords:
-        "无法删除：该分类下仍有关联的时间块或专注记录，请先处理这些记录",
+        "无法删除：请先删除或移动该分类下的时间块。",
       deleteFailed: "删除失败，请稍后重试",
       emptyName: "分类名称不能为空",
     },

@@ -19,6 +19,7 @@ model User {
   sessions      Session[]
   categories    Category[]
   routines      Routine[]
+  focusSessions FocusSession[]
   focusSegments FocusSegment[]
   goals         Goal[]
   goalPeriods   GoalPeriod[]
@@ -134,8 +135,10 @@ model FocusSession {
   title                  String?
   note                   String?
   mode                   String         @default("pomodoro")
-  categoryId             String
-  category               Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  userId                 String
+  user                   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId             String?
+  category               Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   startTime              DateTime
   endTime                DateTime?
   plannedDurationMinutes Int
@@ -151,6 +154,7 @@ model FocusSession {
   createdAt              DateTime       @default(now())
   updatedAt              DateTime       @updatedAt
 
+  @@index([userId])
   @@schema("app")
 }
 
@@ -160,8 +164,8 @@ model FocusSegment {
   focusSession    FocusSession @relation(fields: [focusSessionId], references: [id], onDelete: Cascade)
   userId          String
   user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  categoryId      String
-  category        Category     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  categoryId      String?
+  category        Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   startTime       DateTime
   endTime         DateTime?
   durationMinutes Int?

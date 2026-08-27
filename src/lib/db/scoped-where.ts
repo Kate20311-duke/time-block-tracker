@@ -29,5 +29,5 @@ export function focusSessionScopeWhere(
   userId: string,
   where?: Prisma.FocusSessionWhereInput,
 ): Prisma.FocusSessionWhereInput {
-  return mergeScopedWhere({ category: { userId } }, where);
+  return mergeScopedWhere({ userId }, where);
 }

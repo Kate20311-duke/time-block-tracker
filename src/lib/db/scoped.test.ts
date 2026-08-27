@@ -36,9 +36,17 @@ describe("scoped where builders", () => {
     });
   });
 
-  it("scopes focus sessions through category.userId", () => {
+  it("scopes focus sessions by userId, not category.userId", () => {
     expect(focusSessionScopeWhere("user_2")).toEqual({
-      category: { userId: "user_2" },
+      userId: "user_2",
+    });
+  });
+
+  it("merges extra focus session filters with AND", () => {
+    expect(
+      focusSessionScopeWhere("user_2", { status: "running" }),
+    ).toEqual({
+      AND: [{ userId: "user_2" }, { status: "running" }],
     });
   });
 });

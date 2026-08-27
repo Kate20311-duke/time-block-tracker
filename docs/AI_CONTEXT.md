@@ -55,6 +55,13 @@ Personal time-block planner + Pomodoro + **stopwatch** focus tracker. **Phase 9:
 | **Phase 61.4** | **Done** — Bulk move TimeBlocks between owned categories — see `PROJECT_STATUS.md` §61.4 |
 | **Phase 61.5** | **Done** — Bulk delete selected TimeBlocks (confirm dialog, all-or-nothing) — see `PROJECT_STATUS.md` §61.5 |
 | **Phase 61.6** | **Done** — Category TimeBlock load more + duration summary — see `PROJECT_STATUS.md` §61.6 |
+| **Phase 62.1** | **Done** (audit) — deletion semantics; `FocusSession.userId` gap was the blocker (resolved in 62.2A) |
+| **Phase 62.2A** | **Done** — `FocusSession.userId` independent ownership |
+| **Phase 62.2B** | **Done** — `FocusSession` / `FocusSegment` `categoryId` nullable + `onDelete: SetNull`; TimeBlock still Restrict |
+| **Phase 62.3** | **Done** — orphan Focus reassignment UX: explicit target Category for TimeBlock only; FocusSession.categoryId stays null |
+| **Phase 62.4** | **Done** — Category delete depends only on TimeBlocks; FocusSession/FocusSegment preserved via SetNull |
+| **Phase 62.5** | **Done** — regression / production readiness / closeout — see `PROJECT_STATUS.md` §62 |
+| **Phase 62** | **CLOSED** — TimeBlock-only Category deletion + Focus ownership independence |
 
 ## Stack
 
@@ -103,13 +110,15 @@ Browser → src/proxy.ts (auth gate) → App Router pages (requireUser + *ForUse
 
 ## Data model & ownership
 
-- **`User`** — Auth.js + `Category[]` + `Routine[]` + `FocusSegment[]` + `Goal[]` + `GoalPeriod[]`
-- **`Category.userId`** — required; root of tenant isolation for Category / TimeBlock / FocusSession
+- **`User`** — Auth.js + `Category[]` + `Routine[]` + `FocusSession[]` + `FocusSegment[]` + `Goal[]` + `GoalPeriod[]`
+- **`Category.userId`** — required; root of tenant isolation for Category / TimeBlock
 - **`Routine.userId`** — required; **direct** user ownership (parallel to Category)
 - **`Goal.userId`**, **`GoalPeriod.userId`** — required; direct user ownership
 - **`Goal.categoryId`** — optional filter; `SetNull` on category delete
-- **`TimeBlock`**, **`FocusSession`** — no `userId`; owned via **`category.userId`**
-- **`FocusSegment`** — **`userId`** direct + `focusSessionId` + `categoryId`; one segment may link one `TimeBlock` via `focusSegmentId`
+- **`TimeBlock`** — no `userId`; owned via **`category.userId`**. `categoryId` required; `onDelete: Restrict` (**only** Category-delete blocker)
+- **`FocusSession.userId`** — required (**Phase 62.2A**); **direct** user ownership. Scope via `userId`, not `category.userId`
+- **`FocusSession.categoryId`** — **nullable** + `onDelete: SetNull` (**Phase 62.2B**). Create still requires a Category. Null means the original category was later deleted, not “created uncategorized”. Focus history does **not** block Category delete.
+- **`FocusSegment`** — **`userId`** direct + `focusSessionId` + **nullable** `categoryId` (`SetNull`); one segment may link one `TimeBlock` via `focusSegmentId`
 - **`FocusSession.pauseCount`** — stopwatch pause attempts used (max `MAX_FOCUS_PAUSES` = 2); 3rd pause → `status=failed`
 - **`FocusSession.timeBlockId`** — **backward compat only** (first block id when segmented). List all blocks: `FocusSegment` → `TimeBlock.focusSegmentId`
 - **`FocusSession.mode`**: `pomodoro` | `stopwatch` (default `pomodoro`)
@@ -142,10 +151,10 @@ Errors: `ScopedAccessError` / `isScopedAccessError`.
 
 1. **`requireUser()`** at the start of every business action.
 2. **Create** TimeBlock/FocusSession → `assertCategoryOwned(user.id, categoryId)`.
-3. **Update/delete** → `assert*Owned` then `updateMany`/`deleteMany` with `category: { userId }`.
-4. **Category delete** → count user's TimeBlocks + FocusSessions; redirect `?error=has-records`.
-5. **Focus convert** → `assertFocusSessionOwned` + transaction claim `category: { userId }`.
-6. **One active focus session per user** — `startStopwatch` / `createFocusSession` call `activeFocusSessionForUser` first (`running` or `paused`).
+3. **Update/delete TimeBlock** → `assertTimeBlockOwned` then `updateMany`/`deleteMany` with `category: { userId }`. **FocusSession** mutations use `userId` (not `category.userId`).
+4. **Category delete** → blocked **only** by TimeBlocks (`has_time_blocks` + FK Restrict). FocusSession / FocusSegment never block delete; they are preserved (`ON DELETE SET NULL`). Do **not** `deleteMany` Focus rows. Other-user category → `not_found` (no leak).
+5. **Focus convert / stopwatch complete → TimeBlock** → `assertFocusSessionOwned` + `resolveTimeBlockCategoryId` + `assertCategoryOwned` + transaction claim `userId`. Session still has a category → use it (ignore forged `targetCategoryId`). Orphan (`categoryId` null) without target → `needs_category` (client opens selector). Orphan + owned target → TimeBlock uses target; **do not** write `FocusSession.categoryId` / `FocusSegment.categoryId`. Other-user / missing target → `invalid_category` (no existence leak).
+6. **One active focus session per user** — `startStopwatch` / `createFocusSession` call `activeFocusSessionForUser` first (`running` or `paused`), including sessions whose `categoryId` is null.
 
 Action files: `categories.ts`, `category-time-blocks.ts` (lazy list), `time-blocks.ts`, `calendar-time-blocks.ts`, `focus-sessions.ts`, `focus-shared.ts` (transaction), `routines.ts`, `goals.ts`.
 
@@ -318,7 +327,7 @@ Dashboard: TimeBlock totals from `stats.ts` only; FocusSession totals from `focu
 - **Statuses:** `planned` | `running` | `paused` (stopwatch only) | `completed` | `abandoned` | `converted` | `failed` — stopwatch cancel uses `abandoned`; 3rd pause uses `failed`
 - **FocusHistory:** always lists recent sessions; banner if `running` vs only non-completed; running rows call `abandonFocusSession` or `cancelStopwatch`.
 - **Pomodoro after refresh:** `orphanRunningPomodoro` on `/focus` → abandon via server (`focus-timer.tsx`).
-- **Category delete:** block on TimeBlocks + non-`abandoned` FocusSessions; in transaction `deleteMany` `abandoned` then delete category. Helpers: `src/lib/focus-session-status.ts`.
+- **Category delete:** eligibility is **TimeBlock count only**. `timeBlockCount > 0` → blocked (`has_time_blocks` + FK Restrict). `timeBlockCount === 0` → delete Category; FocusSession / FocusSegment kept, `categoryId` SetNull. Abandoned sessions are **not** hard-deleted. Core helper: `src/lib/category-delete.ts`.
 
 ## Docker
 
@@ -346,7 +355,9 @@ Dashboard: TimeBlock totals from `stats.ts` only; FocusSession totals from `focu
 
 Vercel build: `pnpm run build` (`prisma generate && next build`). **Do not** run migrate in Vercel build by default.
 
-Neon `DATABASE_URL` must include `?schema=app`. Prefer Neon **pooled** URL in Vercel production env.
+Neon `DATABASE_URL` must include `?schema=app`. Prefer Neon **pooled** URL in Vercel production env. Project has a single `DATABASE_URL` (no `DIRECT_URL`). Production `migrate deploy` should use Neon **Direct** host temporarily; Vercel runtime should stay on **Pooled**.
+
+**Phase 62 production ordering (mandatory):** Neon `pnpm exec prisma migrate deploy` **first** (62.2A then 62.2B), verify, **then** git push / Vercel. New code queries `FocusSession.userId`; deploying code before the column exists → Prisma P2022. Generic WORKFLOW “push then migrate” does **not** apply to this release.
 
 ## Env (see `.env.example`)
 
@@ -403,7 +414,7 @@ See `PROJECT_STATUS.md` §47–§51. Summary for new sessions:
 - **TZ:** Convert external times to UTC instants using user calendar TZ (same as TZ-2).
 - **API Routes preferred** for file download (`Content-Disposition`) and upload (`multipart/form-data`); preview before persist.
 - **Phased plan:** (1) CSV export → (2) Excel export → (3) ICS preview → (4) ICS import → (5) duplicate/conflict detection → (6) `ImportBatch` + rollback → (7) ICS export.
-- **Vercel + Neon:** `build` does not run `migrate deploy`; any future `ImportBatch` schema requires **manual** `pnpm exec prisma migrate deploy` against Neon before/alongside deploy.
+- **Vercel + Neon:** `build` does not run `migrate deploy`. Schema changes (including Phase 62, and future `ImportBatch`) require **manual** `pnpm exec prisma migrate deploy` against Neon. For Phase 62: **DB first, then code.**
 
 ## Do NOT add yet
 
@@ -413,7 +424,7 @@ Teams · sharing · invites · payments · password login · dev Credentials in 
 
 1. Private pages → `requireUser()` + `*ForUser` helpers.
 2. Server Actions → `requireUser()` + `assert*Owned`; no `update({ where: { id } })` on private models.
-3. Do not query Category / TimeBlock / FocusSession / Routine without `userId` / `category.userId` filtering.
+3. Do not query Category / TimeBlock / FocusSession / Routine without ownership filtering: Category/Routine/Goal/FocusSession/FocusSegment use `userId`; TimeBlock uses `category.userId`.
 4. Do not bypass `src/lib/db/scoped.ts`.
 5. Validate category ownership before creating TimeBlock or FocusSession.
 6. No Docker seed or shared demo data in production. Local demo: `pnpm db:seed:demo` (see README § Demo seed).
@@ -421,10 +432,9 @@ Teams · sharing · invites · payments · password login · dev Credentials in 
 
 ## Next likely tasks
 
-1. **Search / date filter** on category TimeBlock history (optional); `@@index([categoryId, startTime])` only with explicit schema approval
-2. **Import/export** — `ImportBatch` + rollback (Phase 6) → ICS export (CSV + Excel + ICS import + duplicate/conflict done, §48–§52)
+1. **Import/export** — `ImportBatch` + rollback (Phase 6) → ICS export (CSV + Excel + ICS import + duplicate/conflict done, §48–§52)
+2. **Search / date filter** on category TimeBlock history (optional); `@@index([categoryId, startTime])` only with explicit schema approval
 3. **Settings page** — extend with timezone, locale, profile (data export entry exists at `/settings`)
 4. **Google login** — second OAuth provider alongside GitHub
-5. Pomodoro refresh recovery (localStorage) — optional
 
-Full status: `docs/PROJECT_STATUS.md` §21、§34–§52、§61.2–§61.6
+Full status: `docs/PROJECT_STATUS.md` §21、§34–§52、§61.2–§61.6、§62

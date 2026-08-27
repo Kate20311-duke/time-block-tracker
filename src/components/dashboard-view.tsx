@@ -31,6 +31,7 @@ import type { DailyBarDatum, StatusBarDatum } from "@/components/dashboard-chart
 import type { Dictionary, Locale } from "@/lib/i18n/types";
 import { formatDurationMinutes } from "@/lib/time";
 import { UNCATEGORIZED_ID } from "@/lib/stats";
+import { FOCUS_CATEGORY_REMOVED_ID } from "@/lib/focus-category-display";
 
 type CategoryRow = {
   categoryId: string;
@@ -426,13 +427,18 @@ export function DashboardView({
               <ul className="flex flex-col gap-3">
                 {weekFocusSummary.categoryBreakdown.map((row) => {
                   const name =
-                    row.categoryId === UNCATEGORIZED_ID
-                      ? t.dashboard.uncategorized
-                      : row.categoryName ?? t.dashboard.uncategorized;
+                    row.categoryId === FOCUS_CATEGORY_REMOVED_ID
+                      ? t.focus.categoryRemoved
+                      : row.categoryId === UNCATEGORIZED_ID
+                        ? t.dashboard.uncategorized
+                        : row.categoryName ?? t.focus.categoryRemoved;
                   const color =
+                    row.categoryId === FOCUS_CATEGORY_REMOVED_ID ||
                     row.categoryId === UNCATEGORIZED_ID
-                      ? "#a1a1aa"
-                      : row.categoryColor ?? "#a1a1aa";
+                      ? undefined
+                      : row.categoryColor ?? undefined;
+                  const swatchClass =
+                    color == null ? "bg-muted-foreground/40" : "";
                   const percent =
                     weekFocusSummary.totalFocusMinutes > 0
                       ? Math.round(
@@ -445,8 +451,8 @@ export function DashboardView({
                       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                         <div className="flex items-center gap-2">
                           <span
-                            className="size-2.5 rounded-full"
-                            style={{ backgroundColor: color }}
+                            className={`size-2.5 rounded-full ${swatchClass}`}
+                            style={color ? { backgroundColor: color } : undefined}
                           />
                           <span className="font-medium">{name}</span>
                         </div>

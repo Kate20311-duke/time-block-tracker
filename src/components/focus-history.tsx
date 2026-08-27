@@ -16,6 +16,8 @@ import { focusSessionDisplayMinutes } from "@/lib/focus";
 import { isFocusSessionRunning } from "@/lib/focus-session-status";
 import { ConfirmDeleteDialog } from "@/components/confirm-delete-dialog";
 import { EmptyState } from "@/components/empty-state";
+import { FocusCategoryReassignmentDialog } from "@/components/focus/focus-category-reassignment-dialog";
+import type { FocusCategoryOption } from "@/components/focus-timer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +29,7 @@ import {
 } from "@/components/ui/card";
 import type { Dictionary, Locale } from "@/lib/i18n/types";
 import { formatDateTime } from "@/lib/time";
+import { focusCategorySwatchProps } from "@/lib/focus-category-display";
 
 export type FocusHistoryItem = {
   id: string;
@@ -39,7 +42,7 @@ export type FocusHistoryItem = {
   timeBlockId: string | null;
   startTime: string;
   endTime: string | null;
-  category: { name: string; color: string };
+  category: { name: string; color: string; removed: boolean };
 };
 
 type Props = {
@@ -48,6 +51,7 @@ type Props = {
   locale: Locale;
   cancelLabel: string;
   confirmDeleteTitle: string;
+  categories: FocusCategoryOption[];
 };
 
 function resolveFocusError(
@@ -55,8 +59,20 @@ function resolveFocusError(
   labels: Dictionary["focus"],
 ): string {
   if (!error) return labels.errors.generic;
-  const key = error as keyof Dictionary["focus"]["errors"];
-  return labels.errors[key] ?? labels.errors.generic;
+  const map: Partial<Record<FocusSessionActionError, string>> = {
+    invalid_category: labels.errors.invalidCategory,
+    invalid_status: labels.errors.invalidStatus,
+    invalid_state: labels.errors.invalidState,
+    invalid_range: labels.errors.invalidRange,
+    not_found: labels.errors.notFound,
+    update_failed: labels.errors.updateFailed,
+    convert_failed: labels.errors.convertFailed,
+    already_converted: labels.errors.alreadyConverted,
+    session_already_running: labels.errors.sessionAlreadyRunning,
+    pause_limit_exceeded: labels.errors.pauseLimitExceeded,
+    needs_category: labels.errors.needsCategory,
+  };
+  return map[error] ?? labels.errors.generic;
 }
 
 function sessionStatusLabel(
@@ -78,6 +94,7 @@ function FocusHistoryRow({
   onBusy,
   onError,
   onDone,
+  onNeedsCategory,
   cancelLabel,
   confirmDeleteTitle,
 }: {
@@ -88,6 +105,7 @@ function FocusHistoryRow({
   onBusy: (id: string | null) => void;
   onError: (message: string | null) => void;
   onDone: () => void;
+  onNeedsCategory: () => void;
   cancelLabel: string;
   confirmDeleteTitle: string;
 }) {
@@ -109,6 +127,10 @@ function FocusHistoryRow({
   const isTerminal = isFocusSessionCompleted(session.status);
   const isRunning = isFocusSessionRunning(session.status);
   const isStopwatch = session.mode === "stopwatch";
+  const swatch = focusCategorySwatchProps(
+    session.category.removed,
+    session.category.color,
+  );
 
   const handleEndRunning = async () => {
     onBusy(session.id);
@@ -133,18 +155,23 @@ function FocusHistoryRow({
     onDone();
   };
 
-  const handleConvert = async () => {
+  const handleConvert = async (targetCategoryId?: string) => {
     onBusy(session.id);
     onError(null);
 
     const result = await convertFocusSessionToTimeBlock({
       id: session.id,
       defaultTitle: labels.defaultTimeBlockTitle,
+      targetCategoryId,
     });
 
     onBusy(null);
 
     if (!result.ok) {
+      if (result.error === "needs_category") {
+        onNeedsCategory();
+        return;
+      }
       const message = resolveFocusError(result.error, labels);
       onError(message);
       toast.error(message);
@@ -160,8 +187,8 @@ function FocusHistoryRow({
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <span
-            className="inline-block size-2.5 shrink-0 rounded-full"
-            style={{ backgroundColor: session.category.color }}
+            className={`inline-block size-2.5 shrink-0 rounded-full ${swatch.className}`}
+            style={swatch.style}
             aria-hidden
           />
           <span className="break-words font-medium">{displayTitle}</span>
@@ -240,7 +267,13 @@ function FocusHistoryRow({
           <Button
             type="button"
             size="sm"
-            onClick={handleConvert}
+            onClick={() => {
+              if (session.category.removed) {
+                onNeedsCategory();
+                return;
+              }
+              void handleConvert();
+            }}
             disabled={busyId !== null}
           >
             {busyId === session.id ? labels.working : labels.convertConfirm}
@@ -257,10 +290,42 @@ export function FocusHistory({
   locale,
   cancelLabel,
   confirmDeleteTitle,
+  categories,
 }: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reassignSessionId, setReassignSessionId] = useState<string | null>(null);
+
+  const reassignSession = sessions.find((s) => s.id === reassignSessionId) ?? null;
+
+  const handleReassignConfirm = async (targetCategoryId: string) => {
+    if (!reassignSession) return;
+    setBusyId(reassignSession.id);
+    setErrorMessage(null);
+
+    const result = await convertFocusSessionToTimeBlock({
+      id: reassignSession.id,
+      defaultTitle: labels.defaultTimeBlockTitle,
+      targetCategoryId,
+    });
+
+    setBusyId(null);
+
+    if (!result.ok) {
+      if (result.error === "needs_category") {
+        return;
+      }
+      const message = resolveFocusError(result.error, labels);
+      setErrorMessage(message);
+      toast.error(message);
+      return;
+    }
+
+    setReassignSessionId(null);
+    toast.success(labels.convertConfirm);
+    router.refresh();
+  };
 
   const runningSessions = sessions.filter((s) => isFocusSessionRunning(s.status));
   const hasCompletedSessions = sessions.some((s) =>
@@ -328,6 +393,7 @@ export function FocusHistory({
                   onBusy={setBusyId}
                   onError={setErrorMessage}
                   onDone={() => router.refresh()}
+                  onNeedsCategory={() => setReassignSessionId(session.id)}
                   cancelLabel={cancelLabel}
                   confirmDeleteTitle={confirmDeleteTitle}
                 />
@@ -336,6 +402,37 @@ export function FocusHistory({
           </>
         )}
       </CardContent>
+      <FocusCategoryReassignmentDialog
+        open={reassignSession !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReassignSessionId(null);
+          }
+        }}
+        mode="convert"
+        categories={categories}
+        pending={busyId !== null && busyId === reassignSessionId}
+        labels={{
+          categoryRemovedSaveTitle: labels.categoryRemovedSaveTitle,
+          categoryRemovedSaveDescription: labels.categoryRemovedSaveDescription,
+          categoryRemovedConvertTitle: labels.categoryRemovedConvertTitle,
+          categoryRemovedConvertDescription:
+            labels.categoryRemovedConvertDescription,
+          selectSaveCategory: labels.selectSaveCategory,
+          selectCategory: labels.selectCategory,
+          finishAndSave: labels.finishAndSave,
+          convertWithCategory: labels.convertWithCategory,
+          noAvailableCategories: labels.noAvailableCategories,
+          createCategoryFirst: labels.createCategoryFirst,
+          goToCategories: labels.goToCategories,
+          saving: labels.saving,
+          converting: labels.converting,
+          cancel: cancelLabel,
+        }}
+        onConfirm={(targetCategoryId) => {
+          void handleReassignConfirm(targetCategoryId);
+        }}
+      />
     </Card>
   );
 }

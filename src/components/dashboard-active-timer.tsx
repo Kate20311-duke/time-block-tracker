@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { computeFocusSessionElapsedSeconds } from "@/lib/focus-session-elapsed";
+import { focusCategorySwatchProps } from "@/lib/focus-category-display";
 import type { Dictionary } from "@/lib/i18n/types";
 
 export type DashboardRunningSession = {
@@ -29,6 +30,7 @@ export type DashboardRunningSession = {
   category: {
     name: string;
     color: string;
+    removed: boolean;
   };
 };
 
@@ -82,6 +84,10 @@ export function DashboardActiveTimer({ session, startedAtLabel, labels }: Props)
     goalMinutes && goalMinutes > 0
       ? Math.min(100, (usedMinutes / goalMinutes) * 100)
       : undefined;
+  const swatch = focusCategorySwatchProps(
+    session.category.removed,
+    session.category.color,
+  );
 
   return (
     <Card className="overflow-hidden lg:col-span-2">
@@ -105,8 +111,8 @@ export function DashboardActiveTimer({ session, startedAtLabel, labels }: Props)
           </CardTitle>
           <Badge variant="outline" className="gap-1.5">
             <span
-              className="size-2 rounded-full"
-              style={{ backgroundColor: session.category.color }}
+              className={`size-2 rounded-full ${swatch.className}`}
+              style={swatch.style}
             />
             {session.category.name}
           </Badge>

@@ -40,6 +40,7 @@ import { MAX_FOCUS_PAUSES } from "@/lib/constants";
 import type { FocusCategoryOption } from "@/components/focus-timer";
 import type { Dictionary, Locale } from "@/lib/i18n/types";
 import { formatDateTime } from "@/lib/time";
+import { focusCategorySwatchProps } from "@/lib/focus-category-display";
 
 export type RunningStopwatchSession = {
   id: string;
@@ -50,7 +51,7 @@ export type RunningStopwatchSession = {
   pausedAt: string | null;
   pausedTotalSeconds: number;
   pauseCount: number;
-  category: { id: string; name: string; color: string };
+  category: { id: string | null; name: string; color: string; removed: boolean };
 };
 
 type Props = {
@@ -85,6 +86,7 @@ function resolveFocusError(
     convert_failed: labels.errors.convertFailed,
     already_converted: labels.errors.alreadyConverted,
     pause_limit_exceeded: labels.errors.pauseLimitExceeded,
+    needs_category: labels.errors.needsCategory,
   };
   return map[error] ?? labels.errors.generic;
 }
@@ -172,6 +174,7 @@ export function StopwatchTimer({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
+  const [forceNeedsCategory, setForceNeedsCategory] = useState(false);
 
   const isActive = runningSession !== null;
   const isPaused = runningSession?.status === "paused";
@@ -220,7 +223,12 @@ export function StopwatchTimer({
       pausedAt: null,
       pausedTotalSeconds: 0,
       pauseCount: 0,
-      category: { id: category.id, name: category.name, color: category.color },
+      category: {
+        id: category.id,
+        name: category.name,
+        color: category.color,
+        removed: false,
+      },
     });
     toast.success(labels.stopwatchStart);
     router.refresh();
@@ -307,6 +315,7 @@ export function StopwatchTimer({
     note: string;
     status: string;
     completionLevel: number;
+    targetCategoryId?: string;
   }) => {
     if (!runningSession || busy) return;
 
@@ -322,12 +331,17 @@ export function StopwatchTimer({
       completionLevel: values.completionLevel,
       instantRecordTitle: labels.instantRecordTitle,
       defaultTitle: labels.stopwatchDefaultTimeBlockTitle,
+      targetCategoryId: values.targetCategoryId,
     });
 
     setBusy(false);
     setBusyAction(null);
 
     if (!result.ok) {
+      if (result.error === "needs_category") {
+        setForceNeedsCategory(true);
+        return;
+      }
       const message = resolveFocusError(result.error, labels);
       setErrorMessage(message);
       toast.error(message);
@@ -335,6 +349,7 @@ export function StopwatchTimer({
     }
 
     setCompleteDialogOpen(false);
+    setForceNeedsCategory(false);
     setRunningSession(null);
     setStatusMessage(labels.stopwatchSuccessSaved);
     toast.success(labels.stopwatchSuccessSaved);
@@ -366,7 +381,7 @@ export function StopwatchTimer({
     router.refresh();
   };
 
-  if (!hasCategories) {
+  if (!hasCategories && !isActive) {
     return (
       <Card className="border-amber-200 bg-amber-50/50">
         <CardHeader>
@@ -439,8 +454,13 @@ export function StopwatchTimer({
               </CardTitle>
               <Badge variant="outline" className="gap-1.5">
                 <span
-                  className="size-2 rounded-full"
-                  style={{ backgroundColor: runningSession.category.color }}
+                  className={`size-2 rounded-full ${focusCategorySwatchProps(runningSession.category.removed, runningSession.category.color).className}`}
+                  style={
+                    focusCategorySwatchProps(
+                      runningSession.category.removed,
+                      runningSession.category.color,
+                    ).style
+                  }
                 />
                 {runningSession.category.name}
               </Badge>
@@ -622,7 +642,12 @@ export function StopwatchTimer({
             : "complete-closed"
         }
         open={completeDialogOpen}
-        onOpenChange={setCompleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setForceNeedsCategory(false);
+          }
+          setCompleteDialogOpen(open);
+        }}
         defaultValues={completeDefaults}
         labels={{
           stopwatchCompleteDialogTitle: labels.stopwatchCompleteDialogTitle,
@@ -632,6 +657,15 @@ export function StopwatchTimer({
           noteOptional: labels.noteOptional,
           notePlaceholder: labels.notePlaceholder,
           stopwatchEndAndSave: labels.stopwatchEndAndSave,
+          categoryRemovedSaveTitle: labels.categoryRemovedSaveTitle,
+          categoryRemovedSaveDescription: labels.categoryRemovedSaveDescription,
+          selectSaveCategory: labels.selectSaveCategory,
+          selectCategory: labels.selectCategory,
+          finishAndSave: labels.finishAndSave,
+          noAvailableCategories: labels.noAvailableCategories,
+          createCategoryFirst: labels.createCategoryFirst,
+          goToCategories: labels.goToCategories,
+          saving: labels.saving,
           status: timeBlockLabels.status,
           completionRange: timeBlockLabels.completionRange,
           cancel: cancelLabel,
@@ -639,6 +673,10 @@ export function StopwatchTimer({
         statusLabels={statusLabels}
         onConfirm={handleCompleteConfirm}
         busy={busy && busyAction === "end"}
+        needsCategory={
+          forceNeedsCategory || runningSession?.category.removed === true
+        }
+        categories={categories}
       />
     </div>
   );

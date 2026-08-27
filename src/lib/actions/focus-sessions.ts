@@ -17,6 +17,8 @@ import {
   parseStopwatchCompleteInput,
   parseStopwatchCreateInput,
   rejectStopwatchStartWhenActive,
+  resolveTimeBlockCategoryId,
+  withOwnedTimeBlockCategory,
   validateFocusSessionStatusUpdate,
   type FocusSessionActionError,
 } from "@/lib/actions/focus-shared";
@@ -32,6 +34,7 @@ import {
   assertFocusSessionOwned,
 } from "@/lib/db/scoped";
 import { isScopedAccessError } from "@/lib/db/scoped-errors";
+import { hasFocusCategoryId } from "@/lib/focus-category-display";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { getValidTimeBlockRange } from "@/lib/validation";
@@ -57,6 +60,34 @@ async function assertNoActiveFocusSession(
     return { ok: false, error };
   }
   return null;
+}
+
+async function resolveOwnedTimeBlockCategory(params: {
+  userId: string;
+  sessionCategoryId: string | null;
+  targetCategoryId?: string | null;
+}): Promise<
+  | { ok: true; categoryId: string }
+  | { ok: false; error: "needs_category" | "invalid_category" }
+> {
+  const resolved = resolveTimeBlockCategoryId({
+    sessionCategoryId: params.sessionCategoryId,
+    targetCategoryId: params.targetCategoryId,
+  });
+  if (!resolved.ok) {
+    return resolved;
+  }
+
+  try {
+    await assertCategoryOwned(params.userId, resolved.categoryId);
+  } catch (error) {
+    if (isScopedAccessError(error)) {
+      return withOwnedTimeBlockCategory(resolved, false);
+    }
+    throw error;
+  }
+
+  return withOwnedTimeBlockCategory(resolved, true);
 }
 
 async function getOwnedFocusSessionOrError(
@@ -90,6 +121,9 @@ export async function createFocusSession(input: {
   if (error) {
     return { ok: false, error };
   }
+  if (!hasFocusCategoryId(fields.categoryId)) {
+    return { ok: false, error: "invalid_category" };
+  }
 
   try {
     await assertCategoryOwned(user.id, fields.categoryId);
@@ -110,6 +144,7 @@ export async function createFocusSession(input: {
       data: {
         title: fields.title,
         note: fields.note,
+        userId: user.id,
         categoryId: fields.categoryId,
         startTime: fields.startTime,
         plannedDurationMinutes: Math.round(fields.plannedDurationMinutes),
@@ -146,7 +181,7 @@ export async function updateFocusSessionStatus(input: {
 
   try {
     const updated = await prisma.focusSession.updateMany({
-      where: { id: session.id, category: { userId: user.id } },
+      where: { id: session.id, userId: user.id },
       data: { status: input.status },
     });
     if (updated.count === 0) {
@@ -188,7 +223,7 @@ export async function completeFocusSession(input: {
 
   try {
     const updated = await prisma.focusSession.updateMany({
-      where: { id: session.id, category: { userId: user.id } },
+      where: { id: session.id, userId: user.id },
       data: {
         status: "completed",
         endTime: endUpdate.endTime,
@@ -238,7 +273,7 @@ export async function abandonFocusSession(input: {
       where: {
         id: session.id,
         status: { in: ["running", "planned", "paused"] },
-        category: { userId: user.id },
+        userId: user.id,
       },
       data: {
         status: "abandoned",
@@ -260,13 +295,14 @@ export async function convertFocusSessionToTimeBlock(input: {
   id: string;
   /** Localized fallback when FocusSession has no title. */
   defaultTitle?: string;
+  /** Required when the session category was removed; ignored when session still has one. */
+  targetCategoryId?: string | null;
 }): Promise<FocusSessionResult<{ id: string; timeBlockId: string }>> {
   const user = await requireUser();
 
   let session: FocusSession;
   try {
     session = await assertFocusSessionOwned(user.id, input.id);
-    await assertCategoryOwned(user.id, session.categoryId);
   } catch (error) {
     if (isScopedAccessError(error)) {
       return { ok: false, error: "not_found" };
@@ -286,11 +322,27 @@ export async function convertFocusSessionToTimeBlock(input: {
     return { ok: false, error: "invalid_range" };
   }
 
+  const category = await resolveOwnedTimeBlockCategory({
+    userId: user.id,
+    sessionCategoryId: session.categoryId,
+    targetCategoryId: input.targetCategoryId,
+  });
+  if (!category.ok) {
+    return category;
+  }
+
   const title = defaultTimeBlockTitleFromFocus(session, input.defaultTitle);
 
   try {
     const timeBlock = await prisma.$transaction(async (tx) =>
-      convertFocusSessionInTransaction(session, title, range, user.id, tx),
+      convertFocusSessionInTransaction(
+        session,
+        title,
+        range,
+        user.id,
+        tx,
+        category.categoryId,
+      ),
     );
 
     revalidateFocusRelatedPaths();
@@ -452,40 +504,53 @@ export async function completeStopwatchAndCreateTimeBlock(input: {
   note?: string | null;
   status?: string | null;
   completionLevel?: number | null;
+  /** Required when the session category was removed; ignored when session still has one. */
+  targetCategoryId?: string | null;
 }): Promise<FocusSessionResult<{ id: string; timeBlockId: string }>> {
   const user = await requireUser();
 
   let session: FocusSession;
   let categoryName: string;
+  let timeBlockCategoryId: string;
   try {
     const owned = await prisma.focusSession.findFirst({
-      where: { id: input.id.trim(), category: { userId: user.id } },
+      where: { id: input.id.trim(), userId: user.id },
       include: { category: { select: { id: true, name: true } } },
     });
     if (!owned) {
       return { ok: false, error: "not_found" };
     }
     session = owned;
-    categoryName = owned.category.name;
-    await assertCategoryOwned(user.id, session.categoryId);
-  } catch (error) {
-    if (isScopedAccessError(error)) {
-      return { ok: false, error: "not_found" };
-    }
-    throw error;
-  }
 
-  if (session.mode !== "stopwatch") {
-    return { ok: false, error: "invalid_state" };
-  }
-  if (!canCompleteStopwatchSession(session)) {
-    if (session.convertedToTimeBlock) {
-      return { ok: false, error: "already_converted" };
-    }
-    if (session.status === "failed") {
+    if (session.mode !== "stopwatch") {
       return { ok: false, error: "invalid_state" };
     }
-    return { ok: false, error: "invalid_state" };
+    if (!canCompleteStopwatchSession(session)) {
+      if (session.convertedToTimeBlock) {
+        return { ok: false, error: "already_converted" };
+      }
+      if (session.status === "failed") {
+        return { ok: false, error: "invalid_state" };
+      }
+      return { ok: false, error: "invalid_state" };
+    }
+
+    const category = await resolveOwnedTimeBlockCategory({
+      userId: user.id,
+      sessionCategoryId: session.categoryId,
+      targetCategoryId: input.targetCategoryId,
+    });
+    if (!category.ok) {
+      return category;
+    }
+
+    timeBlockCategoryId = category.categoryId;
+    categoryName = owned.category?.name ?? "";
+  } catch (error) {
+    if (isScopedAccessError(error)) {
+      return { ok: false, error: "invalid_category" };
+    }
+    throw error;
   }
 
   const defaultTitle = defaultStopwatchTitle(
@@ -519,6 +584,7 @@ export async function completeStopwatchAndCreateTimeBlock(input: {
         wallClockEndTime,
         user.id,
         tx,
+        { timeBlockCategoryId },
       ),
     );
     revalidateFocusRelatedPaths();
@@ -528,10 +594,7 @@ export async function completeStopwatchAndCreateTimeBlock(input: {
     };
   } catch (err) {
     if (err instanceof FocusConvertTransactionError) {
-      if (err.code === "already_converted") {
-        return { ok: false, error: "already_converted" };
-      }
-      return { ok: false, error: "invalid_state" };
+      return { ok: false, error: err.code };
     }
     return { ok: false, error: "convert_failed" };
   }

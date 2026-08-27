@@ -134,7 +134,9 @@ export async function getGoalSuggestionsContext(params: {
     focusCompletedCount++;
     const minutes = focusStatsMinutesForSession(session);
     focusTotalMinutes += minutes;
-    const row = categoryRowMap.get(session.categoryId);
+    const row = session.categoryId
+      ? categoryRowMap.get(session.categoryId)
+      : undefined;
     if (row) {
       row.focusMinutes += minutes;
       row.focusSessions++;

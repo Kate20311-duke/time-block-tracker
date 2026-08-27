@@ -11,6 +11,7 @@ import { ensureAndEvaluateGoalPeriodsForUser } from "@/lib/actions/goals";
 import { getDashboardDateRanges } from "@/lib/dashboard-ranges";
 import { getDictionary, formatMessage } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n/server";
+import { focusCategoryDisplay } from "@/lib/focus-category-display";
 import {
   filterFocusSessionsByStartInRange,
   summarizeFocusSessions,
@@ -185,28 +186,21 @@ export default async function DashboardPage() {
   }));
 
   const runningDashboardSession: DashboardRunningSession | null = activeSession
-    ? (() => {
-        const category = categories.find(
-          (item) => item.id === activeSession.categoryId,
-        );
-        if (!category) {
-          return null;
-        }
-        return {
-          id: activeSession.id,
-          mode: activeSession.mode as "pomodoro" | "stopwatch",
-          status: activeSession.status,
-          title: activeSession.title,
-          startTimeIso: activeSession.startTime.toISOString(),
-          pausedAtIso: activeSession.pausedAt?.toISOString() ?? null,
-          pausedTotalSeconds: activeSession.pausedTotalSeconds,
-          plannedDurationMinutes: activeSession.plannedDurationMinutes,
-          category: {
-            name: category.name,
-            color: category.color,
-          },
-        };
-      })()
+    ? {
+        id: activeSession.id,
+        mode: activeSession.mode as "pomodoro" | "stopwatch",
+        status: activeSession.status,
+        title: activeSession.title,
+        startTimeIso: activeSession.startTime.toISOString(),
+        pausedAtIso: activeSession.pausedAt?.toISOString() ?? null,
+        pausedTotalSeconds: activeSession.pausedTotalSeconds,
+        plannedDurationMinutes: activeSession.plannedDurationMinutes,
+        category: focusCategoryDisplay(
+          categories.find((item) => item.id === activeSession.categoryId) ??
+            null,
+          t.focus.categoryRemoved,
+        ),
+      }
     : null;
 
   const startedAtLabel = runningDashboardSession

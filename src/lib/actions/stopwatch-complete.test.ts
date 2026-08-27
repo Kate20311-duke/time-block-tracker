@@ -32,6 +32,7 @@ function createMockTx(options?: {
   timeBlockCreate: ReturnType<typeof vi.fn>;
   focusUpdateMany: ReturnType<typeof vi.fn>;
   focusUpdate: ReturnType<typeof vi.fn>;
+  focusSegmentCount: ReturnType<typeof vi.fn>;
 } {
   const timeBlockCreate = vi.fn().mockResolvedValue({
     id: options?.blockId ?? "block_sw_1",
@@ -40,24 +41,26 @@ function createMockTx(options?: {
     .fn()
     .mockResolvedValue({ count: options?.claimCount ?? 1 });
   const focusUpdate = vi.fn().mockResolvedValue({});
+  const focusSegmentCount = vi.fn().mockResolvedValue(0);
 
   return {
     timeBlockCreate,
     focusUpdateMany,
     focusUpdate,
+    focusSegmentCount,
     timeBlock: { create: timeBlockCreate },
     focusSession: {
       updateMany: focusUpdateMany,
       update: focusUpdate,
     },
     focusSegment: {
-      count: vi.fn().mockResolvedValue(0),
+      count: focusSegmentCount,
     },
   } as StopwatchCompleteTransactionClient & {
     timeBlockCreate: ReturnType<typeof vi.fn>;
     focusUpdateMany: ReturnType<typeof vi.fn>;
     focusUpdate: ReturnType<typeof vi.fn>;
-    focusSegment: { count: ReturnType<typeof vi.fn> };
+    focusSegmentCount: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -89,7 +92,7 @@ describe("completeStopwatchInTransaction", () => {
         convertedToTimeBlock: false,
         status: { in: ["running", "paused"] },
         mode: "stopwatch",
-        category: { userId: "user_1" },
+        userId: "user_1",
       },
       data: expect.objectContaining({
         status: "completed",
@@ -98,12 +101,16 @@ describe("completeStopwatchInTransaction", () => {
         endTime,
       }),
     });
+    expect(tx.focusUpdateMany.mock.calls[0][0].where).not.toHaveProperty(
+      "category",
+    );
     expect(tx.timeBlockCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
         source: "stopwatch",
         status: "completed",
         completionLevel: 100,
         title: "Writing",
+        categoryId: "cat_1",
         startTime: baseSession.startTime,
         endTime: new Date("2026-06-01T10:25:00"),
       }),
@@ -157,5 +164,82 @@ describe("completeStopwatchInTransaction", () => {
       ),
     ).rejects.toBeInstanceOf(FocusConvertTransactionError);
     expect(tx.timeBlockCreate).not.toHaveBeenCalled();
+  });
+
+  it("does not link a TimeBlock when create fails after claim", async () => {
+    const tx = createMockTx();
+    tx.timeBlockCreate.mockRejectedValue(new Error("db error"));
+
+    await expect(
+      completeStopwatchInTransaction(
+        baseSession,
+        completeInput,
+        endTime,
+        "user_1",
+        tx,
+      ),
+    ).rejects.toThrow("db error");
+
+    expect(tx.focusUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe("completeStopwatchInTransaction null category", () => {
+  it("fails before claiming the session or creating a TimeBlock", async () => {
+    const tx = createMockTx();
+
+    await expect(
+      completeStopwatchInTransaction(
+        { ...baseSession, categoryId: null },
+        completeInput,
+        endTime,
+        "user_1",
+        tx,
+      ),
+    ).rejects.toMatchObject({ code: "needs_category" });
+
+    expect(tx.focusUpdateMany).not.toHaveBeenCalled();
+    expect(tx.timeBlockCreate).not.toHaveBeenCalled();
+    expect(tx.focusSegmentCount).not.toHaveBeenCalled();
+  });
+
+  it("creates a TimeBlock on the target category and does not write session.categoryId", async () => {
+    const tx = createMockTx();
+
+    await completeStopwatchInTransaction(
+      { ...baseSession, categoryId: null },
+      completeInput,
+      endTime,
+      "user_1",
+      tx,
+      { timeBlockCategoryId: "cat_work" },
+    );
+
+    expect(tx.timeBlockCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        categoryId: "cat_work",
+        source: "stopwatch",
+      }),
+    });
+    expect(tx.focusUpdateMany.mock.calls[0][0].data).not.toHaveProperty(
+      "categoryId",
+    );
+  });
+
+  it("ignores a forged target when the session still has a category", async () => {
+    const tx = createMockTx();
+
+    await completeStopwatchInTransaction(
+      baseSession,
+      completeInput,
+      endTime,
+      "user_1",
+      tx,
+      { timeBlockCategoryId: "cat_other" },
+    );
+
+    expect(tx.timeBlockCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ categoryId: "cat_1" }),
+    });
   });
 });
